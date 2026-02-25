@@ -19,7 +19,7 @@
 
 <br><br>
 
-<div id="results"></div>
+<div id="results" style="display:flex; gap:40px; align-items:flex-start;"></div>
 
 <script>
 function search() {
@@ -34,6 +34,10 @@ function search() {
             const container = document.getElementById("results");
             container.innerHTML = "";
 
+            if (!data || data.length === 0) {
+                return;
+            }
+
             // Group by courthouse
             const grouped = {};
 
@@ -47,58 +51,206 @@ function search() {
             // Build sections
             for (const courthouse in grouped) {
 
+                const column = document.createElement("div");
+                column.style.width = "50%";
+
                 const header = document.createElement("h3");
                 header.textContent = courthouse;
-                container.appendChild(header);
 
-                const table = document.createElement("table");
-                table.border = "1";
+                column.appendChild(header);
 
-                table.innerHTML = `
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Type</th>
-                            <th>Location</th>
-                            <th>Judge</th>
-                            <th>Part</th>
-                            <th>Member</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                `;
-
-                const tbody = table.querySelector("tbody");
+                // Group by assignment_type inside courthouse
+                const typeGroups = {};
 
                 grouped[courthouse].forEach(row => {
-                    const tr = document.createElement("tr");
-
-                    tr.innerHTML = `
-                        <td>${row.assignment_date || ""}</td>
-                        <td>${row.assignment_type || ""}</td>
-                        <td>${row.location_group || ""} ${row.location_detail || ""}</td>
-                        <td>${row.judge_name || ""}</td>
-                        <td>${row.part || ""}</td>
-                        <td>${row.assigned_member || ""}</td>
-                        <td>${row.assignment_notes || ""}</td>
-                    `;
-
-                    tbody.appendChild(tr);
+                    if (!typeGroups[row.assignment_type]) {
+                        typeGroups[row.assignment_type] = [];
+                    }
+                    typeGroups[row.assignment_type].push(row);
                 });
 
-                container.appendChild(table);
-                container.appendChild(document.createElement("br"));
+                for (const type in typeGroups) {
+                    if (courthouse === "Juvenile" && type === "Fixed Post") {
+                        continue;
+                    }
+
+                    const typeHeader = document.createElement("h4");
+                    typeHeader.textContent = type;
+                    column.appendChild(typeHeader);
+
+                    const table = document.createElement("table");
+                    table.border = "1";
+
+                    let headers = "";
+                    let rowBuilder = "";
+
+                    if (type === "Courtroom") {
+
+                        // Always show all rooms
+                        let rooms = [];
+
+                        if (courthouse === "Mitchell") {
+                            rooms = [
+                                "600M","231M","417M","556C","215M","441M","309M",
+                                "228C","226M","420M","400M","236M","203M","451M","438M"
+                            ];
+                        }
+
+                        if (courthouse === "Cummings") {
+                            rooms = [
+                                "225C","201C","430C","329C","230C","227C",
+                                "540C","404C","523C","528C","113C"
+                            ];
+                        }
+
+                        if (courthouse === "Juvenile") {
+                            rooms = ["329C","428M","406M"];
+                        }
+
+                        const table = document.createElement("table");
+                        table.border = "1";
+
+                        table.innerHTML = `
+                            <thead>
+                                <tr>
+                                    <th>Judge</th>
+                                    <th>Room / Part</th>
+                                    <th>Assignment</th>
+                                    <th>Deputy</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        `;
+
+                        const tbody = table.querySelector("tbody");
+
+                        rooms.forEach(room => {
+
+                            const row = typeGroups[type].find(r => r.location_detail === room);
+
+                            const tr = document.createElement("tr");
+                            tr.innerHTML = `
+                                <td>${row ? (row.judge_name || "") : ""}</td>
+                                <td>${room} ${row && row.part ? "Part " + row.part : ""}</td>
+                                <td>${row ? (row.assignment_notes || "") : ""}</td>
+                                <td>${row ? (row.assigned_member || "") : ""}</td>
+                            `;
+
+                            tbody.appendChild(tr);
+                        });
+
+                        column.appendChild(table);
+                        column.appendChild(document.createElement("br"));
+
+                        continue;
+                    } else if (type === "Fixed Post") {
+
+                        typeHeader.textContent = "Security Posts";
+
+                        let posts = [];
+
+                        if (courthouse === "Mitchell") {
+                            posts = [
+                                "Calvert",
+                                "Lexington",
+                                "Fayette H/C Console room",
+                                "Lock Up West",
+                                "Jury Room",
+                                "St. Paul St. Rover",
+                                "Judges"
+                            ];
+                        }
+
+                        if (courthouse === "Cummings") {
+                            posts = [
+                                "Cummings",
+                                "Fayette St. H/C",
+                                "Console Room",
+                                "Lock Up East",
+                                "Garage",
+                                "Family Court",
+                                "Transportation"
+                            ];
+                        }
+
+                        const table = document.createElement("table");
+                        table.border = "1";
+
+                        table.innerHTML = `
+                            <thead>
+                                <tr>
+                                    <th>Security Post</th>
+                                    <th>Deputy / CSO</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        `;
+
+                        const tbody = table.querySelector("tbody");
+
+                        posts.forEach(post => {
+
+                            const assigned = typeGroups[type].find(r => r.location_group === post);
+
+                            const tr = document.createElement("tr");
+                            tr.innerHTML = `
+                                <td>${post}</td>
+                                <td>${assigned ? assigned.assigned_member : ""}</td>
+                            `;
+
+                            tbody.appendChild(tr);
+                        });
+
+                        column.appendChild(table);
+                        column.appendChild(document.createElement("br"));
+
+                        continue;
+                    } else if (type === "Overtime") {
+
+                        headers = `
+                            <tr>
+                                <th>Detail</th>
+                                <th>Shift</th>
+                                <th>Member</th>
+                                <th>Notes</th>
+                            </tr>
+                        `;
+
+                        rowBuilder = (row) => `
+                            <td>${row.location_detail || ""}</td>
+                            <td>${row.shift_time || ""}</td>
+                            <td>${row.assigned_member || ""}</td>
+                            <td>${row.assignment_notes || ""}</td>
+                        `;
+                    }
+
+                    table.innerHTML = `
+                        <thead>${headers}</thead>
+                        <tbody></tbody>
+                    `;
+
+                    const tbody = table.querySelector("tbody");
+
+                    typeGroups[type].forEach(row => {
+                        const tr = document.createElement("tr");
+                        tr.innerHTML = rowBuilder(row);
+                        tbody.appendChild(tr);
+                    });
+
+                    column.appendChild(table);
+                    column.appendChild(document.createElement("br"));
+                }
+                container.appendChild(column);
             }
         });
 }
 
+// Auto-load today
 window.onload = function() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById("date").value = today;
     search();
 };
-
 </script>
 
 </body>
