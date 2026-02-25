@@ -34,21 +34,15 @@ function search() {
             const container = document.getElementById("results");
             container.innerHTML = "";
 
-            if (!data || data.length === 0) {
-                return;
-            }
+            if (!data || data.length === 0) return;
 
-            // Group by courthouse
             const grouped = {};
 
             data.forEach(row => {
-                if (!grouped[row.courthouse]) {
-                    grouped[row.courthouse] = [];
-                }
+                if (!grouped[row.courthouse]) grouped[row.courthouse] = [];
                 grouped[row.courthouse].push(row);
             });
 
-            // Build sections
             for (const courthouse in grouped) {
 
                 const column = document.createElement("div");
@@ -56,37 +50,30 @@ function search() {
 
                 const header = document.createElement("h3");
                 header.textContent = courthouse;
-
                 column.appendChild(header);
 
-                // Group by assignment_type inside courthouse
                 const typeGroups = {};
 
                 grouped[courthouse].forEach(row => {
-                    if (!typeGroups[row.assignment_type]) {
+                    if (!typeGroups[row.assignment_type])
                         typeGroups[row.assignment_type] = [];
-                    }
                     typeGroups[row.assignment_type].push(row);
                 });
 
-                for (const type in typeGroups) {
-                    if (courthouse === "Juvenile" && type === "Fixed Post") {
-                        continue;
-                    }
+                const orderedTypes = ["Fixed Post", "Courtroom", "Overtime"];
+
+                orderedTypes.forEach(type => {
+
+                    if (!typeGroups[type]) return;
+                    if (courthouse === "Juvenile" && type === "Fixed Post") return;
 
                     const typeHeader = document.createElement("h4");
-                    typeHeader.textContent = type;
+                    typeHeader.textContent = type === "Fixed Post" ? "Security Posts" : type;
                     column.appendChild(typeHeader);
 
-                    const table = document.createElement("table");
-                    table.border = "1";
-
-                    let headers = "";
-                    let rowBuilder = "";
-
+                    /* ================= COURTROOM ================= */
                     if (type === "Courtroom") {
 
-                        // Always show all rooms
                         let rooms = [];
 
                         if (courthouse === "Mitchell") {
@@ -141,11 +128,11 @@ function search() {
 
                         column.appendChild(table);
                         column.appendChild(document.createElement("br"));
+                        return;
+                    }
 
-                        continue;
-                    } else if (type === "Fixed Post") {
-
-                        typeHeader.textContent = "Security Posts";
+                    /* ================= SECURITY POSTS ================= */
+                    if (type === "Fixed Post") {
 
                         let posts = [];
 
@@ -180,7 +167,7 @@ function search() {
                             <thead>
                                 <tr>
                                     <th>Security Post</th>
-                                    <th>Deputy / CSO</th>
+                                    <th>Deputy</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -203,49 +190,53 @@ function search() {
 
                         column.appendChild(table);
                         column.appendChild(document.createElement("br"));
-
-                        continue;
-                    } else if (type === "Overtime") {
-
-                        headers = `
-                            <tr>
-                                <th>Detail</th>
-                                <th>Shift</th>
-                                <th>Member</th>
-                                <th>Notes</th>
-                            </tr>
-                        `;
-
-                        rowBuilder = (row) => `
-                            <td>${row.location_detail || ""}</td>
-                            <td>${row.shift_time || ""}</td>
-                            <td>${row.assigned_member || ""}</td>
-                            <td>${row.assignment_notes || ""}</td>
-                        `;
+                        return;
                     }
 
-                    table.innerHTML = `
-                        <thead>${headers}</thead>
-                        <tbody></tbody>
-                    `;
+                    /* ================= OVERTIME ================= */
+                    if (type === "Overtime") {
 
-                    const tbody = table.querySelector("tbody");
+                        const table = document.createElement("table");
+                        table.border = "1";
 
-                    typeGroups[type].forEach(row => {
-                        const tr = document.createElement("tr");
-                        tr.innerHTML = rowBuilder(row);
-                        tbody.appendChild(tr);
-                    });
+                        table.innerHTML = `
+                            <thead>
+                                <tr>
+                                    <th>Detail</th>
+                                    <th>Shift</th>
+                                    <th>Member</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        `;
 
-                    column.appendChild(table);
-                    column.appendChild(document.createElement("br"));
-                }
+                        const tbody = table.querySelector("tbody");
+
+                        typeGroups[type].forEach(row => {
+
+                            const tr = document.createElement("tr");
+                            tr.innerHTML = `
+                                <td>${row.location_detail || ""}</td>
+                                <td>${row.shift_time || ""}</td>
+                                <td>${row.assigned_member || ""}</td>
+                                <td>${row.assignment_notes || ""}</td>
+                            `;
+
+                            tbody.appendChild(tr);
+                        });
+
+                        column.appendChild(table);
+                        column.appendChild(document.createElement("br"));
+                    }
+
+                });
+
                 container.appendChild(column);
             }
         });
 }
 
-// Auto-load today
 window.onload = function() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById("date").value = today;

@@ -11,6 +11,35 @@ app = Flask(__name__)
 def index():
     return render_template("search.html")
 
+@app.route("/api/update-deputy", methods=["POST"])
+def update_deputy():
+    data = request.json
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE dbo.court_assignments
+        SET assigned_member = ?
+        WHERE assignment_date = ?
+          AND courthouse = ?
+          AND assignment_type = ?
+          AND location_detail = ?
+          AND part = ?
+    """, (
+        data["assigned_member"],
+        data["assignment_date"],
+        data["courthouse"],
+        data["assignment_type"],
+        data["location_detail"],
+        data["part"]
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "success"}
+
 
 @app.route("/api/search")
 def search():
