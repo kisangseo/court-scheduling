@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Court Assignment Search</title>
+</head>
+<body>
+
+<h2>Search Court Assignments</h2>
+
+<input type="text" id="name" placeholder="Search by Name">
+<input type="date" id="date">
+<select id="courthouse">
+    <option value="">All Courthouses</option>
+    <option value="Mitchell">Mitchell</option>
+    <option value="Cummings">Cummings</option>
+    <option value="Juvenile">Juvenile</option>
+</select>
+<button onclick="search()">Search</button>
+
+<br><br>
+
+<div id="results"></div>
+
+<script>
+function search() {
+    const name = document.getElementById("name").value;
+    const date = document.getElementById("date").value;
+    const courthouse = document.getElementById("courthouse").value;
+
+    fetch(`/api/search?name=${name}&date=${date}&courthouse=${courthouse}`)
+        .then(response => response.json())
+        .then(data => {
+
+            const container = document.getElementById("results");
+            container.innerHTML = "";
+
+            // Group by courthouse
+            const grouped = {};
+
+            data.forEach(row => {
+                if (!grouped[row.courthouse]) {
+                    grouped[row.courthouse] = [];
+                }
+                grouped[row.courthouse].push(row);
+            });
+
+            // Build sections
+            for (const courthouse in grouped) {
+
+                const header = document.createElement("h3");
+                header.textContent = courthouse;
+                container.appendChild(header);
+
+                const table = document.createElement("table");
+                table.border = "1";
+
+                table.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Location</th>
+                            <th>Judge</th>
+                            <th>Part</th>
+                            <th>Member</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                `;
+
+                const tbody = table.querySelector("tbody");
+
+                grouped[courthouse].forEach(row => {
+                    const tr = document.createElement("tr");
+
+                    tr.innerHTML = `
+                        <td>${row.assignment_date || ""}</td>
+                        <td>${row.assignment_type || ""}</td>
+                        <td>${row.location_group || ""} ${row.location_detail || ""}</td>
+                        <td>${row.judge_name || ""}</td>
+                        <td>${row.part || ""}</td>
+                        <td>${row.assigned_member || ""}</td>
+                        <td>${row.assignment_notes || ""}</td>
+                    `;
+
+                    tbody.appendChild(tr);
+                });
+
+                container.appendChild(table);
+                container.appendChild(document.createElement("br"));
+            }
+        });
+}
+
+window.onload = function() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById("date").value = today;
+    search();
+};
+
+</script>
+
+</body>
+</html>
