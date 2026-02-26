@@ -2,6 +2,11 @@
 <html>
 <head>
     <title>Court Assignment Search</title>
+    <style>
+#csoDetailTable td {
+    height: 35px;
+}
+</style>
 </head>
 <body>
 
@@ -15,7 +20,9 @@
     <option value="Cummings">Cummings</option>
     <option value="Juvenile">Juvenile</option>
 </select>
-<button onclick="search()">Search</button>
+<button onclick="search()">Search</button><button onclick="openRoster()">Roster</button><button onclick="window.open('/staffing', '_blank')">
+    Staffing Resources Daily
+</button>
 
 <br><br>
 
@@ -119,8 +126,22 @@ function search() {
                             tr.innerHTML = `
                                 <td>${row ? (row.judge_name || "") : ""}</td>
                                 <td>${room} ${row && row.part ? "Part " + row.part : ""}</td>
-                                <td>${row ? (row.assignment_notes || "") : ""}</td>
-                                <td>${row ? (row.assigned_member || "") : ""}</td>
+                                <td class="editable-assignment"
+                                    data-date="${document.getElementById("date").value}"
+                                    data-courthouse="${courthouse}"
+                                    data-type="Courtroom"
+                                    data-room="${room}"
+                                    data-part="${row && row.part ? row.part : ""}">
+                                    ${row ? (row.assignment_notes || "") : ""}
+                                </td>
+                                <td class="editable"
+                                    data-date="${document.getElementById("date").value}"
+                                    data-courthouse="${courthouse}"
+                                    data-type="Courtroom"
+                                    data-room="${room}"
+                                    data-part="${row && row.part ? row.part : ""}">
+                                    ${row ? (row.assigned_member || "") : ""}
+                                </td>
                             `;
 
                             tbody.appendChild(tr);
@@ -182,7 +203,14 @@ function search() {
                             const tr = document.createElement("tr");
                             tr.innerHTML = `
                                 <td>${post}</td>
-                                <td>${assigned ? assigned.assigned_member : ""}</td>
+                                <td class="editable"
+                                    data-date="${document.getElementById("date").value}"
+                                    data-courthouse="${courthouse}"
+                                    data-type="Fixed Post"
+                                    data-room="${post}"
+                                    data-part="">
+                                    ${assigned ? (assigned.assigned_member || "") : ""}
+                                </td>
                             `;
 
                             tbody.appendChild(tr);
@@ -219,8 +247,22 @@ function search() {
                             tr.innerHTML = `
                                 <td>${row.location_detail || ""}</td>
                                 <td>${row.shift_time || ""}</td>
-                                <td>${row.assigned_member || ""}</td>
-                                <td>${row.assignment_notes || ""}</td>
+                                <td class="editable"
+                                    data-date="${document.getElementById("date").value}"
+                                    data-courthouse="${courthouse}"
+                                    data-type="Overtime"
+                                    data-room="${row.location_detail}"
+                                    data-part="">
+                                    ${row.assigned_member || ""}
+                                </td>
+                                <td class="editable-assignment"
+                                    data-date="${document.getElementById("date").value}"
+                                    data-courthouse="${courthouse}"
+                                    data-type="Overtime"
+                                    data-room="${row.location_detail || ""}"
+                                    data-part="${row.assigned_member || ""}">
+                                    ${row.assignment_notes || ""}
+                                </td>
                             `;
 
                             tbody.appendChild(tr);
@@ -242,7 +284,195 @@ window.onload = function() {
     document.getElementById("date").value = today;
     search();
 };
-</script>
+document.addEventListener("click", function(e) {
 
+    if (!e.target.classList.contains("editable")) return;
+
+    const cell = e.target;
+
+    fetch("/api/deputies-available")
+    .then(res => res.json())
+    .then(roster => {
+
+        const select = document.createElement("select");
+
+        const blank = document.createElement("option");
+        blank.value = "";
+        blank.textContent = "-- Select --";
+        select.appendChild(blank);
+
+        roster.forEach(dep => {
+            const option = document.createElement("option");
+            option.value = dep.full_name;
+            option.textContent = dep.full_name + " (" + dep.capacity_tag + ")";
+            select.appendChild(option);
+        });
+
+        select.value = cell.textContent.trim();
+
+        cell.innerHTML = "";
+        cell.appendChild(select);
+        select.focus();
+
+        select.addEventListener("change", function() {
+
+            const payload = {
+                assignment_date: cell.dataset.date,
+                courthouse: cell.dataset.courthouse,
+                assignment_type: cell.dataset.type,
+                location_detail: cell.dataset.room,
+                part: cell.dataset.part,
+                assigned_member: select.value
+            };
+
+            fetch("/api/update-deputy", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(() => {
+                cell.textContent = select.value;
+            });
+        });
+    });
+    const select = document.createElement("select");
+
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = "-- Select --";
+    select.appendChild(blank);
+
+    roster.forEach(name => {
+        const option = document.createElement("option");
+        option.value = name;
+        option.textContent = name;
+        select.appendChild(option);
+    });
+
+    select.value = cell.textContent.trim();
+
+    cell.innerHTML = "";
+    cell.appendChild(select);
+
+    select.focus();
+    select.addEventListener("change", function() {
+
+    const payload = {
+        assignment_date: cell.dataset.date,
+        courthouse: cell.dataset.courthouse,
+        assignment_type: cell.dataset.type,
+        location_detail: cell.dataset.room,
+        part: cell.dataset.part,
+        assigned_member: select.value
+    };
+
+    fetch("/api/update-deputy", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(() => {
+        cell.textContent = select.value;
+    })
+    .catch(err => {
+        console.error("Update failed:", err);
+    });
+
+    });
+
+});
+document.addEventListener("click", function(e) {
+
+    const cell = e.target.closest(".editable-assignment");
+    if (!cell) return;
+
+    if (cell.querySelector("input")) return;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = cell.textContent.trim();
+
+    cell.innerHTML = "";
+    cell.appendChild(input);
+    input.focus();
+
+    input.addEventListener("blur", function() {
+
+        const payload = {
+            assignment_date: cell.dataset.date,
+            courthouse: cell.dataset.courthouse,
+            assignment_type: cell.dataset.type,
+            location_detail: cell.dataset.room,
+            part: cell.dataset.part,
+            assignment_notes: input.value
+        };
+
+        fetch("/api/update-assignment-notes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(() => {
+            cell.textContent = input.value;
+        });
+
+    });
+
+});
+function openRoster() {
+    window.open("/roster", "_blank");
+}
+</script>
+<hr>
+
+<h2>CSO Detail - Borrowed Deputies</h2>
+
+<table border="1" id="csoDetailTable">
+    <thead>
+        <tr>
+            <th>Deputy Name</th>
+            <th>Building</th>
+            <th>Assignment Type</th>
+            <th>Room / Post / Part</th>
+        </tr>
+    </thead>
+    <tbody id="csoDetailBody">
+    <tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+    </tr>
+    <tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+    </tr>
+    <tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+    </tr>
+    <tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+    </tr>
+    <tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+    </tr>
+</tbody>
+</table>
 </body>
 </html>

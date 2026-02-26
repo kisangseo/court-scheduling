@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Staffing Resources Daily</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            border: 1px solid black;
+            padding: 6px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        td {
+            height: 32px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Staffing Resources Daily</h2>
+<label for="staffingDate">Date:</label>
+<input type="date" id="staffingDate">
+
+<script>
+    // default to today
+    document.addEventListener("DOMContentLoaded", function() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById("staffingDate").value = today;
+    });
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+
+    const columnNames = [
+        "Assigned to Court Security",
+        "Certified for Court Room",
+        "Certified to Work Door",
+        "Available to Work",
+        "Unavailable (+ Leave Code)",
+        "Supervisor / Roll Call"
+    ];
+
+    const dateInput = document.getElementById("staffingDate");
+    const tbody = document.getElementById("staffingBody");
+
+    let deputiesCache = [];
+
+    function buildTable() {
+
+        tbody.innerHTML = "";
+
+        for (let i = 0; i < 10; i++) {
+
+            const tr = document.createElement("tr");
+
+            for (let j = 0; j < 6; j++) {
+
+                const td = document.createElement("td");
+                const select = document.createElement("select");
+
+                const blank = document.createElement("option");
+                blank.value = "";
+                blank.textContent = "-- Select --";
+                select.appendChild(blank);
+
+                deputiesCache.forEach(dep => {
+                    const option = document.createElement("option");
+                    option.value = dep.full_name;
+                    option.textContent = dep.full_name + " (" + dep.capacity_tag + ")";
+                    select.appendChild(option);
+                });
+
+                select.dataset.row = i + 1;
+                select.dataset.column = columnNames[j];
+
+                select.addEventListener("change", function() {
+
+                    fetch("/api/update-staffing", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            staffing_date: dateInput.value,
+                            row_number: this.dataset.row,
+                            column_name: this.dataset.column,
+                            deputy_name: this.value || null
+                        })
+                    });
+                });
+
+                td.appendChild(select);
+                tr.appendChild(td);
+            }
+
+            tbody.appendChild(tr);
+        }
+    }
+
+    function loadStaffing(date) {
+
+        fetch(`/api/get-staffing?date=${date}`)
+            .then(res => res.json())
+            .then(data => {
+
+                data.forEach(item => {
+
+                    const selector = `select[data-row="${item.row_number}"][data-column="${item.column_name}"]`;
+                    const select = document.querySelector(selector);
+
+                    if (select && item.deputy_name) {
+                        select.value = item.deputy_name;
+                    }
+                });
+            });
+    }
+
+    // Load deputies first
+    fetch("/api/deputies")
+        .then(res => res.json())
+        .then(deputies => {
+
+            deputiesCache = deputies;
+
+            buildTable();
+            loadStaffing(dateInput.value);
+
+        });
+
+    // Reload when date changes
+    dateInput.addEventListener("change", function() {
+        buildTable();
+        loadStaffing(this.value);
+    });
+
+    // ===== CLEAR COLUMN LOGIC =====
+    document.querySelectorAll(".clear-column").forEach(button => {
+
+        button.addEventListener("click", function() {
+
+            const columnName = this.dataset.column;
+            const selectedDate = dateInput.value;
+
+            const selects = document.querySelectorAll(
+                `select[data-column="${columnName}"]`
+            );
+
+            selects.forEach(select => {
+
+                select.value = "";
+
+                fetch("/api/update-staffing", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        staffing_date: selectedDate,
+                        row_number: select.dataset.row,
+                        column_name: columnName,
+                        deputy_name: null
+                    })
+                });
+
+            });
+
+        });
+
+    });
+
+    // ===== IMPORT COLUMN LOGIC =====
+    document.querySelectorAll(".import-column").forEach(button => {
+
+        button.addEventListener("click", function() {
+
+            const columnName = this.dataset.column;
+            const selectedDate = dateInput.value;
+
+            fetch("/api/import-previous-column", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    staffing_date: selectedDate,
+                    column_name: columnName
+                })
+            })
+            .then(res => res.json())
+            .then(result => {
+
+                if (result.status === "success") {
+
+                    buildTable();
+                    loadStaffing(selectedDate);
+
+                } else {
+                    alert("No previous data found for this column.");
+                }
+
+            });
+
+        });
+
+    });
+
+});
+</script>
+
+<table>
+    <thead>
+        <tr>
+            <th>
+                Assigned to Court Security
+                <button class="clear-column" data-column="Assigned to Court Security">Clear</button>
+                <button class="import-column" data-column="Assigned to Court Security">Import</button>
+            </th>
+            <th>
+                Certified for Court Room
+                <button class="clear-column" data-column="Certified for Court Room">Clear</button>
+                <button class="import-column" data-column="Certified for Court Room">Import</button>
+            </th>
+            <th>
+                Certified to Work Door
+                <button class="clear-column" data-column="Certified to Work Door">Clear</button>
+                <button class="import-column" data-column="Certified to Work Door">Import</button>
+            </th>
+            <th>
+                Available to Work
+                <button class="clear-column" data-column="Available to Work">Clear</button>
+                <button class="import-column" data-column="Available to Work">Import</button>
+            </th>
+            <th>
+                Unavailable (+ Leave Code)
+                <button class="clear-column" data-column="Unavailable (+ Leave Code)">Clear</button>
+                <button class="import-column" data-column="Unavailable (+ Leave Code)">Import</button>
+            </th>
+            <th>
+                Supervisor / Roll Call
+                <button class="clear-column" data-column="Supervisor / Roll Call">Clear</button>
+                <button class="import-column" data-column="Supervisor / Roll Call">Import</button>
+            </th>
+        </tr>
+    </thead>
+    <tbody id="staffingBody"></tbody>
+</table>
+<hr>
+
+<h2>CSO Detail</h2>
+
+<table border="1" id="csoDetailTable">
+    <thead>
+        <tr>
+            <th>Deputy Name</th>
+            <th>Building</th>
+            <th>Assignment Type</th>
+            <th>Room / Post / Part</th>
+        </tr>
+    </thead>
+    <tbody id="csoDetailBody">
+        <!-- Will populate dynamically -->
+    </tbody>
+</table>
+</body>
+</html>
