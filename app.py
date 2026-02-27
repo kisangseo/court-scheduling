@@ -239,6 +239,23 @@ def get_deputies():
     conn = get_conn()
     cursor = conn.cursor()
 
+    has_division = True
+
+    try:
+        cursor.execute("""
+            SELECT full_name, email, capacity_tag, current_status, division
+            FROM dbo.deputies
+            ORDER BY full_name
+        """)
+        rows = cursor.fetchall()
+    except pyodbc.ProgrammingError:
+        has_division = False
+        cursor.execute("""
+            SELECT full_name, email, capacity_tag, current_status
+            FROM dbo.deputies
+            ORDER BY full_name
+        """)
+        rows = cursor.fetchall()
     cursor.execute("""
         SELECT full_name, email, capacity_tag, current_status, division
         FROM dbo.deputies
@@ -252,9 +269,10 @@ def get_deputies():
             "email": row[1],
             "capacity_tag": row[2],
             "current_status": row[3],
+            "division": row[4] if has_division else None
             "division": row[4]
         }
-        for row in cursor.fetchall()
+        for row in rows
     ]
 
     conn.close()

@@ -64,6 +64,16 @@ let pendingAssignments = {};
 let pendingNotes = {};
 let allDeputies = [];
 
+function isCourtSecurityDeputy(deputy) {
+    const division = (deputy.division || "").trim().toLowerCase();
+    const capacityTag = (deputy.capacity_tag || "").trim().toLowerCase();
+
+    return division === "court security"
+        || division === "court security division"
+        || capacityTag.includes("court security")
+        || capacityTag.includes("cso");
+}
+
 function renderRoster() {
     const rosterList = document.getElementById("rosterList");
     const showFullRoster = document.getElementById("showFullRoster").checked;
@@ -71,6 +81,7 @@ function renderRoster() {
 
     const deputiesToRender = showFullRoster
         ? allDeputies
+        : allDeputies.filter(isCourtSecurityDeputy);
         : allDeputies.filter(deputy =>
             (deputy.division || "").trim().toLowerCase() === "court security"
         );
