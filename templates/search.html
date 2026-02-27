@@ -87,11 +87,16 @@
     font-size: 12px;
     margin-top: 4px;
 }
+
+.metric-red { color: #b42318; font-weight: 700; }
+.metric-green { color: #067647; font-weight: 700; }
+.metric-blue { color: #175cd3; font-weight: 700; }
+.counts-inline { margin-left: 10px; font-size: 0.9em; }
 </style>
 </head>
 <body>
 
-<h2>Search Court Assignments</h2>
+<h2>Search Court Assignments <span id="overallAssignmentCounts" class="counts-inline"></span></h2>
 
 <input type="text" id="name" placeholder="Search by Name">
 <input type="date" id="date">
@@ -127,6 +132,7 @@
 let pendingAssignments = {};
 let pendingNotes = {};
 let allDeputies = [];
+let rawDeputies = [];
 let selectedDeputy = null;
 
 function isCourtSecurityDeputy(deputy) {
@@ -173,12 +179,88 @@ function getAssignedNames() {
     return names;
 }
 
+function formatCountMetrics(vacant, filled, colorFilled = 'metric-green') {
+    return `<span class="metric-red">Vacant ${vacant}</span> / <span class="${colorFilled}">Filled ${filled}</span>`;
+}
+
+function getPostedNameSetForPostsAndCourtrooms() {
+    const names = new Set();
+    document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"]').forEach(cell => {
+        getAssignedNamesFromCell(cell).forEach(name => names.add(name));
+    });
+    return names;
+}
+
+function updateAssignmentCountBadges() {
+    const statsByCourthouse = {};
+    let overallTotal = 0;
+    let overallFilled = 0;
+
+    document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"]').forEach(cell => {
+        const courthouse = cell.dataset.courthouse || '';
+        if (!statsByCourthouse[courthouse]) {
+            statsByCourthouse[courthouse] = { total: 0, filled: 0 };
+        }
+
+        statsByCourthouse[courthouse].total += 1;
+        overallTotal += 1;
+
+        if (getAssignedNamesFromCell(cell).length > 0) {
+            statsByCourthouse[courthouse].filled += 1;
+            overallFilled += 1;
+        }
+    });
+
+    const overallVacant = Math.max(overallTotal - overallFilled, 0);
+    const overallBadge = document.getElementById('overallAssignmentCounts');
+    if (overallBadge) {
+        overallBadge.innerHTML = formatCountMetrics(overallVacant, overallFilled);
+    }
+
+    document.querySelectorAll('[data-courthouse-header]').forEach(el => {
+        const courthouse = el.dataset.courthouseHeader;
+        const stats = statsByCourthouse[courthouse] || { total: 0, filled: 0 };
+        const vacant = Math.max(stats.total - stats.filled, 0);
+        el.innerHTML = formatCountMetrics(vacant, stats.filled);
+    });
+}
+
+function getCourtSecurityRosterStats() {
+    const courtSecurity = rawDeputies.filter(isCourtSecurityDeputy);
+    const outCount = courtSecurity.filter(dep => !isDeputyAvailable(dep)).length;
+    const availableCount = courtSecurity.filter(dep => isDeputyAvailable(dep)).length;
+
+    const postedNames = getPostedNameSetForPostsAndCourtrooms();
+    const postedCount = courtSecurity.filter(dep => postedNames.has((dep.full_name || '').trim())).length;
+
+    return { outCount, availableCount, postedCount };
+}
+
+function refreshRosterHeaderCounts() {
+    const courtCountsEl = document.getElementById('courtSecurityCounts');
+    if (courtCountsEl) {
+        const stats = getCourtSecurityRosterStats();
+        courtCountsEl.innerHTML = `<span class="metric-red">Out ${stats.outCount}</span> / <span class="metric-green">Available ${stats.availableCount}</span> / <span class="metric-blue">Posted ${stats.postedCount}</span>`;
+    }
+
+    document.querySelectorAll('[data-division-posted]').forEach(el => {
+        const division = (el.dataset.divisionPosted || '').toLowerCase();
+        const postedNames = getAssignedNames();
+        const postedCount = rawDeputies.filter(dep => ((dep.division || 'Unassigned Division').trim().toLowerCase() === division)
+            && postedNames.has((dep.full_name || '').trim())).length;
+        el.textContent = `Posted ${postedCount}`;
+    });
+}
+
 function refreshRosterAssignedState() {
     const assignedNames = getAssignedNames();
     document.querySelectorAll('#rosterList .roster-item').forEach(item => {
         const name = (item.dataset.name || '').trim();
         item.classList.toggle('assigned', !!name && assignedNames.has(name));
     });
+
+    updateAssignmentCountBadges();
+    refreshRosterHeaderCounts();
 }
 
 function clearRosterSelectionUI() {
@@ -243,7 +325,7 @@ function renderRoster() {
 
     const courtHeading = document.createElement("h4");
     courtHeading.className = "roster-section-title";
-    courtHeading.textContent = "Court Security";
+    courtHeading.innerHTML = `Court Security <span id="courtSecurityCounts" class="counts-inline"></span>`;
     courtColumn.appendChild(courtHeading);
 
     const courtList = document.createElement("div");
@@ -286,7 +368,8 @@ function renderRoster() {
             if (division !== currentDivision) {
                 const divisionHeading = document.createElement("h5");
                 divisionHeading.className = "roster-section-title";
-                divisionHeading.textContent = division;
+                const safeDivision = division.replace(/"/g, '&quot;');
+                divisionHeading.innerHTML = `${division} <span class="counts-inline metric-blue" data-division-posted="${safeDivision.toLowerCase()}"></span>`;
                 fullList.appendChild(divisionHeading);
                 currentDivision = division;
             }
@@ -315,7 +398,8 @@ function loadRoster() {
     fetch("/api/deputies")
         .then(response => response.json())
         .then(data => {
-            allDeputies = (data || [])
+            rawDeputies = data || [];
+            allDeputies = rawDeputies
                 .filter(isDeputyAvailable)
                 .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
             renderRoster();
@@ -490,7 +574,11 @@ function search() {
             const container = document.getElementById("results");
             container.innerHTML = "";
 
-            if (!data || data.length === 0) return;
+            if (!data || data.length === 0) {
+                updateAssignmentCountBadges();
+                refreshRosterHeaderCounts();
+                return;
+            }
 
             const grouped = {};
 
@@ -505,7 +593,7 @@ function search() {
                 column.style.width = "50%";
 
                 const header = document.createElement("h3");
-                header.textContent = courthouse;
+                header.innerHTML = `${courthouse} <span class="counts-inline" data-courthouse-header="${courthouse}"></span>`;
                 column.appendChild(header);
 
                 const typeGroups = {};
