@@ -256,6 +256,12 @@ def get_deputies():
             ORDER BY full_name
         """)
         rows = cursor.fetchall()
+    cursor.execute("""
+        SELECT full_name, email, capacity_tag, current_status, division
+        FROM dbo.deputies
+        
+        ORDER BY full_name
+    """)
 
     deputies = [
         {
@@ -264,6 +270,7 @@ def get_deputies():
             "capacity_tag": row[2],
             "current_status": row[3],
             "division": row[4] if has_division else None
+            "division": row[4]
         }
         for row in rows
     ]
