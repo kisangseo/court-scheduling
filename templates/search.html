@@ -134,6 +134,7 @@ let pendingNotes = {};
 let allDeputies = [];
 let rawDeputies = [];
 let selectedDeputy = null;
+let globalAssignmentTotals = { total: 0, filled: 0 };
 
 function isCourtSecurityDeputy(deputy) {
     const division = (deputy.division || "").trim().toLowerCase();
@@ -191,6 +192,29 @@ function getPostedNameSetForPostsAndCourtrooms() {
     return names;
 }
 
+function fetchGlobalAssignmentTotals(dateValue) {
+    const date = dateValue || document.getElementById('date').value;
+    if (!date) {
+        globalAssignmentTotals = { total: 0, filled: 0 };
+        updateAssignmentCountBadges();
+        return Promise.resolve();
+    }
+
+    return fetch(`/api/search?date=${date}`)
+        .then(response => response.json())
+        .then(rows => {
+            const relevantRows = (rows || []).filter(row => row.assignment_type === 'Courtroom' || row.assignment_type === 'Fixed Post');
+            const total = relevantRows.length;
+            const filled = relevantRows.filter(row => (row.assigned_member || '').trim().length > 0).length;
+            globalAssignmentTotals = { total, filled };
+            updateAssignmentCountBadges();
+        })
+        .catch(() => {
+            globalAssignmentTotals = { total: 0, filled: 0 };
+            updateAssignmentCountBadges();
+        });
+}
+
 function updateAssignmentCountBadges() {
     const statsByCourthouse = {};
     let overallTotal = 0;
@@ -211,10 +235,12 @@ function updateAssignmentCountBadges() {
         }
     });
 
-    const overallVacant = Math.max(overallTotal - overallFilled, 0);
+    const sourceTotal = globalAssignmentTotals.total || overallTotal;
+    const sourceFilled = globalAssignmentTotals.total ? globalAssignmentTotals.filled : overallFilled;
+    const overallVacant = Math.max(sourceTotal - sourceFilled, 0);
     const overallBadge = document.getElementById('overallAssignmentCounts');
     if (overallBadge) {
-        overallBadge.innerHTML = formatCountMetrics(overallVacant, overallFilled);
+        overallBadge.innerHTML = formatCountMetrics(overallVacant, sourceFilled);
     }
 
     document.querySelectorAll('[data-courthouse-header]').forEach(el => {
@@ -228,10 +254,11 @@ function updateAssignmentCountBadges() {
 function getCourtSecurityRosterStats() {
     const courtSecurity = rawDeputies.filter(isCourtSecurityDeputy);
     const outCount = courtSecurity.filter(dep => !isDeputyAvailable(dep)).length;
-    const availableCount = courtSecurity.filter(dep => isDeputyAvailable(dep)).length;
-
     const postedNames = getPostedNameSetForPostsAndCourtrooms();
     const postedCount = courtSecurity.filter(dep => postedNames.has((dep.full_name || '').trim())).length;
+
+    const totalAvailablePool = courtSecurity.filter(dep => isDeputyAvailable(dep)).length;
+    const availableCount = Math.max(totalAvailablePool - postedCount, 0);
 
     return { outCount, availableCount, postedCount };
 }
@@ -566,6 +593,8 @@ function search() {
     const name = document.getElementById("name").value;
     const date = document.getElementById("date").value;
     const courthouse = document.getElementById("courthouse").value;
+
+    fetchGlobalAssignmentTotals(date);
 
     fetch(`/api/search?name=${name}&date=${date}&courthouse=${courthouse}`)
         .then(response => response.json())
@@ -921,9 +950,13 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         .then(() => {
             pendingAssignments = {};
             pendingNotes = {};
+            search();
+            loadRoster();
+            alert("Assignments saved.");
         })
         .catch(err => {
             console.error("Save failed:", err);
+            alert("Save failed. Please try again.");
         });
 });
 
