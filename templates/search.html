@@ -74,6 +74,7 @@ function renderRoster() {
         : allDeputies.filter(deputy =>
             (deputy.division || "").trim().toLowerCase() === "court security"
         );
+        : allDeputies.filter(deputy => deputy.division === "Court Security");
 
     deputiesToRender.forEach(deputy => {
         const deputyRow = document.createElement("div");
