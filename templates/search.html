@@ -23,12 +23,16 @@
 <button onclick="search()">Search</button><button onclick="openRoster()">Roster</button><button onclick="window.open('/staffing', '_blank')">
     Staffing Resources Daily
 </button>
+<button id="saveAssignments">Save Assignments</button>
 
 <br><br>
 
 <div id="results" style="display:flex; gap:40px; align-items:flex-start;"></div>
 
 <script>
+let pendingAssignments = {};
+let pendingNotes = {};
+
 function search() {
     const name = document.getElementById("name").value;
     const date = document.getElementById("date").value;
@@ -325,65 +329,18 @@ document.addEventListener("click", function(e) {
                 assigned_member: select.value
             };
 
-            fetch("/api/update-deputy", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            })
-            .then(res => res.json())
-            .then(() => {
-                cell.textContent = select.value;
-            });
+            const key = [
+                payload.assignment_date,
+                payload.courthouse,
+                payload.assignment_type,
+                payload.location_detail,
+                payload.part
+            ].join("|");
+
+            pendingAssignments[key] = payload;
+            cell.textContent = select.value;
         });
     });
-    const select = document.createElement("select");
-
-    const blank = document.createElement("option");
-    blank.value = "";
-    blank.textContent = "-- Select --";
-    select.appendChild(blank);
-
-    roster.forEach(name => {
-        const option = document.createElement("option");
-        option.value = name;
-        option.textContent = name;
-        select.appendChild(option);
-    });
-
-    select.value = cell.textContent.trim();
-
-    cell.innerHTML = "";
-    cell.appendChild(select);
-
-    select.focus();
-    select.addEventListener("change", function() {
-
-    const payload = {
-        assignment_date: cell.dataset.date,
-        courthouse: cell.dataset.courthouse,
-        assignment_type: cell.dataset.type,
-        location_detail: cell.dataset.room,
-        part: cell.dataset.part,
-        assigned_member: select.value
-    };
-
-    fetch("/api/update-deputy", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-    })
-    .then(res => res.json())
-    .then(() => {
-        cell.textContent = select.value;
-    })
-    .catch(err => {
-        console.error("Update failed:", err);
-    });
-
-    });
-
 });
 document.addEventListener("click", function(e) {
 
@@ -411,19 +368,55 @@ document.addEventListener("click", function(e) {
             assignment_notes: input.value
         };
 
-        fetch("/api/update-assignment-notes", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        })
-        .then(res => res.json())
-        .then(() => {
-            cell.textContent = input.value;
-        });
+        const key = [
+            payload.assignment_date,
+            payload.courthouse,
+            payload.assignment_type,
+            payload.location_detail,
+            payload.part
+        ].join("|");
+
+        pendingNotes[key] = payload;
+        cell.textContent = input.value;
 
     });
 
 });
+
+document.getElementById("saveAssignments").addEventListener("click", function() {
+
+    const assignmentRequests = Object.values(pendingAssignments).map(payload =>
+        fetch("/api/update-deputy", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(res => {
+            if (!res.ok) throw new Error("Failed to save deputy assignment");
+            return res.json();
+        })
+    );
+
+    const notesRequests = Object.values(pendingNotes).map(payload =>
+        fetch("/api/update-assignment-notes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(res => {
+            if (!res.ok) throw new Error("Failed to save assignment note");
+            return res.json();
+        })
+    );
+
+    Promise.all([...assignmentRequests, ...notesRequests])
+        .then(() => {
+            pendingAssignments = {};
+            pendingNotes = {};
+        })
+        .catch(err => {
+            console.error("Save failed:", err);
+        });
+});
+
 function openRoster() {
     window.open("/roster", "_blank");
 }
