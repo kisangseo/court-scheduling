@@ -175,17 +175,33 @@ function createDeputyRow(dep, includeDivision) {
 
     const rankSelect = document.createElement("select");
     buildOptions(rankSelect, rankOptions, dep.rank || "");
+    rankSelect.disabled = true;
 
     const capabilitySelect = document.createElement("select");
     buildOptions(capabilitySelect, capabilityOptions, dep.capacity_tag || "");
+    capabilitySelect.disabled = true;
 
     const statusTd = document.createElement("td");
     statusTd.appendChild(renderStatusControls(dep, tr));
 
     const actionsTd = document.createElement("td");
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.textContent = "Edit";
+
     const saveBtn = document.createElement("button");
     saveBtn.type = "button";
     saveBtn.textContent = "Save";
+    saveBtn.style.display = "none";
+
+    editBtn.addEventListener("click", () => {
+        rankSelect.disabled = false;
+        capabilitySelect.disabled = false;
+        editBtn.style.display = "none";
+        saveBtn.style.display = "inline-block";
+    });
+
     saveBtn.addEventListener("click", () => {
         fetch("/api/upsert-deputy", {
             method: "POST",
@@ -212,6 +228,7 @@ function createDeputyRow(dep, includeDivision) {
         }).then(() => loadRoster());
     });
 
+    actionsTd.appendChild(editBtn);
     actionsTd.appendChild(saveBtn);
     actionsTd.appendChild(removeBtn);
 
