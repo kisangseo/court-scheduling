@@ -240,7 +240,7 @@ def get_deputies():
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT full_name, email, capacity_tag, current_status
+        SELECT full_name, email, capacity_tag, current_status, division
         FROM dbo.deputies
         
         ORDER BY full_name
@@ -251,7 +251,8 @@ def get_deputies():
             "full_name": row[0],
             "email": row[1],
             "capacity_tag": row[2],
-            "current_status": row[3]
+            "current_status": row[3],
+            "division": row[4]
         }
         for row in cursor.fetchall()
     ]

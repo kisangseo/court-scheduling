@@ -71,6 +71,9 @@ function renderRoster() {
 
     const deputiesToRender = showFullRoster
         ? allDeputies
+        : allDeputies.filter(deputy =>
+            (deputy.division || "").trim().toLowerCase() === "court security"
+        );
         : allDeputies.filter(deputy => deputy.division === "Court Security");
 
     deputiesToRender.forEach(deputy => {
