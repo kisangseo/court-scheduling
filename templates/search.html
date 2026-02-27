@@ -29,6 +29,17 @@
     margin: 12px 0 4px;
 }
 
+#rosterList.roster-two-column {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.roster-column {
+    flex: 1;
+    min-width: 0;
+}
+
 .roster-item.assigned {
     opacity: 0.45;
 }
@@ -163,22 +174,54 @@ function renderRoster() {
     const rosterList = document.getElementById("rosterList");
     const showFullRoster = document.getElementById("showFullRoster").checked;
     rosterList.innerHTML = "";
+    rosterList.classList.toggle("roster-two-column", showFullRoster);
 
+    const courtColumn = document.createElement("div");
+    courtColumn.className = "roster-column";
+
+    const courtHeading = document.createElement("h4");
+    courtHeading.className = "roster-section-title";
+    courtHeading.textContent = "Court Security";
+    courtColumn.appendChild(courtHeading);
+
+    const courtList = document.createElement("div");
+    courtList.id = "courtSecurityRosterList";
+    courtList.className = "draggable-roster-list";
     const courtSecurityDeputies = allDeputies.filter(isCourtSecurityDeputy);
     courtSecurityDeputies.forEach(deputy => {
-        rosterList.appendChild(createRosterItem(deputy));
+        courtList.appendChild(createRosterItem(deputy));
     });
+    courtColumn.appendChild(courtList);
+    rosterList.appendChild(courtColumn);
 
     if (showFullRoster) {
-        const fullRosterHeading = document.createElement("h4");
-        fullRosterHeading.className = "roster-section-title";
-        fullRosterHeading.textContent = "Full Roster";
-        rosterList.appendChild(fullRosterHeading);
+        const fullColumn = document.createElement("div");
+        fullColumn.className = "roster-column";
 
-        const nonCourtSecurityDeputies = allDeputies.filter(deputy => !isCourtSecurityDeputy(deputy));
-        nonCourtSecurityDeputies.forEach(deputy => {
-            rosterList.appendChild(createRosterItem(deputy));
+        const fullHeading = document.createElement("h4");
+        fullHeading.className = "roster-section-title";
+        fullHeading.textContent = "Full Roster";
+        fullColumn.appendChild(fullHeading);
+
+        const fullList = document.createElement("div");
+        fullList.id = "fullRosterList";
+        fullList.className = "draggable-roster-list";
+
+        const fullRosterSorted = [...allDeputies].sort((a, b) => {
+            const divisionA = (a.division || "Unassigned Division").trim().toLowerCase();
+            const divisionB = (b.division || "Unassigned Division").trim().toLowerCase();
+            if (divisionA !== divisionB) {
+                return divisionA.localeCompare(divisionB);
+            }
+            return (a.full_name || "").localeCompare(b.full_name || "");
         });
+
+        fullRosterSorted.forEach(deputy => {
+            fullList.appendChild(createRosterItem(deputy));
+        });
+
+        fullColumn.appendChild(fullList);
+        rosterList.appendChild(fullColumn);
     }
 
     initRosterDrag();
@@ -325,7 +368,7 @@ function initAssignmentDropzones() {
             group: {
                 name: 'assignmentRoster',
                 pull: false,
-                put: (to, from) => from.el.id === 'rosterList'
+                put: (to, from) => from.el.classList.contains('draggable-roster-list')
             },
             animation: 100,
             sort: false,
@@ -364,22 +407,22 @@ function initAssignmentDropzones() {
     });
 }
 
-let rosterSortable = null;
+let rosterSortables = [];
 function initRosterDrag() {
-    const rosterList = document.getElementById('rosterList');
-    if (rosterSortable) {
-        rosterSortable.destroy();
-    }
+    rosterSortables.forEach(sortable => sortable.destroy());
+    rosterSortables = [];
 
-    rosterSortable = Sortable.create(rosterList, {
-        group: {
-            name: 'assignmentRoster',
-            pull: 'clone',
-            put: false
-        },
-        animation: 100,
-        sort: false,
-        filter: '.roster-section-title'
+    document.querySelectorAll('.draggable-roster-list').forEach(rosterEl => {
+        const sortable = Sortable.create(rosterEl, {
+            group: {
+                name: 'assignmentRoster',
+                pull: 'clone',
+                put: false
+            },
+            animation: 100,
+            sort: false
+        });
+        rosterSortables.push(sortable);
     });
 }
 
@@ -638,7 +681,11 @@ function search() {
 window.onload = function() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById("date").value = today;
+
     document.getElementById("showFullRoster").addEventListener("change", renderRoster);
+    document.getElementById("courthouse").addEventListener("change", search);
+    document.getElementById("date").addEventListener("change", search);
+
     loadRoster();
     search();
 };
