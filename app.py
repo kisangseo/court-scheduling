@@ -256,48 +256,19 @@ def get_deputies():
             ORDER BY full_name
         """)
         rows = cursor.fetchall()
-    cursor.execute("""
-        SELECT full_name, email, capacity_tag, current_status, division
-        FROM dbo.deputies
-        
-        ORDER BY full_name
-    """)
-
-    try:
-        cursor.execute("""
-            SELECT full_name, email, capacity_tag, current_status, division
-            FROM dbo.deputies
-            ORDER BY full_name
-        """)
-        rows = cursor.fetchall()
-    except pyodbc.ProgrammingError:
-        has_division = False
-        cursor.execute("""
-            SELECT full_name, email, capacity_tag, current_status
-            FROM dbo.deputies
-            ORDER BY full_name
-        """)
-        rows = cursor.fetchall()
 
     deputies = []
-    for row in rows:
-        deputies.append({
-
     for row in rows:
         deputy = {
             "full_name": row[0],
             "email": row[1],
             "capacity_tag": row[2],
             "current_status": row[3],
-            "division": row[4] if has_division else None,
-        })
+            "division": None
         }
+        if has_division and len(row) > 4:
+            deputy["division"] = row[4]
         deputies.append(deputy)
-            "division": row[4] if has_division else None
-            "division": row[4]
-        }
-        for row in rows
-    ]
 
     conn.close()
 
