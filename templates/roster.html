@@ -173,13 +173,19 @@ function renderStatusControls(dep, hostTr) {
 function createDeputyRow(dep, includeDivision) {
     const tr = document.createElement("tr");
 
+    const rankDisplay = document.createElement("span");
+    rankDisplay.textContent = dep.rank || "";
+
+    const capabilityDisplay = document.createElement("span");
+    capabilityDisplay.textContent = dep.capacity_tag || "";
+
     const rankSelect = document.createElement("select");
     buildOptions(rankSelect, rankOptions, dep.rank || "");
-    rankSelect.disabled = true;
+    rankSelect.style.display = "none";
 
     const capabilitySelect = document.createElement("select");
     buildOptions(capabilitySelect, capabilityOptions, dep.capacity_tag || "");
-    capabilitySelect.disabled = true;
+    capabilitySelect.style.display = "none";
 
     const statusTd = document.createElement("td");
     statusTd.appendChild(renderStatusControls(dep, tr));
@@ -196,8 +202,10 @@ function createDeputyRow(dep, includeDivision) {
     saveBtn.style.display = "none";
 
     editBtn.addEventListener("click", () => {
-        rankSelect.disabled = false;
-        capabilitySelect.disabled = false;
+        rankDisplay.style.display = "none";
+        capabilityDisplay.style.display = "none";
+        rankSelect.style.display = "inline-block";
+        capabilitySelect.style.display = "inline-block";
         editBtn.style.display = "none";
         saveBtn.style.display = "inline-block";
     });
@@ -236,10 +244,12 @@ function createDeputyRow(dep, includeDivision) {
     if (includeDivision) tr.appendChild(Object.assign(document.createElement("td"), { textContent: dep.division || "Unassigned Division" }));
 
     const rankTd = document.createElement("td");
+    rankTd.appendChild(rankDisplay);
     rankTd.appendChild(rankSelect);
     tr.appendChild(rankTd);
 
     const capabilityTd = document.createElement("td");
+    capabilityTd.appendChild(capabilityDisplay);
     capabilityTd.appendChild(capabilitySelect);
     tr.appendChild(capabilityTd);
 

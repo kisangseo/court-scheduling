@@ -135,6 +135,7 @@ let allDeputies = [];
 let rawDeputies = [];
 let selectedDeputy = null;
 let globalAssignmentTotals = { total: 0, filled: 0 };
+let globalPostedNames = new Set();
 
 function isCourtSecurityDeputy(deputy) {
     const division = (deputy.division || "").trim().toLowerCase();
@@ -185,7 +186,7 @@ function formatCountMetrics(vacant, filled, colorFilled = 'metric-green') {
 }
 
 function getPostedNameSetForPostsAndCourtrooms() {
-    const names = new Set();
+    const names = new Set(globalPostedNames);
     document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"]').forEach(cell => {
         getAssignedNamesFromCell(cell).forEach(name => names.add(name));
     });
@@ -205,13 +206,26 @@ function fetchGlobalAssignmentTotals(dateValue) {
         .then(rows => {
             const relevantRows = (rows || []).filter(row => row.assignment_type === 'Courtroom' || row.assignment_type === 'Fixed Post');
             const total = relevantRows.length;
-            const filled = relevantRows.filter(row => (row.assigned_member || '').trim().length > 0).length;
+            const filledRows = relevantRows.filter(row => (row.assigned_member || '').trim().length > 0);
+            const filled = filledRows.length;
+
+            const posted = new Set();
+            filledRows.forEach(row => {
+                (row.assigned_member || '').split(',').map(n => n.trim()).filter(Boolean).forEach(name => posted.add(name));
+            });
+            globalPostedNames = posted;
+
             globalAssignmentTotals = { total, filled };
             updateAssignmentCountBadges();
+            refreshRosterHeaderCounts();
+            refreshRosterAssignedState();
         })
         .catch(() => {
             globalAssignmentTotals = { total: 0, filled: 0 };
+            globalPostedNames = new Set();
             updateAssignmentCountBadges();
+            refreshRosterHeaderCounts();
+            refreshRosterAssignedState();
         });
 }
 
@@ -280,7 +294,7 @@ function refreshRosterHeaderCounts() {
 }
 
 function refreshRosterAssignedState() {
-    const assignedNames = getAssignedNames();
+    const assignedNames = getPostedNameSetForPostsAndCourtrooms();
     document.querySelectorAll('#rosterList .roster-item').forEach(item => {
         const name = (item.dataset.name || '').trim();
         item.classList.toggle('assigned', !!name && assignedNames.has(name));
