@@ -422,7 +422,7 @@ function isDeputyAvailable(deputy) {
 }
 
 function loadRoster() {
-    fetch("/api/deputies")
+    fetch(`/api/deputies?date=${document.getElementById("date").value || ""}`)
         .then(response => response.json())
         .then(data => {
             rawDeputies = data || [];
