@@ -901,6 +901,29 @@ document.addEventListener("click", function(e) {
 
 document.getElementById("saveAssignments").addEventListener("click", function() {
 
+    const invalidSecurityCells = [];
+    document.querySelectorAll('.editable[data-type="Fixed Post"]').forEach(cell => {
+        const assignedName = getAssignedNameFromCell(cell);
+        if (!assignedName) {
+            invalidSecurityCells.push(cell.dataset.room || "Security Post");
+            return;
+        }
+
+        const deputy = allDeputies.find(dep => (dep.full_name || "") === assignedName);
+        const role = ((deputy && (deputy.role || deputy.capacity_tag)) || cell.querySelector('.assignment-chip')?.dataset.role || "")
+            .trim()
+            .toUpperCase();
+
+        if (!isArmedRole(role)) {
+            invalidSecurityCells.push(cell.dataset.room || "Security Post");
+        }
+    });
+
+    if (invalidSecurityCells.length > 0) {
+        alert(`Each security post must have at least one armed person (DEP/SPO). Check: ${invalidSecurityCells.join(', ')}`);
+        return;
+    }
+
     const assignmentRequests = Object.values(pendingAssignments).map(payload =>
         fetch("/api/update-deputy", {
             method: "POST",
