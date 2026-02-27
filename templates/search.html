@@ -2,9 +2,84 @@
 <html>
 <head>
     <title>Court Assignment Search</title>
-    <style>
+<style>
 #csoDetailTable td {
     height: 35px;
+}
+
+#assignmentRosterLayout {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+#assignmentsPanel {
+    width: 70%;
+}
+
+#rosterPanel {
+    width: 30%;
+}
+
+.roster-item {
+    padding: 4px 0;
+}
+
+.roster-section-title {
+    margin: 12px 0 4px;
+}
+
+#rosterList.roster-two-column {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.roster-column {
+    flex: 1;
+    min-width: 0;
+}
+
+.roster-item.assigned {
+    opacity: 0.45;
+}
+
+.editable {
+    min-height: 28px;
+}
+
+.assignment-chip {
+    padding: 2px 6px;
+    background: #eef3ff;
+    border-radius: 4px;
+    display: inline-block;
+    margin: 2px 4px 2px 0;
+}
+
+.assignment-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.add-deputy-btn {
+    margin-left: 4px;
+    border: 1px solid #98a2b3;
+    background: #fff;
+    border-radius: 4px;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+}
+
+.editable.append-mode {
+    outline: 2px dashed #98a2b3;
+}
+
+.cell-warning {
+    color: #b42318;
+    font-size: 12px;
+    margin-top: 4px;
 }
 </style>
 </head>
@@ -27,11 +102,329 @@
 
 <br><br>
 
-<div id="results" style="display:flex; gap:40px; align-items:flex-start;"></div>
+<div id="assignmentRosterLayout">
+    <div id="assignmentsPanel">
+        <div id="results" style="display:flex; gap:40px; align-items:flex-start;"></div>
+    </div>
+    <div id="rosterPanel">
+        <h3>Court Security Roster</h3>
+        <label>
+            <input type="checkbox" id="showFullRoster">
+            Show Full Roster
+        </label>
+        <div id="rosterList"></div>
+    </div>
+</div>
 
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
 let pendingAssignments = {};
 let pendingNotes = {};
+let allDeputies = [];
+
+function isCourtSecurityDeputy(deputy) {
+    const division = (deputy.division || "").trim().toLowerCase();
+    const capacityTag = (deputy.capacity_tag || "").trim().toLowerCase();
+
+    return division === "court security"
+        || division === "court security division"
+        || capacityTag.includes("court security")
+        || capacityTag.includes("cso");
+}
+
+function getDeputyRole(deputy) {
+    return (deputy.role || deputy.capacity_tag || "").trim().toUpperCase();
+}
+
+function createRosterItem(deputy) {
+    const deputyRow = document.createElement("div");
+    deputyRow.className = "roster-item";
+    deputyRow.dataset.name = deputy.full_name || "";
+    deputyRow.dataset.role = getDeputyRole(deputy);
+
+    const division = (deputy.division || "Unassigned Division").trim() || "Unassigned Division";
+    deputyRow.textContent = `${deputy.full_name} - ${division} (${deputy.capacity_tag || ""})`;
+
+    return deputyRow;
+}
+
+function getAssignedNamesFromCell(cell) {
+    return Array.from(cell.querySelectorAll('.assignment-chip'))
+        .map(chip => (chip.dataset.name || chip.textContent || '').trim())
+        .filter(Boolean);
+}
+
+function getAssignedNames() {
+    const names = new Set();
+    document.querySelectorAll('.editable').forEach(cell => {
+        getAssignedNamesFromCell(cell).forEach(name => names.add(name));
+    });
+    return names;
+}
+
+function refreshRosterAssignedState() {
+    const assignedNames = getAssignedNames();
+    document.querySelectorAll('#rosterList .roster-item').forEach(item => {
+        const name = (item.dataset.name || '').trim();
+        item.classList.toggle('assigned', !!name && assignedNames.has(name));
+    });
+}
+
+function renderRoster() {
+    const rosterList = document.getElementById("rosterList");
+    const showFullRoster = document.getElementById("showFullRoster").checked;
+    rosterList.innerHTML = "";
+    rosterList.classList.toggle("roster-two-column", showFullRoster);
+
+    const courtColumn = document.createElement("div");
+    courtColumn.className = "roster-column";
+
+    const courtHeading = document.createElement("h4");
+    courtHeading.className = "roster-section-title";
+    courtHeading.textContent = "Court Security";
+    courtColumn.appendChild(courtHeading);
+
+    const courtList = document.createElement("div");
+    courtList.id = "courtSecurityRosterList";
+    courtList.className = "draggable-roster-list";
+    const courtSecurityDeputies = allDeputies.filter(isCourtSecurityDeputy);
+    courtSecurityDeputies.forEach(deputy => {
+        courtList.appendChild(createRosterItem(deputy));
+    });
+    courtColumn.appendChild(courtList);
+    rosterList.appendChild(courtColumn);
+
+    if (showFullRoster) {
+        const fullColumn = document.createElement("div");
+        fullColumn.className = "roster-column";
+
+        const fullHeading = document.createElement("h4");
+        fullHeading.className = "roster-section-title";
+        fullHeading.textContent = "Full Roster";
+        fullColumn.appendChild(fullHeading);
+
+        const fullList = document.createElement("div");
+        fullList.id = "fullRosterList";
+        fullList.className = "draggable-roster-list";
+
+        const fullRosterSorted = [...allDeputies].sort((a, b) => {
+            const divisionA = (a.division || "Unassigned Division").trim().toLowerCase();
+            const divisionB = (b.division || "Unassigned Division").trim().toLowerCase();
+            if (divisionA !== divisionB) {
+                return divisionA.localeCompare(divisionB);
+            }
+            return (a.full_name || "").localeCompare(b.full_name || "");
+        });
+
+        fullRosterSorted.forEach(deputy => {
+            fullList.appendChild(createRosterItem(deputy));
+        });
+
+        fullColumn.appendChild(fullList);
+        rosterList.appendChild(fullColumn);
+    }
+
+    initRosterDrag();
+    refreshRosterAssignedState();
+}
+
+function isDeputyAvailable(deputy) {
+    const status = (deputy.current_status || '').trim().toLowerCase();
+    if (!status) return true;
+
+    return !status.includes('leave')
+        && !status.includes('sick')
+        && !status.includes('light duty');
+}
+
+function loadRoster() {
+    fetch("/api/deputies")
+        .then(response => response.json())
+        .then(data => {
+            allDeputies = (data || [])
+                .filter(isDeputyAvailable)
+                .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
+            renderRoster();
+        });
+}
+
+function getCellAssignmentCategory(cell) {
+    if (cell.dataset.type === 'Courtroom') return 'courtroom';
+    if (cell.dataset.type === 'Fixed Post') return 'security';
+    return 'overtime';
+}
+
+function isArmedRole(role) {
+    return role === 'DEP' || role === 'SPO' || role === 'F';
+}
+
+function isEligibleForCell(cell, role) {
+    const category = getCellAssignmentCategory(cell);
+    if (category === 'courtroom') {
+        return isArmedRole(role);
+    }
+    return true;
+}
+
+function showCellWarning(cell, message) {
+    const existing = cell.querySelector('.cell-warning');
+    if (existing) existing.remove();
+    const warning = document.createElement('div');
+    warning.className = 'cell-warning';
+    warning.textContent = message;
+    cell.appendChild(warning);
+    setTimeout(() => warning.remove(), 2000);
+}
+
+function buildAssignmentChip(name, role) {
+    const chip = document.createElement('div');
+    chip.className = 'assignment-chip';
+    chip.dataset.name = name;
+    chip.dataset.role = role || '';
+    chip.textContent = name;
+    return chip;
+}
+
+function clearExistingAssignmentForName(name, excludeCell) {
+    document.querySelectorAll('.editable').forEach(cell => {
+        if (cell === excludeCell) return;
+
+        const chips = Array.from(cell.querySelectorAll('.assignment-chip'));
+        let removed = false;
+        chips.forEach(chip => {
+            const chipName = (chip.dataset.name || chip.textContent || '').trim();
+            if (chipName === name) {
+                chip.remove();
+                removed = true;
+            }
+        });
+
+        if (removed) {
+            setPendingAssignmentFromCell(cell);
+        }
+    });
+}
+
+function setPendingAssignmentFromCell(cell) {
+    const assignedName = getAssignedNamesFromCell(cell).join(', ');
+    const payload = {
+        assignment_date: cell.dataset.date,
+        courthouse: cell.dataset.courthouse,
+        assignment_type: cell.dataset.type,
+        location_detail: cell.dataset.room,
+        part: cell.dataset.part,
+        assigned_member: assignedName
+    };
+
+    const key = [
+        payload.assignment_date,
+        payload.courthouse,
+        payload.assignment_type,
+        payload.location_detail,
+        payload.part
+    ].join('|');
+
+    pendingAssignments[key] = payload;
+}
+
+function ensureCellStructure(cell) {
+    let list = cell.querySelector('.assignment-list');
+    if (!list) {
+        list = document.createElement('div');
+        list.className = 'assignment-list';
+        cell.appendChild(list);
+    }
+
+    let addButton = cell.querySelector('.add-deputy-btn');
+    if (!addButton) {
+        addButton = document.createElement('button');
+        addButton.type = 'button';
+        addButton.className = 'add-deputy-btn';
+        addButton.textContent = '+';
+        addButton.title = 'Add additional deputy';
+        addButton.addEventListener('click', () => {
+            cell.dataset.appendMode = 'true';
+            cell.classList.add('append-mode');
+        });
+        cell.appendChild(addButton);
+    }
+
+    return list;
+}
+
+function initAssignmentDropzones() {
+    document.querySelectorAll('.editable').forEach(cell => {
+        const existingName = cell.textContent.trim();
+        cell.innerHTML = '';
+        const list = ensureCellStructure(cell);
+
+        if (existingName) {
+            existingName.split(',').map(name => name.trim()).filter(Boolean).forEach(name => {
+                list.appendChild(buildAssignmentChip(name, ''));
+            });
+        }
+
+        Sortable.create(cell, {
+            group: {
+                name: 'assignmentRoster',
+                pull: false,
+                put: (to, from) => from.el.classList.contains('draggable-roster-list')
+            },
+            animation: 100,
+            sort: false,
+            onAdd: (evt) => {
+                const dropCell = evt.to;
+                const item = evt.item;
+                const role = (item.dataset.role || '').trim().toUpperCase();
+                const assignedName = (item.dataset.name || item.textContent || '').trim();
+
+                if (!isEligibleForCell(dropCell, role)) {
+                    item.remove();
+                    showCellWarning(dropCell, 'Select eligible personnel');
+                    return;
+                }
+
+                const assignmentList = ensureCellStructure(dropCell);
+                clearExistingAssignmentForName(assignedName, dropCell);
+
+                if (dropCell.dataset.appendMode !== 'true') {
+                    assignmentList.innerHTML = '';
+                }
+
+                item.className = 'assignment-chip';
+                item.dataset.name = assignedName;
+                item.dataset.role = role;
+                item.textContent = assignedName;
+                assignmentList.appendChild(item);
+
+                dropCell.dataset.appendMode = 'false';
+                dropCell.classList.remove('append-mode');
+
+                setPendingAssignmentFromCell(dropCell);
+                refreshRosterAssignedState();
+            }
+        });
+    });
+}
+
+let rosterSortables = [];
+function initRosterDrag() {
+    rosterSortables.forEach(sortable => sortable.destroy());
+    rosterSortables = [];
+
+    document.querySelectorAll('.draggable-roster-list').forEach(rosterEl => {
+        const sortable = Sortable.create(rosterEl, {
+            group: {
+                name: 'assignmentRoster',
+                pull: 'clone',
+                put: false
+            },
+            animation: 100,
+            sort: false
+        });
+        rosterSortables.push(sortable);
+    });
+}
 
 function search() {
     const name = document.getElementById("name").value;
@@ -280,68 +673,22 @@ function search() {
 
                 container.appendChild(column);
             }
+            initAssignmentDropzones();
+            refreshRosterAssignedState();
         });
 }
 
 window.onload = function() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById("date").value = today;
+
+    document.getElementById("showFullRoster").addEventListener("change", renderRoster);
+    document.getElementById("courthouse").addEventListener("change", search);
+    document.getElementById("date").addEventListener("change", search);
+
+    loadRoster();
     search();
 };
-document.addEventListener("click", function(e) {
-
-    if (!e.target.classList.contains("editable")) return;
-
-    const cell = e.target;
-
-    fetch("/api/deputies-available")
-    .then(res => res.json())
-    .then(roster => {
-
-        const select = document.createElement("select");
-
-        const blank = document.createElement("option");
-        blank.value = "";
-        blank.textContent = "-- Select --";
-        select.appendChild(blank);
-
-        roster.forEach(dep => {
-            const option = document.createElement("option");
-            option.value = dep.full_name;
-            option.textContent = dep.full_name + " (" + dep.capacity_tag + ")";
-            select.appendChild(option);
-        });
-
-        select.value = cell.textContent.trim();
-
-        cell.innerHTML = "";
-        cell.appendChild(select);
-        select.focus();
-
-        select.addEventListener("change", function() {
-
-            const payload = {
-                assignment_date: cell.dataset.date,
-                courthouse: cell.dataset.courthouse,
-                assignment_type: cell.dataset.type,
-                location_detail: cell.dataset.room,
-                part: cell.dataset.part,
-                assigned_member: select.value
-            };
-
-            const key = [
-                payload.assignment_date,
-                payload.courthouse,
-                payload.assignment_type,
-                payload.location_detail,
-                payload.part
-            ].join("|");
-
-            pendingAssignments[key] = payload;
-            cell.textContent = select.value;
-        });
-    });
-});
 document.addEventListener("click", function(e) {
 
     const cell = e.target.closest(".editable-assignment");
