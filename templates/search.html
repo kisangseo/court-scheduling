@@ -143,14 +143,18 @@ function getDeputyRole(deputy) {
     return (deputy.role || deputy.capacity_tag || "").trim().toUpperCase();
 }
 
-function createRosterItem(deputy) {
+function createRosterItem(deputy, options = {}) {
     const deputyRow = document.createElement("div");
     deputyRow.className = "roster-item";
     deputyRow.dataset.name = deputy.full_name || "";
     deputyRow.dataset.role = getDeputyRole(deputy);
 
+    const showDivision = options.showDivision === true;
     const division = (deputy.division || "Unassigned Division").trim() || "Unassigned Division";
-    deputyRow.textContent = `${deputy.full_name} - ${division} (${deputy.capacity_tag || ""})`;
+
+    deputyRow.textContent = showDivision
+        ? `${deputy.full_name} - ${division} (${deputy.capacity_tag || ""})`
+        : `${deputy.full_name} (${deputy.capacity_tag || ""})`;
 
     return deputyRow;
 }
@@ -247,7 +251,7 @@ function renderRoster() {
     courtList.className = "draggable-roster-list";
     const courtSecurityDeputies = allDeputies.filter(isCourtSecurityDeputy);
     courtSecurityDeputies.forEach(deputy => {
-        courtList.appendChild(createRosterItem(deputy));
+        courtList.appendChild(createRosterItem(deputy, { showDivision: false }));
     });
     courtColumn.appendChild(courtList);
     rosterList.appendChild(courtColumn);
@@ -276,8 +280,18 @@ function renderRoster() {
                 return (a.full_name || "").localeCompare(b.full_name || "");
             });
 
+        let currentDivision = null;
         fullRosterSorted.forEach(deputy => {
-            fullList.appendChild(createRosterItem(deputy));
+            const division = (deputy.division || "Unassigned Division").trim() || "Unassigned Division";
+            if (division !== currentDivision) {
+                const divisionHeading = document.createElement("h5");
+                divisionHeading.className = "roster-section-title";
+                divisionHeading.textContent = division;
+                fullList.appendChild(divisionHeading);
+                currentDivision = division;
+            }
+
+            fullList.appendChild(createRosterItem(deputy, { showDivision: false }));
         });
 
         fullColumn.appendChild(fullList);
