@@ -182,7 +182,7 @@ function getCellAssignmentCategory(cell) {
 }
 
 function isArmedRole(role) {
-    return role === 'DEP' || role === 'SPO';
+    return role === 'DEP' || role === 'SPO' || role === 'F';
 }
 
 function isEligibleForCell(cell, role) {
@@ -210,6 +210,21 @@ function buildAssignmentChip(name, role) {
     chip.dataset.role = role || '';
     chip.textContent = name;
     return chip;
+}
+
+function clearExistingAssignmentForName(name, excludeCell) {
+    document.querySelectorAll('.editable').forEach(cell => {
+        if (cell === excludeCell) return;
+
+        const chip = cell.querySelector('.assignment-chip');
+        if (!chip) return;
+
+        const chipName = (chip.dataset.name || chip.textContent || '').trim();
+        if (chipName !== name) return;
+
+        chip.remove();
+        setPendingAssignmentFromCell(cell, '');
+    });
 }
 
 function setPendingAssignmentFromCell(cell, assignedName) {
@@ -260,6 +275,8 @@ function initAssignmentDropzones() {
                     showCellWarning(dropCell, 'Select eligible personnel');
                     return;
                 }
+
+                clearExistingAssignmentForName(assignedName, dropCell);
 
                 Array.from(dropCell.children).forEach(child => {
                     if (child !== item && !child.classList.contains('cell-warning')) {
