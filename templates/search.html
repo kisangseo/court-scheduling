@@ -23,6 +23,12 @@
 
 .roster-item {
     padding: 4px 0;
+    cursor: pointer;
+}
+
+.roster-item.selected {
+    outline: 2px solid #528bff;
+    border-radius: 4px;
 }
 
 .roster-section-title {
@@ -121,6 +127,7 @@
 let pendingAssignments = {};
 let pendingNotes = {};
 let allDeputies = [];
+let selectedDeputy = null;
 
 function isCourtSecurityDeputy(deputy) {
     const division = (deputy.division || "").trim().toLowerCase();
@@ -170,6 +177,57 @@ function refreshRosterAssignedState() {
     });
 }
 
+function clearRosterSelectionUI() {
+    document.querySelectorAll('#rosterList .roster-item.selected').forEach(item => {
+        item.classList.remove('selected');
+    });
+}
+
+function setSelectedDeputyFromRosterItem(item) {
+    if (!item) {
+        selectedDeputy = null;
+        clearRosterSelectionUI();
+        return;
+    }
+
+    const deputyName = (item.dataset.name || item.textContent || '').trim();
+    const deputyRole = (item.dataset.role || '').trim().toUpperCase();
+
+    if (selectedDeputy && selectedDeputy.name === deputyName) {
+        selectedDeputy = null;
+        clearRosterSelectionUI();
+        return;
+    }
+
+    selectedDeputy = { name: deputyName, role: deputyRole };
+    clearRosterSelectionUI();
+    item.classList.add('selected');
+}
+
+function applyDeputyToCell(dropCell, assignedName, role) {
+    if (!isEligibleForCell(dropCell, role)) {
+        showCellWarning(dropCell, 'Select eligible personnel');
+        return false;
+    }
+
+    const assignmentList = ensureCellStructure(dropCell);
+    clearExistingAssignmentForName(assignedName, dropCell);
+
+    if (dropCell.dataset.appendMode !== 'true') {
+        assignmentList.innerHTML = '';
+    }
+
+    const item = buildAssignmentChip(assignedName, role);
+    assignmentList.appendChild(item);
+
+    dropCell.dataset.appendMode = 'false';
+    dropCell.classList.remove('append-mode');
+
+    setPendingAssignmentFromCell(dropCell);
+    refreshRosterAssignedState();
+    return true;
+}
+
 function renderRoster() {
     const rosterList = document.getElementById("rosterList");
     const showFullRoster = document.getElementById("showFullRoster").checked;
@@ -207,14 +265,16 @@ function renderRoster() {
         fullList.id = "fullRosterList";
         fullList.className = "draggable-roster-list";
 
-        const fullRosterSorted = [...allDeputies].sort((a, b) => {
-            const divisionA = (a.division || "Unassigned Division").trim().toLowerCase();
-            const divisionB = (b.division || "Unassigned Division").trim().toLowerCase();
-            if (divisionA !== divisionB) {
-                return divisionA.localeCompare(divisionB);
-            }
-            return (a.full_name || "").localeCompare(b.full_name || "");
-        });
+        const fullRosterSorted = allDeputies
+            .filter(deputy => !isCourtSecurityDeputy(deputy))
+            .sort((a, b) => {
+                const divisionA = (a.division || "Unassigned Division").trim().toLowerCase();
+                const divisionB = (b.division || "Unassigned Division").trim().toLowerCase();
+                if (divisionA !== divisionB) {
+                    return divisionA.localeCompare(divisionB);
+                }
+                return (a.full_name || "").localeCompare(b.full_name || "");
+            });
 
         fullRosterSorted.forEach(deputy => {
             fullList.appendChild(createRosterItem(deputy));
@@ -378,30 +438,8 @@ function initAssignmentDropzones() {
                 const role = (item.dataset.role || '').trim().toUpperCase();
                 const assignedName = (item.dataset.name || item.textContent || '').trim();
 
-                if (!isEligibleForCell(dropCell, role)) {
-                    item.remove();
-                    showCellWarning(dropCell, 'Select eligible personnel');
-                    return;
-                }
-
-                const assignmentList = ensureCellStructure(dropCell);
-                clearExistingAssignmentForName(assignedName, dropCell);
-
-                if (dropCell.dataset.appendMode !== 'true') {
-                    assignmentList.innerHTML = '';
-                }
-
-                item.className = 'assignment-chip';
-                item.dataset.name = assignedName;
-                item.dataset.role = role;
-                item.textContent = assignedName;
-                assignmentList.appendChild(item);
-
-                dropCell.dataset.appendMode = 'false';
-                dropCell.classList.remove('append-mode');
-
-                setPendingAssignmentFromCell(dropCell);
-                refreshRosterAssignedState();
+                item.remove();
+                applyDeputyToCell(dropCell, assignedName, role);
             }
         });
     });
@@ -785,6 +823,23 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         .catch(err => {
             console.error("Save failed:", err);
         });
+});
+
+document.addEventListener('click', function(e) {
+    const rosterItem = e.target.closest('#rosterList .roster-item');
+    if (rosterItem) {
+        setSelectedDeputyFromRosterItem(rosterItem);
+        return;
+    }
+
+    const editableCell = e.target.closest('.editable');
+    if (!editableCell || !selectedDeputy) return;
+
+    const applied = applyDeputyToCell(editableCell, selectedDeputy.name, selectedDeputy.role);
+    if (applied) {
+        clearRosterSelectionUI();
+        selectedDeputy = null;
+    }
 });
 
 function openRoster() {
