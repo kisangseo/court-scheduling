@@ -314,13 +314,18 @@ def update_deputy():
         WHERE assignment_date = ?
           AND courthouse = ?
           AND assignment_type = ?
-          AND location_detail = ?
-          AND part = ?
+          AND (
+                (assignment_type = 'Fixed Post' AND ISNULL(location_group, '') = ISNULL(?, ''))
+                OR
+                (assignment_type <> 'Fixed Post' AND ISNULL(location_detail, '') = ISNULL(?, ''))
+              )
+          AND ISNULL(part, '') = ISNULL(?, '')
     """, (
         data["assigned_member"],
         data["assignment_date"],
         data["courthouse"],
         data["assignment_type"],
+        data["location_detail"],
         data["location_detail"],
         data["part"]
     ))

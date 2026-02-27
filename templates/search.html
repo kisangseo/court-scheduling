@@ -109,7 +109,7 @@
 <button onclick="search()">Search</button><button onclick="openRoster()">Roster</button><button onclick="window.open('/staffing', '_blank')">
     Staffing Resources Daily
 </button>
-<button id="saveAssignments">Save Assignments</button>
+<button id="saveAssignments">Save Assignments</button> <span id="saveStatus" class="counts-inline"></span>
 
 <br><br>
 
@@ -901,27 +901,10 @@ document.addEventListener("click", function(e) {
 
 document.getElementById("saveAssignments").addEventListener("click", function() {
 
-    const invalidSecurityCells = [];
-    document.querySelectorAll('.editable[data-type="Fixed Post"]').forEach(cell => {
-        const assignedName = getAssignedNameFromCell(cell);
-        if (!assignedName) {
-            invalidSecurityCells.push(cell.dataset.room || "Security Post");
-            return;
-        }
-
-        const deputy = allDeputies.find(dep => (dep.full_name || "") === assignedName);
-        const role = ((deputy && (deputy.role || deputy.capacity_tag)) || cell.querySelector('.assignment-chip')?.dataset.role || "")
-            .trim()
-            .toUpperCase();
-
-        if (!isArmedRole(role)) {
-            invalidSecurityCells.push(cell.dataset.room || "Security Post");
-        }
-    });
-
-    if (invalidSecurityCells.length > 0) {
-        alert(`Each security post must have at least one armed person (DEP/SPO). Check: ${invalidSecurityCells.join(', ')}`);
-        return;
+    const saveStatus = document.getElementById("saveStatus");
+    if (saveStatus) {
+        saveStatus.className = "counts-inline";
+        saveStatus.textContent = "Saving...";
     }
 
     const assignmentRequests = Object.values(pendingAssignments).map(payload =>
@@ -950,12 +933,19 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         .then(() => {
             pendingAssignments = {};
             pendingNotes = {};
+            if (saveStatus) {
+                saveStatus.className = "counts-inline metric-green";
+                saveStatus.textContent = "Saved";
+            }
             search();
             loadRoster();
-            alert("Assignments saved.");
         })
         .catch(err => {
             console.error("Save failed:", err);
+            if (saveStatus) {
+                saveStatus.className = "counts-inline metric-red";
+                saveStatus.textContent = "Save failed";
+            }
             alert("Save failed. Please try again.");
         });
 });
