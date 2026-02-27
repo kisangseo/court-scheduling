@@ -239,23 +239,42 @@ def get_deputies():
     conn = get_conn()
     cursor = conn.cursor()
 
-    has_division = True
-
-    try:
-        cursor.execute("""
+    query_options = [
+        ("""
+            SELECT full_name, email, capacity_tag, current_status, division, rank
+            FROM dbo.deputies
+            ORDER BY full_name
+        """, True, True),
+        ("""
             SELECT full_name, email, capacity_tag, current_status, division
             FROM dbo.deputies
             ORDER BY full_name
-        """)
-        rows = cursor.fetchall()
-    except pyodbc.ProgrammingError:
-        has_division = False
-        cursor.execute("""
+        """, True, False),
+        ("""
+            SELECT full_name, email, capacity_tag, current_status, rank
+            FROM dbo.deputies
+            ORDER BY full_name
+        """, False, True),
+        ("""
             SELECT full_name, email, capacity_tag, current_status
             FROM dbo.deputies
             ORDER BY full_name
-        """)
-        rows = cursor.fetchall()
+        """, False, False),
+    ]
+
+    rows = []
+    has_division = False
+    has_rank = False
+
+    for query, query_has_division, query_has_rank in query_options:
+        try:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            has_division = query_has_division
+            has_rank = query_has_rank
+            break
+        except pyodbc.ProgrammingError:
+            continue
 
     deputies = []
     for row in rows:
@@ -264,10 +283,18 @@ def get_deputies():
             "email": row[1],
             "capacity_tag": row[2],
             "current_status": row[3],
-            "division": None
+            "division": None,
+            "rank": None,
         }
-        if has_division and len(row) > 4:
-            deputy["division"] = row[4]
+
+        idx = 4
+        if has_division and len(row) > idx:
+            deputy["division"] = row[idx]
+            idx += 1
+
+        if has_rank and len(row) > idx:
+            deputy["rank"] = row[idx]
+
         deputies.append(deputy)
 
     conn.close()

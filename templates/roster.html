@@ -4,49 +4,28 @@
     <title>Deputy Roster</title>
 
     <style>
-        body {
-            font-family: Arial, sans-serif;
-        }
-
-        .container {
-            display: flex;
-            gap: 40px;
-            align-items: flex-start;
-        }
-
-        table {
-            border-collapse: collapse;
-        }
-
-        th, td {
-            border: 1px solid black;
-            padding: 6px;
-            text-align: left;
-        }
-
-        th {
-            background-color: #f2f2f2;
-        }
-
-        #divisionTable td {
-            height: 28px;
-        }
+        body { font-family: Arial, sans-serif; }
+        .container { display: flex; gap: 40px; align-items: flex-start; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid black; padding: 6px; text-align: left; vertical-align: top; }
+        th { background-color: #f2f2f2; }
+        .panel { width: 50%; }
+        .status-group label { margin-right: 8px; display: inline-block; }
     </style>
 </head>
 <body>
 
-<h2>Deputy Roster - Court Security</h2>
+<h2>Deputy Roster</h2>
 
 <div class="container">
-
-    <!-- MAIN ROSTER TABLE -->
-    <div>
-        <table border="1" id="rosterTable">
+    <div class="panel">
+        <h3>Court Security</h3>
+        <table border="1" id="courtSecurityTable">
             <thead>
                 <tr>
                     <th>Name</th>
-                    <th>Email</th>
-                    <th>Capacity</th>
+                    <th>Rank</th>
+                    <th>Capability</th>
                     <th>Status</th>
                 </tr>
             </thead>
@@ -54,125 +33,113 @@
         </table>
     </div>
 
-    <!-- DV / FIELD SERVICES TABLE -->
-    <div>
+    <div class="panel">
         <h3>Other Divisions</h3>
-
-        <table border="1" id="divisionTable">
+        <table border="1" id="otherDivisionsTable">
             <thead>
                 <tr>
                     <th>Name</th>
                     <th>Division</th>
-                    <th>Capacity</th>
+                    <th>Rank</th>
+                    <th>Capability</th>
+                    <th>Status</th>
                 </tr>
             </thead>
-            <tbody>
-                <!-- Domestic Violence -->
-                <tr><td>Smith, Maurice</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Butler, Renea</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Kang, Richard</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Smith, Dontray</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Durham, Andrew</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Thomas, Ronald</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Grimes, Keon</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Simpkins, Marvin</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Ringley, Connie</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Green, James</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>McEntyre, Marius</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Bryant, Davon</td><td>Domestic Violence</td><td></td></tr>
-
-                <!-- Field Services -->
-                <tr><td>Tillman, April</td><td>Field Services</td><td></td></tr>
-                <tr><td>Lowther, Wanya</td><td>Field Services</td><td></td></tr>
-                <tr><td>Diggs, Deryrn</td><td>Field Services</td><td></td></tr>
-                <tr><td>Wright, Crystal</td><td>Field Services</td><td></td></tr>
-                <tr><td>McCaskil, Carl</td><td>Field Services</td><td></td></tr>
-                <tr><td>Simon, Michael</td><td>Field Services</td><td></td></tr>
-                <tr><td>Rowe, Derrick</td><td>Field Services</td><td></td></tr>
-                <tr><td>Stringfield, Kabria</td><td>Field Services</td><td></td></tr>
-                <tr><td>Cook, Brandon</td><td>Field Services</td><td></td></tr>
-                <tr><td>Kinat, Perry</td><td>Field Services</td><td></td></tr>
-                <tr><td>Chester, Shena</td><td>Field Services</td><td></td></tr>
-                <tr><td>Coby, Jonathan</td><td>Field Services</td><td></td></tr>
-                <tr><td>McQueen, Earl</td><td>Field Services</td><td></td></tr>
-                <tr><td>Randolph, Keith</td><td>Field Services</td><td></td></tr>
-                <tr><td>Tillery, Christopher</td><td>Field Services</td><td></td></tr>
-            </tbody>
+            <tbody></tbody>
         </table>
     </div>
-
 </div>
 
 <script>
+function isCourtSecurityDeputy(deputy) {
+    const division = (deputy.division || "").trim().toLowerCase();
+    const capability = (deputy.capacity_tag || "").trim().toLowerCase();
+    return division === "court security"
+        || division === "court security division"
+        || capability.includes("court security")
+        || capability.includes("cso");
+}
+
+function getStatusMarkup(dep) {
+    const status = (dep.current_status || "").toLowerCase();
+
+    return `
+        <div class="status-group">
+            <label>
+                <input type="checkbox" value="Sick" ${status.includes("sick") ? "checked" : ""}> Sick
+            </label>
+            <label>
+                <input type="checkbox" value="Leave" ${status.includes("leave") ? "checked" : ""}> Leave
+            </label>
+            <label>
+                <input type="checkbox" value="Light Duty" ${status.includes("light duty") ? "checked" : ""}> Light Duty
+            </label>
+            <button class="clear-status" type="button">Clear</button>
+        </div>
+    `;
+}
+
+function wireStatusHandlers(tr, dep) {
+    tr.querySelectorAll("input[type=checkbox]").forEach(box => {
+        box.addEventListener("change", function() {
+            const selected = Array.from(tr.querySelectorAll("input[type=checkbox]:checked")).map(b => b.value);
+            fetch("/api/update-status", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    full_name: dep.full_name,
+                    status: selected.length ? selected.join(",") : null
+                })
+            });
+        });
+    });
+
+    tr.querySelector(".clear-status").addEventListener("click", function() {
+        tr.querySelectorAll("input[type=checkbox]").forEach(b => b.checked = false);
+        fetch("/api/update-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                full_name: dep.full_name,
+                status: null
+            })
+        });
+    });
+}
+
 fetch("/api/deputies")
     .then(res => res.json())
     .then(data => {
+        const deputies = (data || []).sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
 
-        const tbody = document.querySelector("#rosterTable tbody");
+        const csBody = document.querySelector("#courtSecurityTable tbody");
+        const otherBody = document.querySelector("#otherDivisionsTable tbody");
 
-        data.forEach(dep => {
+        deputies.forEach(dep => {
+            const rank = dep.rank || "";
+            const division = (dep.division || "Unassigned Division").trim() || "Unassigned Division";
+
             const tr = document.createElement("tr");
+            if (isCourtSecurityDeputy(dep)) {
+                tr.innerHTML = `
+                    <td>${dep.full_name || ""}</td>
+                    <td>${rank}</td>
+                    <td>${dep.capacity_tag || ""}</td>
+                    <td>${getStatusMarkup(dep)}</td>
+                `;
+                csBody.appendChild(tr);
+            } else {
+                tr.innerHTML = `
+                    <td>${dep.full_name || ""}</td>
+                    <td>${division}</td>
+                    <td>${rank}</td>
+                    <td>${dep.capacity_tag || ""}</td>
+                    <td>${getStatusMarkup(dep)}</td>
+                `;
+                otherBody.appendChild(tr);
+            }
 
-            tr.innerHTML = `
-                <td>${dep.full_name}</td>
-                <td>${dep.email || ""}</td>
-                <td>${dep.capacity_tag}</td>
-                <td>
-                    <label>
-                        <input type="checkbox" value="Sick"
-                            ${dep.current_status && dep.current_status.includes("Sick") ? "checked" : ""}>
-                        Sick
-                    </label>
-
-                    <label>
-                        <input type="checkbox" value="Vacation"
-                            ${dep.current_status && dep.current_status.includes("Vacation") ? "checked" : ""}>
-                        Vacation
-                    </label>
-
-                    <label>
-                        <input type="checkbox" value="Light Duty"
-                            ${dep.current_status && dep.current_status.includes("Light Duty") ? "checked" : ""}>
-                        Light Duty
-                    </label>
-
-                    <button class="clear-status">Clear</button>
-                </td>
-            `;
-
-            tr.querySelectorAll("input[type=checkbox]").forEach(box => {
-                box.addEventListener("change", function() {
-
-                    const selected = Array.from(
-                        tr.querySelectorAll("input[type=checkbox]:checked")
-                    ).map(b => b.value);
-
-                    fetch("/api/update-status", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            full_name: dep.full_name,
-                            status: selected.length ? selected.join(",") : null
-                        })
-                    });
-                });
-            });
-
-            tr.querySelector(".clear-status").addEventListener("click", function() {
-
-                tr.querySelectorAll("input[type=checkbox]").forEach(b => b.checked = false);
-
-                fetch("/api/update-status", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        full_name: dep.full_name,
-                        status: null
-                    })
-                });
-            });
-
-            tbody.appendChild(tr);
+            wireStatusHandlers(tr, dep);
         });
     });
 </script>
