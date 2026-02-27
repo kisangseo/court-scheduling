@@ -42,6 +42,27 @@
     background: #eef3ff;
     border-radius: 4px;
     display: inline-block;
+    margin: 2px 4px 2px 0;
+}
+
+.assignment-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.add-deputy-btn {
+    margin-left: 4px;
+    border: 1px solid #98a2b3;
+    background: #fff;
+    border-radius: 4px;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+}
+
+.editable.append-mode {
+    outline: 2px dashed #98a2b3;
 }
 
 .cell-warning {
@@ -116,16 +137,16 @@ function createRosterItem(deputy) {
     return deputyRow;
 }
 
-function getAssignedNameFromCell(cell) {
-    const chip = cell.querySelector('.assignment-chip');
-    return chip ? (chip.dataset.name || chip.textContent || '').trim() : '';
+function getAssignedNamesFromCell(cell) {
+    return Array.from(cell.querySelectorAll('.assignment-chip'))
+        .map(chip => (chip.dataset.name || chip.textContent || '').trim())
+        .filter(Boolean);
 }
 
 function getAssignedNames() {
     const names = new Set();
     document.querySelectorAll('.editable').forEach(cell => {
-        const name = getAssignedNameFromCell(cell);
-        if (name) names.add(name);
+        getAssignedNamesFromCell(cell).forEach(name => names.add(name));
     });
     return names;
 }
@@ -164,13 +185,22 @@ function renderRoster() {
     refreshRosterAssignedState();
 }
 
+function isDeputyAvailable(deputy) {
+    const status = (deputy.current_status || '').trim().toLowerCase();
+    if (!status) return true;
+
+    return !status.includes('leave')
+        && !status.includes('sick')
+        && !status.includes('light duty');
+}
+
 function loadRoster() {
     fetch("/api/deputies")
         .then(response => response.json())
         .then(data => {
-            allDeputies = (data || []).sort((a, b) =>
-                (a.full_name || "").localeCompare(b.full_name || "")
-            );
+            allDeputies = (data || [])
+                .filter(isDeputyAvailable)
+                .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
             renderRoster();
         });
 }
@@ -216,18 +246,24 @@ function clearExistingAssignmentForName(name, excludeCell) {
     document.querySelectorAll('.editable').forEach(cell => {
         if (cell === excludeCell) return;
 
-        const chip = cell.querySelector('.assignment-chip');
-        if (!chip) return;
+        const chips = Array.from(cell.querySelectorAll('.assignment-chip'));
+        let removed = false;
+        chips.forEach(chip => {
+            const chipName = (chip.dataset.name || chip.textContent || '').trim();
+            if (chipName === name) {
+                chip.remove();
+                removed = true;
+            }
+        });
 
-        const chipName = (chip.dataset.name || chip.textContent || '').trim();
-        if (chipName !== name) return;
-
-        chip.remove();
-        setPendingAssignmentFromCell(cell, '');
+        if (removed) {
+            setPendingAssignmentFromCell(cell);
+        }
     });
 }
 
-function setPendingAssignmentFromCell(cell, assignedName) {
+function setPendingAssignmentFromCell(cell) {
+    const assignedName = getAssignedNamesFromCell(cell).join(', ');
     const payload = {
         assignment_date: cell.dataset.date,
         courthouse: cell.dataset.courthouse,
@@ -248,12 +284,41 @@ function setPendingAssignmentFromCell(cell, assignedName) {
     pendingAssignments[key] = payload;
 }
 
+function ensureCellStructure(cell) {
+    let list = cell.querySelector('.assignment-list');
+    if (!list) {
+        list = document.createElement('div');
+        list.className = 'assignment-list';
+        cell.appendChild(list);
+    }
+
+    let addButton = cell.querySelector('.add-deputy-btn');
+    if (!addButton) {
+        addButton = document.createElement('button');
+        addButton.type = 'button';
+        addButton.className = 'add-deputy-btn';
+        addButton.textContent = '+';
+        addButton.title = 'Add additional deputy';
+        addButton.addEventListener('click', () => {
+            cell.dataset.appendMode = 'true';
+            cell.classList.add('append-mode');
+        });
+        cell.appendChild(addButton);
+    }
+
+    return list;
+}
+
 function initAssignmentDropzones() {
     document.querySelectorAll('.editable').forEach(cell => {
         const existingName = cell.textContent.trim();
         cell.innerHTML = '';
+        const list = ensureCellStructure(cell);
+
         if (existingName) {
-            cell.appendChild(buildAssignmentChip(existingName, ''));
+            existingName.split(',').map(name => name.trim()).filter(Boolean).forEach(name => {
+                list.appendChild(buildAssignmentChip(name, ''));
+            });
         }
 
         Sortable.create(cell, {
@@ -276,20 +341,23 @@ function initAssignmentDropzones() {
                     return;
                 }
 
+                const assignmentList = ensureCellStructure(dropCell);
                 clearExistingAssignmentForName(assignedName, dropCell);
 
-                Array.from(dropCell.children).forEach(child => {
-                    if (child !== item && !child.classList.contains('cell-warning')) {
-                        child.remove();
-                    }
-                });
+                if (dropCell.dataset.appendMode !== 'true') {
+                    assignmentList.innerHTML = '';
+                }
 
                 item.className = 'assignment-chip';
                 item.dataset.name = assignedName;
                 item.dataset.role = role;
                 item.textContent = assignedName;
+                assignmentList.appendChild(item);
 
-                setPendingAssignmentFromCell(dropCell, assignedName);
+                dropCell.dataset.appendMode = 'false';
+                dropCell.classList.remove('append-mode');
+
+                setPendingAssignmentFromCell(dropCell);
                 refreshRosterAssignedState();
             }
         });
