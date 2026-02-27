@@ -239,22 +239,63 @@ def get_deputies():
     conn = get_conn()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT full_name, email, capacity_tag, current_status
-        FROM dbo.deputies
-        
-        ORDER BY full_name
-    """)
+    query_options = [
+        ("""
+            SELECT full_name, email, capacity_tag, current_status, division, rank
+            FROM dbo.deputies
+            ORDER BY full_name
+        """, True, True),
+        ("""
+            SELECT full_name, email, capacity_tag, current_status, division
+            FROM dbo.deputies
+            ORDER BY full_name
+        """, True, False),
+        ("""
+            SELECT full_name, email, capacity_tag, current_status, rank
+            FROM dbo.deputies
+            ORDER BY full_name
+        """, False, True),
+        ("""
+            SELECT full_name, email, capacity_tag, current_status
+            FROM dbo.deputies
+            ORDER BY full_name
+        """, False, False),
+    ]
 
-    deputies = [
-        {
+    rows = []
+    has_division = False
+    has_rank = False
+
+    for query, query_has_division, query_has_rank in query_options:
+        try:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            has_division = query_has_division
+            has_rank = query_has_rank
+            break
+        except pyodbc.ProgrammingError:
+            continue
+
+    deputies = []
+    for row in rows:
+        deputy = {
             "full_name": row[0],
             "email": row[1],
             "capacity_tag": row[2],
-            "current_status": row[3]
+            "current_status": row[3],
+            "division": None,
+            "rank": None,
         }
-        for row in cursor.fetchall()
-    ]
+
+        idx = 4
+        if has_division and len(row) > idx:
+            deputy["division"] = row[idx]
+            idx += 1
+
+        if has_rank and len(row) > idx:
+            deputy["rank"] = row[idx]
+
+        deputies.append(deputy)
 
     conn.close()
 
@@ -273,13 +314,18 @@ def update_deputy():
         WHERE assignment_date = ?
           AND courthouse = ?
           AND assignment_type = ?
-          AND location_detail = ?
-          AND part = ?
+          AND (
+                (assignment_type = 'Fixed Post' AND ISNULL(location_group, '') = ISNULL(?, ''))
+                OR
+                (assignment_type <> 'Fixed Post' AND ISNULL(location_detail, '') = ISNULL(?, ''))
+              )
+          AND ISNULL(part, '') = ISNULL(?, '')
     """, (
         data["assigned_member"],
         data["assignment_date"],
         data["courthouse"],
         data["assignment_type"],
+        data["location_detail"],
         data["location_detail"],
         data["part"]
     ))
