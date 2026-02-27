@@ -280,6 +280,8 @@ def get_deputies():
         rows = cursor.fetchall()
 
     deputies = []
+    for row in rows:
+        deputies.append({
 
     for row in rows:
         deputy = {
@@ -288,6 +290,7 @@ def get_deputies():
             "capacity_tag": row[2],
             "current_status": row[3],
             "division": row[4] if has_division else None,
+        })
         }
         deputies.append(deputy)
             "division": row[4] if has_division else None
