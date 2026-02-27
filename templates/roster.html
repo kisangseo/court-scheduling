@@ -2,179 +2,295 @@
 <html>
 <head>
     <title>Deputy Roster</title>
-
     <style>
-        body {
-            font-family: Arial, sans-serif;
-        }
-
-        .container {
-            display: flex;
-            gap: 40px;
-            align-items: flex-start;
-        }
-
-        table {
-            border-collapse: collapse;
-        }
-
-        th, td {
-            border: 1px solid black;
-            padding: 6px;
-            text-align: left;
-        }
-
-        th {
-            background-color: #f2f2f2;
-        }
-
-        #divisionTable td {
-            height: 28px;
-        }
+        body { font-family: Arial, sans-serif; }
+        .container { display: flex; gap: 24px; align-items: flex-start; }
+        .panel { width: 50%; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid black; padding: 6px; text-align: left; vertical-align: top; }
+        th { background-color: #f2f2f2; }
+        .toolbar { display: flex; gap: 16px; align-items: center; margin-bottom: 10px; }
+        .status-counts { font-size: 0.95em; }
+        .status-red { color: #b42318; font-weight: 700; }
+        .status-group label { margin-right: 8px; display: inline-block; }
+        .action-row { display: flex; gap: 6px; margin-top: 6px; }
+        .small { font-size: 12px; color: #344054; }
+        .add-form { margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
     </style>
 </head>
 <body>
 
-<h2>Deputy Roster - Court Security</h2>
+<h2>Deputy Roster</h2>
+<div class="toolbar">
+    <label>
+        Date:
+        <input type="date" id="rosterDate">
+    </label>
+</div>
+
+<div class="add-form">
+    <input type="text" id="newFullName" placeholder="Full Name">
+    <select id="newDivision">
+        <option value="Court Security">Court Security</option>
+        <option value="Domestic Violence">Domestic Violence</option>
+        <option value="Field Services">Field Services</option>
+        <option value="Other">Other</option>
+    </select>
+    <select id="newRank"></select>
+    <select id="newCapability"></select>
+    <button id="addDeputyBtn" type="button">Add Person</button>
+</div>
 
 <div class="container">
-
-    <!-- MAIN ROSTER TABLE -->
-    <div>
-        <table border="1" id="rosterTable">
+    <div class="panel">
+        <h3>Court Security <span id="courtSecurityStatusCounts" class="status-counts"></span></h3>
+        <table id="courtSecurityTable">
             <thead>
                 <tr>
                     <th>Name</th>
-                    <th>Email</th>
-                    <th>Capacity</th>
+                    <th>Rank</th>
+                    <th>Capability</th>
                     <th>Status</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody></tbody>
         </table>
     </div>
 
-    <!-- DV / FIELD SERVICES TABLE -->
-    <div>
+    <div class="panel">
         <h3>Other Divisions</h3>
-
-        <table border="1" id="divisionTable">
+        <table id="otherDivisionsTable">
             <thead>
                 <tr>
                     <th>Name</th>
                     <th>Division</th>
-                    <th>Capacity</th>
+                    <th>Rank</th>
+                    <th>Capability</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
-            <tbody>
-                <!-- Domestic Violence -->
-                <tr><td>Smith, Maurice</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Butler, Renea</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Kang, Richard</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Smith, Dontray</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Durham, Andrew</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Thomas, Ronald</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Grimes, Keon</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Simpkins, Marvin</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Ringley, Connie</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Green, James</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>McEntyre, Marius</td><td>Domestic Violence</td><td></td></tr>
-                <tr><td>Bryant, Davon</td><td>Domestic Violence</td><td></td></tr>
-
-                <!-- Field Services -->
-                <tr><td>Tillman, April</td><td>Field Services</td><td></td></tr>
-                <tr><td>Lowther, Wanya</td><td>Field Services</td><td></td></tr>
-                <tr><td>Diggs, Deryrn</td><td>Field Services</td><td></td></tr>
-                <tr><td>Wright, Crystal</td><td>Field Services</td><td></td></tr>
-                <tr><td>McCaskil, Carl</td><td>Field Services</td><td></td></tr>
-                <tr><td>Simon, Michael</td><td>Field Services</td><td></td></tr>
-                <tr><td>Rowe, Derrick</td><td>Field Services</td><td></td></tr>
-                <tr><td>Stringfield, Kabria</td><td>Field Services</td><td></td></tr>
-                <tr><td>Cook, Brandon</td><td>Field Services</td><td></td></tr>
-                <tr><td>Kinat, Perry</td><td>Field Services</td><td></td></tr>
-                <tr><td>Chester, Shena</td><td>Field Services</td><td></td></tr>
-                <tr><td>Coby, Jonathan</td><td>Field Services</td><td></td></tr>
-                <tr><td>McQueen, Earl</td><td>Field Services</td><td></td></tr>
-                <tr><td>Randolph, Keith</td><td>Field Services</td><td></td></tr>
-                <tr><td>Tillery, Christopher</td><td>Field Services</td><td></td></tr>
-            </tbody>
+            <tbody></tbody>
         </table>
     </div>
-
 </div>
 
 <script>
-fetch("/api/deputies")
-    .then(res => res.json())
-    .then(data => {
+const rankOptions = ["Court Security Officer", "Deputy Sheriff", "Sergeant", "Detective"];
+const capabilityOptions = ["CSO", "DEP", "SPO", "F", "PATROL", "TRANSPORT", "DET", "SGT"];
 
-        const tbody = document.querySelector("#rosterTable tbody");
+function buildOptions(selectEl, values, selectedValue = "") {
+    selectEl.innerHTML = "";
+    values.forEach(value => {
+        const opt = document.createElement("option");
+        opt.value = value;
+        opt.textContent = value;
+        if ((selectedValue || "") === value) opt.selected = true;
+        selectEl.appendChild(opt);
+    });
+}
 
-        data.forEach(dep => {
-            const tr = document.createElement("tr");
+buildOptions(document.getElementById("newRank"), rankOptions, "Court Security Officer");
+buildOptions(document.getElementById("newCapability"), capabilityOptions, "CSO");
 
-            tr.innerHTML = `
-                <td>${dep.full_name}</td>
-                <td>${dep.email || ""}</td>
-                <td>${dep.capacity_tag}</td>
-                <td>
-                    <label>
-                        <input type="checkbox" value="Sick"
-                            ${dep.current_status && dep.current_status.includes("Sick") ? "checked" : ""}>
-                        Sick
-                    </label>
+function isCourtSecurityDeputy(deputy) {
+    const division = (deputy.division || "").trim().toLowerCase();
+    const capability = (deputy.capacity_tag || "").trim().toLowerCase();
+    return division === "court security"
+        || division === "court security division"
+        || capability.includes("court security")
+        || capability.includes("cso");
+}
 
-                    <label>
-                        <input type="checkbox" value="Vacation"
-                            ${dep.current_status && dep.current_status.includes("Vacation") ? "checked" : ""}>
-                        Vacation
-                    </label>
+function statusIncludes(dep, value) {
+    return (dep.current_status || "").toLowerCase().includes(value.toLowerCase());
+}
 
-                    <label>
-                        <input type="checkbox" value="Light Duty"
-                            ${dep.current_status && dep.current_status.includes("Light Duty") ? "checked" : ""}>
-                        Light Duty
-                    </label>
+function renderStatusControls(dep, hostTr) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "status-group";
+    wrapper.innerHTML = `
+        <label><input type="checkbox" value="Sick" ${statusIncludes(dep, "Sick") ? "checked" : ""}> Sick</label>
+        <label><input type="checkbox" value="Leave" ${statusIncludes(dep, "Leave") ? "checked" : ""}> Leave</label>
+        <label><input type="checkbox" value="Light Duty" ${statusIncludes(dep, "Light Duty") ? "checked" : ""}> Light Duty</label>
+        <button class="clear-status" type="button">Clear</button>
+        <div class="small">Click a status checkbox to set date range.</div>
+    `;
 
-                    <button class="clear-status">Clear</button>
-                </td>
+    wrapper.querySelectorAll("input[type=checkbox]").forEach(box => {
+        box.addEventListener("change", function() {
+            if (!box.checked) return;
+
+            const rangeRow = document.createElement("div");
+            rangeRow.className = "action-row";
+            rangeRow.innerHTML = `
+                <input type="date" class="start-date">
+                <input type="date" class="end-date">
+                <button type="button" class="apply-range">Apply</button>
+                <button type="button" class="cancel-range">Cancel</button>
             `;
 
-            tr.querySelectorAll("input[type=checkbox]").forEach(box => {
-                box.addEventListener("change", function() {
+            const start = rangeRow.querySelector(".start-date");
+            const end = rangeRow.querySelector(".end-date");
+            const selectedDate = document.getElementById("rosterDate").value;
+            start.value = selectedDate;
+            end.value = selectedDate;
 
-                    const selected = Array.from(
-                        tr.querySelectorAll("input[type=checkbox]:checked")
-                    ).map(b => b.value);
-
-                    fetch("/api/update-status", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            full_name: dep.full_name,
-                            status: selected.length ? selected.join(",") : null
-                        })
-                    });
-                });
-            });
-
-            tr.querySelector(".clear-status").addEventListener("click", function() {
-
-                tr.querySelectorAll("input[type=checkbox]").forEach(b => b.checked = false);
-
-                fetch("/api/update-status", {
+            rangeRow.querySelector(".apply-range").addEventListener("click", () => {
+                fetch("/api/update-status-range", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         full_name: dep.full_name,
-                        status: null
+                        status: box.value,
+                        start_date: start.value,
+                        end_date: end.value
                     })
-                });
+                }).then(() => loadRoster());
             });
 
-            tbody.appendChild(tr);
+            rangeRow.querySelector(".cancel-range").addEventListener("click", () => {
+                rangeRow.remove();
+                box.checked = false;
+            });
+
+            wrapper.appendChild(rangeRow);
         });
     });
+
+    wrapper.querySelector(".clear-status").addEventListener("click", function() {
+        fetch("/api/update-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ full_name: dep.full_name, status: null })
+        }).then(() => loadRoster());
+    });
+
+    return wrapper;
+}
+
+function createDeputyRow(dep, includeDivision) {
+    const tr = document.createElement("tr");
+
+    const rankSelect = document.createElement("select");
+    buildOptions(rankSelect, rankOptions, dep.rank || "");
+
+    const capabilitySelect = document.createElement("select");
+    buildOptions(capabilitySelect, capabilityOptions, dep.capacity_tag || "");
+
+    const statusTd = document.createElement("td");
+    statusTd.appendChild(renderStatusControls(dep, tr));
+
+    const actionsTd = document.createElement("td");
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.textContent = "Save";
+    saveBtn.addEventListener("click", () => {
+        fetch("/api/upsert-deputy", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                original_full_name: dep.full_name,
+                full_name: dep.full_name,
+                division: dep.division || "",
+                rank: rankSelect.value,
+                capacity_tag: capabilitySelect.value
+            })
+        }).then(() => loadRoster());
+    });
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.textContent = "Remove";
+    removeBtn.addEventListener("click", () => {
+        if (!confirm(`Remove ${dep.full_name}?`)) return;
+        fetch("/api/delete-deputy", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ full_name: dep.full_name })
+        }).then(() => loadRoster());
+    });
+
+    actionsTd.appendChild(saveBtn);
+    actionsTd.appendChild(removeBtn);
+
+    tr.appendChild(Object.assign(document.createElement("td"), { textContent: dep.full_name || "" }));
+    if (includeDivision) tr.appendChild(Object.assign(document.createElement("td"), { textContent: dep.division || "Unassigned Division" }));
+
+    const rankTd = document.createElement("td");
+    rankTd.appendChild(rankSelect);
+    tr.appendChild(rankTd);
+
+    const capabilityTd = document.createElement("td");
+    capabilityTd.appendChild(capabilitySelect);
+    tr.appendChild(capabilityTd);
+
+    tr.appendChild(statusTd);
+    tr.appendChild(actionsTd);
+
+    return tr;
+}
+
+function updateCourtSecurityStatusCounts(deputies) {
+    const cs = deputies.filter(isCourtSecurityDeputy);
+    const sick = cs.filter(dep => statusIncludes(dep, "Sick")).length;
+    const leave = cs.filter(dep => statusIncludes(dep, "Leave")).length;
+    const lightDuty = cs.filter(dep => statusIncludes(dep, "Light Duty")).length;
+
+    document.getElementById("courtSecurityStatusCounts").innerHTML =
+        `<span class="status-red">Sick ${sick}</span> / <span class="status-red">Leave ${leave}</span> / <span class="status-red">Light Duty ${lightDuty}</span>`;
+}
+
+function loadRoster() {
+    const date = document.getElementById("rosterDate").value;
+    fetch(`/api/deputies?date=${date}`)
+        .then(res => res.json())
+        .then(data => {
+            const deputies = (data || []).sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
+
+            const csBody = document.querySelector("#courtSecurityTable tbody");
+            const otherBody = document.querySelector("#otherDivisionsTable tbody");
+            csBody.innerHTML = "";
+            otherBody.innerHTML = "";
+
+            deputies.forEach(dep => {
+                if (isCourtSecurityDeputy(dep)) {
+                    csBody.appendChild(createDeputyRow(dep, false));
+                } else {
+                    otherBody.appendChild(createDeputyRow(dep, true));
+                }
+            });
+
+            updateCourtSecurityStatusCounts(deputies);
+        });
+}
+
+document.getElementById("addDeputyBtn").addEventListener("click", () => {
+    const fullName = document.getElementById("newFullName").value.trim();
+    if (!fullName) {
+        alert("Enter full name");
+        return;
+    }
+
+    fetch("/api/upsert-deputy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            full_name: fullName,
+            division: document.getElementById("newDivision").value,
+            rank: document.getElementById("newRank").value,
+            capacity_tag: document.getElementById("newCapability").value
+        })
+    }).then(() => {
+        document.getElementById("newFullName").value = "";
+        loadRoster();
+    });
+});
+
+document.getElementById("rosterDate").addEventListener("change", loadRoster);
+document.getElementById("rosterDate").value = new Date().toISOString().split("T")[0];
+loadRoster();
 </script>
 
 </body>
