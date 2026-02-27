@@ -24,6 +24,10 @@
 .roster-item {
     padding: 4px 0;
 }
+
+.roster-section-title {
+    margin: 12px 0 4px;
+}
 </style>
 </head>
 <body>
@@ -74,20 +78,38 @@ function isCourtSecurityDeputy(deputy) {
         || capacityTag.includes("cso");
 }
 
+function createRosterItem(deputy) {
+    const deputyRow = document.createElement("div");
+    deputyRow.className = "roster-item";
+
+    const division = (deputy.division || "Unassigned Division").trim() || "Unassigned Division";
+    deputyRow.textContent = `${deputy.full_name} - ${division} (${deputy.capacity_tag || ""})`;
+
+    return deputyRow;
+}
+
 function renderRoster() {
     const rosterList = document.getElementById("rosterList");
     const showFullRoster = document.getElementById("showFullRoster").checked;
     rosterList.innerHTML = "";
 
-    const deputiesToRender = showFullRoster
-        ? allDeputies
-        : allDeputies.filter(isCourtSecurityDeputy);
+    const courtSecurityDeputies = allDeputies.filter(isCourtSecurityDeputy);
+    courtSecurityDeputies.forEach(deputy => {
+        rosterList.appendChild(createRosterItem(deputy));
+    });
 
-    deputiesToRender.forEach(deputy => {
-        const deputyRow = document.createElement("div");
-        deputyRow.className = "roster-item";
-        deputyRow.textContent = `${deputy.full_name} (${deputy.capacity_tag || ""})`;
-        rosterList.appendChild(deputyRow);
+    if (!showFullRoster) {
+        return;
+    }
+
+    const fullRosterHeading = document.createElement("h4");
+    fullRosterHeading.className = "roster-section-title";
+    fullRosterHeading.textContent = "Full Roster";
+    rosterList.appendChild(fullRosterHeading);
+
+    const nonCourtSecurityDeputies = allDeputies.filter(deputy => !isCourtSecurityDeputy(deputy));
+    nonCourtSecurityDeputies.forEach(deputy => {
+        rosterList.appendChild(createRosterItem(deputy));
     });
 }
 
