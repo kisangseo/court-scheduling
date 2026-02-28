@@ -10,6 +10,7 @@ body {
 table {
     border-collapse: collapse;
     width: 100%;
+    border: 1px solid #d0d5dd;   /* ← adds outer frame */
 }
 
 th {
@@ -92,19 +93,7 @@ th, td {
     min-height: 28px;
 }
 
-.assignment-chip {
-    padding: 4px 8px;
-    background: #eef2ff;
-    border: 1px solid #d0d7ff;
-    border-radius: 6px;
-    font-size: 13px;
-    cursor: pointer;              /* 🔥 fixes I-beam */
-    user-select: none;            /* 🔥 prevents text selection */
-}
 
-.assignment-chip:hover {
-    background: #e0e7ff;
-}
 
 .assignment-list {
     display: flex;
@@ -130,6 +119,24 @@ th, td {
     border: 1px dashed #d0d5dd;
     color: #98a2b3;
     font-style: italic;
+}
+.assignment-chip {
+    padding: 4px 8px;
+    background: #eef2ff;
+    border: 1px solid #d0d7ff;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;              /* 🔥 fixes I-beam */
+    user-select: none;            /* 🔥 prevents text selection */
+}
+
+.assignment-chip:hover {
+    background: #e0e7ff;
+    padding: 2px 6px;
+    background: #eef3ff;
+    border-radius: 4px;
+    display: inline-block;
+    margin: 2px 4px 2px 0;
 }
 
 

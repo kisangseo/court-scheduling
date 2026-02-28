@@ -16,6 +16,10 @@
         .action-row { display: flex; gap: 6px; margin-top: 6px; }
         .small { font-size: 12px; color: #344054; }
         .add-form { margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .status-green {
+            color: #067647;
+            font-weight: 700;
+        }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
@@ -327,9 +331,14 @@ function updateCourtSecurityStatusCounts(deputies) {
     const sick = cs.filter(dep => statusIncludes(dep, "Sick")).length;
     const leave = cs.filter(dep => statusIncludes(dep, "Leave")).length;
     const lightDuty = cs.filter(dep => statusIncludes(dep, "Light Duty")).length;
+    const total = cs.length;
+    const available = total - sick - leave - lightDuty;
 
     document.getElementById("courtSecurityStatusCounts").innerHTML =
-        `<span class="status-red">Sick ${sick}</span> / <span class="status-red">Leave ${leave}</span> / <span class="status-red">Light Duty ${lightDuty}</span>`;
+        `<span class="status-red">Sick ${sick}</span> /
+        <span class="status-red">Leave ${leave}</span> /
+        <span class="status-red">Light Duty ${lightDuty}</span> /
+        <span class="status-green">Available ${available}</span>`;
 }
 
 function loadRoster() {
