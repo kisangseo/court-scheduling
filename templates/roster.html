@@ -103,8 +103,40 @@ function isCourtSecurityDeputy(deputy) {
         || capability.includes("cso");
 }
 
+function parseDateOnly(value) {
+    if (!value) return null;
+    const d = new Date(`${value}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function effectiveStatusForSelectedDate(dep) {
+    const selectedDate = parseDateOnly(document.getElementById("rosterDate").value);
+
+    try {
+        const raw = dep.status_raw;
+        const parsed = raw ? JSON.parse(raw) : null;
+        const ranges = parsed && Array.isArray(parsed.ranges) ? parsed.ranges : [];
+
+        if (selectedDate) {
+            for (const entry of ranges) {
+                const start = parseDateOnly(entry.start_date);
+                const end = parseDateOnly(entry.end_date);
+                if (start && end && selectedDate >= start && selectedDate <= end) {
+                    return entry.status || "";
+                }
+            }
+        }
+
+        if (parsed && parsed.legacy) return parsed.legacy;
+    } catch (_) {
+        // fallback to effective status from API
+    }
+
+    return dep.current_status || "";
+}
+
 function statusIncludes(dep, value) {
-    return (dep.current_status || "").toLowerCase().includes(value.toLowerCase());
+    return effectiveStatusForSelectedDate(dep).toLowerCase().includes(value.toLowerCase());
 }
 
 function renderStatusControls(dep, hostTr) {
@@ -138,6 +170,15 @@ function renderStatusControls(dep, hostTr) {
             end.value = selectedDate;
 
             rangeRow.querySelector(".apply-range").addEventListener("click", () => {
+                if (!start.value || !end.value) {
+                    alert("Please select both start and end dates.");
+                    return;
+                }
+                if (start.value > end.value) {
+                    alert("Start date must be on or before end date.");
+                    return;
+                }
+
                 fetch("/api/update-status-range", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -157,6 +198,27 @@ function renderStatusControls(dep, hostTr) {
 
             wrapper.appendChild(rangeRow);
         });
+}
+
+document.getElementById("addDeputyBtn").addEventListener("click", () => {
+    const fullName = document.getElementById("newFullName").value.trim();
+    if (!fullName) {
+        alert("Enter full name");
+        return;
+    }
+
+    fetch("/api/upsert-deputy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            full_name: fullName,
+            division: document.getElementById("newDivision").value,
+            rank: document.getElementById("newRank").value,
+            capacity_tag: document.getElementById("newCapability").value
+        })
+    }).then(() => {
+        document.getElementById("newFullName").value = "";
+        loadRoster();
     });
 
     wrapper.querySelector(".clear-status").addEventListener("click", function() {

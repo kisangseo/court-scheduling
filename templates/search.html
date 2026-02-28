@@ -477,8 +477,42 @@ function renderRoster() {
     refreshRosterAssignedState();
 }
 
+function parseDateOnly(value) {
+    if (!value) return null;
+    const d = new Date(`${value}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function effectiveStatusForSearchDate(deputy) {
+    const selectedDate = parseDateOnly(document.getElementById("date").value);
+
+    try {
+        const raw = deputy.status_raw;
+        const parsed = raw ? JSON.parse(raw) : null;
+        const ranges = parsed && Array.isArray(parsed.ranges) ? parsed.ranges : [];
+
+        if (selectedDate) {
+            for (const entry of ranges) {
+                const start = parseDateOnly(entry.start_date);
+                const end = parseDateOnly(entry.end_date);
+                if (start && end && selectedDate >= start && selectedDate <= end) {
+                    return (entry.status || '').toLowerCase();
+                }
+            }
+        }
+
+        if (parsed && parsed.legacy) {
+            return parsed.legacy.toLowerCase();
+        }
+    } catch (_) {
+        // fallback to effective status from API
+    }
+
+    return (deputy.current_status || '').trim().toLowerCase();
+}
+
 function isDeputyAvailable(deputy) {
-    const status = (deputy.current_status || '').trim().toLowerCase();
+    const status = effectiveStatusForSearchDate(deputy);
     if (!status) return true;
 
     return !status.includes('leave')
