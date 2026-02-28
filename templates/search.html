@@ -326,7 +326,7 @@ function refreshRosterHeaderCounts() {
 
     document.querySelectorAll('[data-division-posted]').forEach(el => {
         const division = (el.dataset.divisionPosted || '').toLowerCase();
-        const postedNames = getAssignedNames();
+        const postedNames = getPostedNameSetForPostsAndCourtrooms();
         const postedCount = rawDeputies.filter(dep => ((dep.division || 'Unassigned Division').trim().toLowerCase() === division)
             && postedNames.has((dep.full_name || '').trim())).length;
         el.textContent = `Posted ${postedCount}`;
