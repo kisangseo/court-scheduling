@@ -608,6 +608,7 @@ function search() {
     const date = document.getElementById("date").value;
     const courthouse = document.getElementById("courthouse").value;
 
+    localStorage.setItem('searchPageDate', date || '');
     fetchGlobalAssignmentTotals(date);
 
     fetch(`/api/search?name=${name}&date=${date}&courthouse=${courthouse}`)
@@ -863,11 +864,15 @@ function search() {
 
 window.onload = function() {
     const today = new Date().toISOString().split('T')[0];
-    document.getElementById("date").value = today;
+    const savedDate = localStorage.getItem('searchPageDate');
+    document.getElementById("date").value = savedDate || today;
 
     document.getElementById("showFullRoster").addEventListener("change", renderRoster);
     document.getElementById("courthouse").addEventListener("change", search);
-    document.getElementById("date").addEventListener("change", search);
+    document.getElementById("date").addEventListener("change", function() {
+        localStorage.setItem('searchPageDate', document.getElementById("date").value || '');
+        search();
+    });
 
     loadRoster();
     search();

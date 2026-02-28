@@ -515,9 +515,8 @@ def update_deputy():
           AND courthouse = ?
           AND assignment_type = ?
           AND (
-                (assignment_type = 'Fixed Post' AND ISNULL(location_group, '') = ISNULL(?, ''))
-                OR
-                (assignment_type <> 'Fixed Post' AND ISNULL(location_detail, '') = ISNULL(?, ''))
+                ISNULL(location_group, '') = ISNULL(?, '')
+                OR ISNULL(location_detail, '') = ISNULL(?, '')
               )
           AND ISNULL(part, '') = ISNULL(?, '')
     """, (
@@ -530,10 +529,30 @@ def update_deputy():
         data["part"]
     ))
 
+    if cursor.rowcount == 0:
+        cursor.execute("""
+            UPDATE dbo.court_assignments
+            SET assigned_member = ?
+            WHERE assignment_date = ?
+              AND courthouse = ?
+              AND assignment_type = ?
+              AND (
+                    ISNULL(location_group, '') = ISNULL(?, '')
+                    OR ISNULL(location_detail, '') = ISNULL(?, '')
+                  )
+        """, (
+            data["assigned_member"],
+            data["assignment_date"],
+            data["courthouse"],
+            data["assignment_type"],
+            data["location_detail"],
+            data["location_detail"]
+        ))
+
     conn.commit()
     conn.close()
 
-    return {"status": "success"}
+    return {"status": "success", "updated": cursor.rowcount}
 
 
 @app.route("/api/search")
