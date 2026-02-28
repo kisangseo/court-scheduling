@@ -118,7 +118,8 @@ function effectiveStatusForSelectedDate(dep) {
         const ranges = parsed && Array.isArray(parsed.ranges) ? parsed.ranges : [];
 
         if (selectedDate) {
-            for (const entry of ranges) {
+            for (let i = ranges.length - 1; i >= 0; i -= 1) {
+                const entry = ranges[i];
                 const start = parseDateOnly(entry.start_date);
                 const end = parseDateOnly(entry.end_date);
                 if (start && end && selectedDate >= start && selectedDate <= end) {
@@ -188,7 +189,16 @@ function renderStatusControls(dep, hostTr) {
                         start_date: start.value,
                         end_date: end.value
                     })
-                }).then(() => loadRoster());
+                })
+                    .then(res => {
+                        if (!res.ok) throw new Error('Failed to save status range');
+                        return res.json();
+                    })
+                    .then(() => loadRoster())
+                    .catch(err => {
+                        console.error(err);
+                        alert('Failed to save status range.');
+                    });
             });
 
             rangeRow.querySelector(".cancel-range").addEventListener("click", () => {
@@ -198,27 +208,6 @@ function renderStatusControls(dep, hostTr) {
 
             wrapper.appendChild(rangeRow);
         });
-}
-
-document.getElementById("addDeputyBtn").addEventListener("click", () => {
-    const fullName = document.getElementById("newFullName").value.trim();
-    if (!fullName) {
-        alert("Enter full name");
-        return;
-    }
-
-    fetch("/api/upsert-deputy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            full_name: fullName,
-            division: document.getElementById("newDivision").value,
-            rank: document.getElementById("newRank").value,
-            capacity_tag: document.getElementById("newCapability").value
-        })
-    }).then(() => {
-        document.getElementById("newFullName").value = "";
-        loadRoster();
     });
 
     wrapper.querySelector(".clear-status").addEventListener("click", function() {

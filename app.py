@@ -50,7 +50,7 @@ def _effective_status_for_date(status_text, target_date):
 
     if target_date:
         target = _parse_date_value(target_date)
-        for status_range in payload.get("ranges", []):
+        for status_range in reversed(payload.get("ranges", [])):
             start = _parse_date_value(status_range.get("start_date"))
             end = _parse_date_value(status_range.get("end_date"))
             if start and end and start <= target <= end:
