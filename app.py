@@ -137,12 +137,66 @@ def update_status_range():
         _serialize_status_payload(payload),
         full_name
     ))
+    removed_count = 0
+
+    if status in ["Sick", "Leave", "Light Duty"] and start_date and end_date:
+
+        cursor.execute("""
+            SELECT assignment_date, courthouse, assignment_type,
+                location_group, location_detail, part, assigned_member
+            FROM dbo.court_assignments
+            WHERE assignment_date BETWEEN ? AND ?
+            AND assigned_member LIKE ?
+        """, (
+            start_date,
+            end_date,
+            f"%{full_name}%"
+        ))
+
+        rows = cursor.fetchall()
+
+        for row in rows:
+            assignment_date = row[0]
+            courthouse = row[1]
+            assignment_type = row[2]
+            location_group = row[3]
+            location_detail = row[4]
+            part = row[5]
+            assigned_member = row[6] or ""
+
+            names = [n.strip() for n in assigned_member.split("||") if n.strip()]
+            names = [n for n in names if n != full_name]
+
+            new_value = " || ".join(names) if names else None
+
+            cursor.execute("""
+                UPDATE dbo.court_assignments
+                SET assigned_member = ?
+                WHERE assignment_date = ?
+                AND courthouse = ?
+                AND assignment_type = ?
+                AND ISNULL(location_group,'') = ISNULL(?, '')
+                AND ISNULL(location_detail,'') = ISNULL(?, '')
+                AND ISNULL(part,'') = ISNULL(?, '')
+            """, (
+                new_value,
+                assignment_date,
+                courthouse,
+                assignment_type,
+                location_group,
+                location_detail,
+                part
+            ))
+
+            removed_count += 1
 
     conn.commit()
     conn.close()
 
-    return {"status": "success"}
-
+    return jsonify({
+        "status": "success",
+        "removed_assignments": removed_count
+    })
 
 @app.route("/api/upsert-deputy", methods=["POST"])
 def upsert_deputy():

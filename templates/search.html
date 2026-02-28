@@ -2,97 +2,8 @@
 <html>
 <head>
     <title>Court Assignment Search</title>
-<style>
-#csoDetailTable td {
-    height: 35px;
-}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 
-#assignmentRosterLayout {
-    display: flex;
-    gap: 24px;
-    align-items: flex-start;
-}
-
-#assignmentsPanel {
-    width: 70%;
-}
-
-#rosterPanel {
-    width: 30%;
-}
-
-.roster-item {
-    padding: 4px 0;
-    cursor: pointer;
-}
-
-.roster-item.selected {
-    outline: 2px solid #528bff;
-    border-radius: 4px;
-}
-
-.roster-section-title {
-    margin: 12px 0 4px;
-}
-
-#rosterList.roster-two-column {
-    display: flex;
-    gap: 16px;
-    align-items: flex-start;
-}
-
-.roster-column {
-    flex: 1;
-    min-width: 0;
-}
-
-.roster-item.assigned {
-    opacity: 0.45;
-}
-
-.editable {
-    min-height: 28px;
-}
-
-.assignment-chip {
-    padding: 2px 6px;
-    background: #eef3ff;
-    border-radius: 4px;
-    display: inline-block;
-    margin: 2px 4px 2px 0;
-}
-
-.assignment-list {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-}
-
-.add-deputy-btn {
-    margin-left: 4px;
-    border: 1px solid #98a2b3;
-    background: #fff;
-    border-radius: 4px;
-    width: 22px;
-    height: 22px;
-    cursor: pointer;
-}
-
-.editable.append-mode {
-    outline: 2px dashed #98a2b3;
-}
-
-.cell-warning {
-    color: #b42318;
-    font-size: 12px;
-    margin-top: 4px;
-}
-
-.metric-red { color: #b42318; font-weight: 700; }
-.metric-green { color: #067647; font-weight: 700; }
-.metric-blue { color: #175cd3; font-weight: 700; }
-.counts-inline { margin-left: 10px; font-size: 0.9em; }
-</style>
 </head>
 <body>
 
@@ -389,17 +300,16 @@ function applyDeputyToCell(dropCell, assignedName, role) {
     }
 
     const assignmentList = ensureCellStructure(dropCell);
+    // Remove placeholder if present
+    
     clearExistingAssignmentForName(assignedName, dropCell);
 
-    if (dropCell.dataset.appendMode !== 'true') {
-        assignmentList.innerHTML = '';
-    }
+   
 
     const item = buildAssignmentChip(assignedName, role);
     assignmentList.appendChild(item);
 
-    dropCell.dataset.appendMode = 'false';
-    dropCell.classList.remove('append-mode');
+    
 
     setPendingAssignmentFromCell(dropCell);
     refreshRosterAssignedState();
@@ -567,6 +477,19 @@ function buildAssignmentChip(name, role) {
     chip.dataset.name = name;
     chip.dataset.role = role || '';
     chip.textContent = name;
+
+    chip.addEventListener('click', function () {
+
+        const confirmed = confirm(`Remove ${name} from this assignment?`);
+        if (!confirmed) return;
+
+        const cell = chip.closest('.editable');
+        chip.remove();
+
+        setPendingAssignmentFromCell(cell);
+        refreshRosterAssignedState();
+    });
+
     return chip;
 }
 
@@ -577,7 +500,7 @@ function clearExistingAssignmentForName(name, excludeCell) {
         const chips = Array.from(cell.querySelectorAll('.assignment-chip'));
         let removed = false;
         chips.forEach(chip => {
-            const chipName = (chip.dataset.name || chip.textContent || '').trim();
+            const chipName = chip.dataset.name?.trim();
             if (chipName === name) {
                 chip.remove();
                 removed = true;
@@ -620,19 +543,7 @@ function ensureCellStructure(cell) {
         cell.appendChild(list);
     }
 
-    let addButton = cell.querySelector('.add-deputy-btn');
-    if (!addButton) {
-        addButton = document.createElement('button');
-        addButton.type = 'button';
-        addButton.className = 'add-deputy-btn';
-        addButton.textContent = '+';
-        addButton.title = 'Add additional deputy';
-        addButton.addEventListener('click', () => {
-            cell.dataset.appendMode = 'true';
-            cell.classList.add('append-mode');
-        });
-        cell.appendChild(addButton);
-    }
+
 
     return list;
 }

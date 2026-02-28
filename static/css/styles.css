@@ -1,0 +1,145 @@
+/* ===== GLOBAL BASE ===== */
+
+body {
+    font-family: Arial, sans-serif;
+    background: #fafafa;
+    margin: 0;
+    padding: 20px;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+th {
+    text-align: left;
+    padding: 8px;
+    background-color: #f2f2f2;
+    border-bottom: 2px solid #e4e7ec;
+    font-weight: 600;
+}
+
+td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+th, td {
+    vertical-align: top;
+}
+#csoDetailTable td {
+    height: 35px;
+}
+
+#assignmentRosterLayout {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+#assignmentsPanel {
+    width: 70%;
+}
+
+#rosterPanel {
+    width: 30%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: sticky;
+    top: 20px;
+    padding-right: 8px; /* prevents scrollbar from overlapping text */
+}
+#rosterPanel::-webkit-scrollbar {
+    width: 8px;
+}
+
+#rosterPanel::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}
+
+.roster-item {
+    padding: 4px 0;
+    cursor: pointer;
+}
+
+.roster-item.selected {
+    outline: 2px solid #528bff;
+    border-radius: 4px;
+}
+
+.roster-section-title {
+    margin: 12px 0 4px;
+}
+
+#rosterList.roster-two-column {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.roster-column {
+    flex: 1;
+    min-width: 0;
+}
+
+.roster-item.assigned {
+    opacity: 0.45;
+}
+
+.editable {
+    min-height: 28px;
+}
+
+.assignment-chip {
+    padding: 4px 8px;
+    background: #eef2ff;
+    border: 1px solid #d0d7ff;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;              /* 🔥 fixes I-beam */
+    user-select: none;            /* 🔥 prevents text selection */
+}
+
+.assignment-chip:hover {
+    background: #e0e7ff;
+}
+
+.assignment-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.add-deputy-btn {
+    margin-left: 6px;
+    border: none;
+    background: none;
+    color: #175cd3;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+}
+.add-deputy-btn:hover {
+    text-decoration: underline;
+}
+.assignment-chip.placeholder {
+    background: #f2f4f7;
+    border: 1px dashed #d0d5dd;
+    color: #98a2b3;
+    font-style: italic;
+}
+
+
+.cell-warning {
+    color: #b42318;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.metric-red { color: #b42318; font-weight: 700; }
+.metric-green { color: #067647; font-weight: 700; }
+.metric-blue { color: #175cd3; font-weight: 700; }
+.counts-inline { margin-left: 10px; font-size: 0.9em; }
