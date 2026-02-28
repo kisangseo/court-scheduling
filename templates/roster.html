@@ -198,6 +198,27 @@ function renderStatusControls(dep, hostTr) {
 
             wrapper.appendChild(rangeRow);
         });
+}
+
+document.getElementById("addDeputyBtn").addEventListener("click", () => {
+    const fullName = document.getElementById("newFullName").value.trim();
+    if (!fullName) {
+        alert("Enter full name");
+        return;
+    }
+
+    fetch("/api/upsert-deputy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            full_name: fullName,
+            division: document.getElementById("newDivision").value,
+            rank: document.getElementById("newRank").value,
+            capacity_tag: document.getElementById("newCapability").value
+        })
+    }).then(() => {
+        document.getElementById("newFullName").value = "";
+        loadRoster();
     });
 
     wrapper.querySelector(".clear-status").addEventListener("click", function() {
