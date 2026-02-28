@@ -211,6 +211,17 @@ function getAssignedNamesFromCell(cell) {
         .filter(Boolean);
 }
 
+function parseAssignedMemberValue(value) {
+    const text = (value || '').trim();
+    if (!text) return [];
+
+    if (text.includes(' || ')) {
+        return text.split(' || ').map(name => name.trim()).filter(Boolean);
+    }
+
+    return [text];
+}
+
 function getAssignedNames() {
     const names = new Set();
     document.querySelectorAll('.editable').forEach(cell => {
@@ -249,7 +260,7 @@ function fetchGlobalAssignmentTotals(dateValue) {
 
             const posted = new Set();
             filledRows.forEach(row => {
-                (row.assigned_member || '').split(',').map(n => n.trim()).filter(Boolean).forEach(name => posted.add(name));
+                parseAssignedMemberValue(row.assigned_member).forEach(name => posted.add(name));
             });
             globalPostedNames = posted;
 
@@ -545,7 +556,7 @@ function clearExistingAssignmentForName(name, excludeCell) {
 }
 
 function setPendingAssignmentFromCell(cell) {
-    const assignedName = getAssignedNamesFromCell(cell).join(', ');
+    const assignedName = getAssignedNamesFromCell(cell).join(' || ');
     const payload = {
         assignment_date: cell.dataset.date,
         courthouse: cell.dataset.courthouse,
@@ -598,7 +609,7 @@ function initAssignmentDropzones() {
         const list = ensureCellStructure(cell);
 
         if (existingName) {
-            existingName.split(',').map(name => name.trim()).filter(Boolean).forEach(name => {
+            parseAssignedMemberValue(existingName).forEach(name => {
                 list.appendChild(buildAssignmentChip(name, ''));
             });
         }
