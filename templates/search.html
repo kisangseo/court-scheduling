@@ -2,15 +2,101 @@
 <html>
 <head>
     <title>Court Assignment Search</title>
-    <style>
+<style>
 #csoDetailTable td {
     height: 35px;
 }
+
+#assignmentRosterLayout {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+#assignmentsPanel {
+    width: 70%;
+}
+
+#rosterPanel {
+    width: 30%;
+}
+
+.roster-item {
+    padding: 4px 0;
+    cursor: pointer;
+}
+
+.roster-item.selected {
+    outline: 2px solid #528bff;
+    border-radius: 4px;
+}
+
+.roster-section-title {
+    margin: 12px 0 4px;
+}
+
+#rosterList.roster-two-column {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.roster-column {
+    flex: 1;
+    min-width: 0;
+}
+
+.roster-item.assigned {
+    opacity: 0.45;
+}
+
+.editable {
+    min-height: 28px;
+}
+
+.assignment-chip {
+    padding: 2px 6px;
+    background: #eef3ff;
+    border-radius: 4px;
+    display: inline-block;
+    margin: 2px 4px 2px 0;
+}
+
+.assignment-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.add-deputy-btn {
+    margin-left: 4px;
+    border: 1px solid #98a2b3;
+    background: #fff;
+    border-radius: 4px;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+}
+
+.editable.append-mode {
+    outline: 2px dashed #98a2b3;
+}
+
+.cell-warning {
+    color: #b42318;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.metric-red { color: #b42318; font-weight: 700; }
+.metric-green { color: #067647; font-weight: 700; }
+.metric-blue { color: #175cd3; font-weight: 700; }
+.counts-inline { margin-left: 10px; font-size: 0.9em; }
 </style>
 </head>
 <body>
 
-<h2>Search Court Assignments</h2>
+<h2>Search Court Assignments <span id="overallAssignmentCounts" class="counts-inline"></span></h2>
 
 <input type="text" id="name" placeholder="Search by Name">
 <input type="date" id="date">
@@ -23,20 +109,559 @@
 <button onclick="search()">Search</button><button onclick="openRoster()">Roster</button><button onclick="window.open('/staffing', '_blank')">
     Staffing Resources Daily
 </button>
-<button id="saveAssignments">Save Assignments</button>
+<button id="saveAssignments">Save Assignments</button> <span id="saveStatus" class="counts-inline"></span>
 
 <br><br>
 
-<div id="results" style="display:flex; gap:40px; align-items:flex-start;"></div>
+<div id="assignmentRosterLayout">
+    <div id="assignmentsPanel">
+        <div id="results" style="display:flex; gap:40px; align-items:flex-start;"></div>
+    </div>
+    <div id="rosterPanel">
+        <h3>Court Security Roster</h3>
+        <label>
+            <input type="checkbox" id="showFullRoster">
+            Show Full Roster
+        </label>
+        <div id="rosterList"></div>
+    </div>
+</div>
 
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
 let pendingAssignments = {};
 let pendingNotes = {};
+let allDeputies = [];
+let rawDeputies = [];
+let selectedDeputy = null;
+let globalAssignmentTotals = { total: 0, filled: 0 };
+let globalPostedNames = new Set();
+
+function getPostedCacheKey(date) {
+    return `postedNames:${date || ''}`;
+}
+
+function getTotalsCacheKey(date) {
+    return `assignmentTotals:${date || ''}`;
+}
+
+function loadCachedDateState(date) {
+    try {
+        const postedRaw = localStorage.getItem(getPostedCacheKey(date));
+        const totalsRaw = localStorage.getItem(getTotalsCacheKey(date));
+
+        if (postedRaw) {
+            globalPostedNames = new Set(JSON.parse(postedRaw));
+        }
+
+        if (totalsRaw) {
+            const parsedTotals = JSON.parse(totalsRaw);
+            globalAssignmentTotals = {
+                total: parsedTotals.total || 0,
+                filled: parsedTotals.filled || 0
+            };
+        }
+    } catch (_) {
+        globalPostedNames = new Set();
+    }
+}
+
+function cacheDateState(date, postedSet, totals) {
+    try {
+        localStorage.setItem(getPostedCacheKey(date), JSON.stringify(Array.from(postedSet)));
+        localStorage.setItem(getTotalsCacheKey(date), JSON.stringify(totals));
+    } catch (_) {
+        // ignore storage failures
+    }
+}
+
+function isCourtSecurityDeputy(deputy) {
+    const division = (deputy.division || "").trim().toLowerCase();
+    const capacityTag = (deputy.capacity_tag || "").trim().toLowerCase();
+
+    return division === "court security"
+        || division === "court security division"
+        || capacityTag.includes("court security")
+        || capacityTag.includes("cso");
+}
+
+function getDeputyRole(deputy) {
+    return (deputy.role || deputy.capacity_tag || "").trim().toUpperCase();
+}
+
+function createRosterItem(deputy, options = {}) {
+    const deputyRow = document.createElement("div");
+    deputyRow.className = "roster-item";
+    deputyRow.dataset.name = deputy.full_name || "";
+    deputyRow.dataset.role = getDeputyRole(deputy);
+
+    const showDivision = options.showDivision === true;
+    const division = (deputy.division || "Unassigned Division").trim() || "Unassigned Division";
+
+    deputyRow.textContent = showDivision
+        ? `${deputy.full_name} - ${division} (${deputy.capacity_tag || ""})`
+        : `${deputy.full_name} (${deputy.capacity_tag || ""})`;
+
+    return deputyRow;
+}
+
+function getAssignedNamesFromCell(cell) {
+    return Array.from(cell.querySelectorAll('.assignment-chip'))
+        .map(chip => (chip.dataset.name || chip.textContent || '').trim())
+        .filter(Boolean);
+}
+
+function parseAssignedMemberValue(value) {
+    const text = (value || '').trim();
+    if (!text) return [];
+
+    if (text.includes(' || ')) {
+        return text.split(' || ').map(name => name.trim()).filter(Boolean);
+    }
+
+    return [text];
+}
+
+function getAssignedNames() {
+    const names = new Set();
+    document.querySelectorAll('.editable').forEach(cell => {
+        getAssignedNamesFromCell(cell).forEach(name => names.add(name));
+    });
+    return names;
+}
+
+function formatCountMetrics(vacant, filled, colorFilled = 'metric-green') {
+    return `<span class="metric-red">Vacant ${vacant}</span> / <span class="${colorFilled}">Filled ${filled}</span>`;
+}
+
+function getPostedNameSetForPostsAndCourtrooms() {
+    const names = new Set(globalPostedNames);
+    document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"]').forEach(cell => {
+        getAssignedNamesFromCell(cell).forEach(name => names.add(name));
+    });
+    return names;
+}
+
+function fetchGlobalAssignmentTotals(dateValue) {
+    const date = dateValue || document.getElementById('date').value;
+    if (!date) {
+        globalAssignmentTotals = { total: 0, filled: 0 };
+        updateAssignmentCountBadges();
+        return Promise.resolve();
+    }
+
+    return fetch(`/api/search?date=${date}`)
+        .then(response => response.json())
+        .then(rows => {
+            const relevantRows = (rows || []).filter(row => row.assignment_type === 'Courtroom' || row.assignment_type === 'Fixed Post');
+            const total = relevantRows.length;
+            const filledRows = relevantRows.filter(row => (row.assigned_member || '').trim().length > 0);
+            const filled = filledRows.length;
+
+            const posted = new Set();
+            filledRows.forEach(row => {
+                parseAssignedMemberValue(row.assigned_member).forEach(name => posted.add(name));
+            });
+            globalPostedNames = posted;
+
+            globalAssignmentTotals = { total, filled };
+            cacheDateState(date, posted, globalAssignmentTotals);
+            updateAssignmentCountBadges();
+            refreshRosterHeaderCounts();
+            refreshRosterAssignedState();
+        })
+        .catch(() => {
+            globalAssignmentTotals = { total: 0, filled: 0 };
+            globalPostedNames = new Set();
+            cacheDateState(date, globalPostedNames, globalAssignmentTotals);
+            updateAssignmentCountBadges();
+            refreshRosterHeaderCounts();
+            refreshRosterAssignedState();
+        });
+}
+
+function updateAssignmentCountBadges() {
+    const statsByCourthouse = {};
+    let overallTotal = 0;
+    let overallFilled = 0;
+
+    document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"]').forEach(cell => {
+        const courthouse = cell.dataset.courthouse || '';
+        if (!statsByCourthouse[courthouse]) {
+            statsByCourthouse[courthouse] = { total: 0, filled: 0 };
+        }
+
+        statsByCourthouse[courthouse].total += 1;
+        overallTotal += 1;
+
+        if (getAssignedNamesFromCell(cell).length > 0) {
+            statsByCourthouse[courthouse].filled += 1;
+            overallFilled += 1;
+        }
+    });
+
+    const sourceTotal = globalAssignmentTotals.total || overallTotal;
+    const sourceFilled = globalAssignmentTotals.total ? globalAssignmentTotals.filled : overallFilled;
+    const overallVacant = Math.max(sourceTotal - sourceFilled, 0);
+    const overallBadge = document.getElementById('overallAssignmentCounts');
+    if (overallBadge) {
+        overallBadge.innerHTML = formatCountMetrics(overallVacant, sourceFilled);
+    }
+
+    document.querySelectorAll('[data-courthouse-header]').forEach(el => {
+        const courthouse = el.dataset.courthouseHeader;
+        const stats = statsByCourthouse[courthouse] || { total: 0, filled: 0 };
+        const vacant = Math.max(stats.total - stats.filled, 0);
+        el.innerHTML = formatCountMetrics(vacant, stats.filled);
+    });
+}
+
+function getCourtSecurityRosterStats() {
+    const courtSecurity = rawDeputies.filter(isCourtSecurityDeputy);
+    const outCount = courtSecurity.filter(dep => !isDeputyAvailable(dep)).length;
+    const postedNames = getPostedNameSetForPostsAndCourtrooms();
+    const postedCount = courtSecurity.filter(dep => postedNames.has((dep.full_name || '').trim())).length;
+
+    const totalAvailablePool = courtSecurity.filter(dep => isDeputyAvailable(dep)).length;
+    const availableCount = Math.max(totalAvailablePool - postedCount, 0);
+
+    return { outCount, availableCount, postedCount };
+}
+
+function refreshRosterHeaderCounts() {
+    const courtCountsEl = document.getElementById('courtSecurityCounts');
+    if (courtCountsEl) {
+        const stats = getCourtSecurityRosterStats();
+        courtCountsEl.innerHTML = `<span class="metric-red">Out ${stats.outCount}</span> / <span class="metric-green">Available ${stats.availableCount}</span> / <span class="metric-blue">Posted ${stats.postedCount}</span>`;
+    }
+
+    document.querySelectorAll('[data-division-posted]').forEach(el => {
+        const division = (el.dataset.divisionPosted || '').toLowerCase();
+        const postedNames = getPostedNameSetForPostsAndCourtrooms();
+        const postedCount = rawDeputies.filter(dep => ((dep.division || 'Unassigned Division').trim().toLowerCase() === division)
+            && postedNames.has((dep.full_name || '').trim())).length;
+        el.textContent = `Posted ${postedCount}`;
+    });
+}
+
+function refreshRosterAssignedState() {
+    const assignedNames = getPostedNameSetForPostsAndCourtrooms();
+    document.querySelectorAll('#rosterList .roster-item').forEach(item => {
+        const name = (item.dataset.name || '').trim();
+        item.classList.toggle('assigned', !!name && assignedNames.has(name));
+    });
+
+    updateAssignmentCountBadges();
+    refreshRosterHeaderCounts();
+}
+
+function clearRosterSelectionUI() {
+    document.querySelectorAll('#rosterList .roster-item.selected').forEach(item => {
+        item.classList.remove('selected');
+    });
+}
+
+function setSelectedDeputyFromRosterItem(item) {
+    if (!item) {
+        selectedDeputy = null;
+        clearRosterSelectionUI();
+        return;
+    }
+
+    const deputyName = (item.dataset.name || item.textContent || '').trim();
+    const deputyRole = (item.dataset.role || '').trim().toUpperCase();
+
+    if (selectedDeputy && selectedDeputy.name === deputyName) {
+        selectedDeputy = null;
+        clearRosterSelectionUI();
+        return;
+    }
+
+    selectedDeputy = { name: deputyName, role: deputyRole };
+    clearRosterSelectionUI();
+    item.classList.add('selected');
+}
+
+function applyDeputyToCell(dropCell, assignedName, role) {
+    if (!isEligibleForCell(dropCell, role)) {
+        showCellWarning(dropCell, 'Select eligible personnel');
+        return false;
+    }
+
+    const assignmentList = ensureCellStructure(dropCell);
+    clearExistingAssignmentForName(assignedName, dropCell);
+
+    if (dropCell.dataset.appendMode !== 'true') {
+        assignmentList.innerHTML = '';
+    }
+
+    const item = buildAssignmentChip(assignedName, role);
+    assignmentList.appendChild(item);
+
+    dropCell.dataset.appendMode = 'false';
+    dropCell.classList.remove('append-mode');
+
+    setPendingAssignmentFromCell(dropCell);
+    refreshRosterAssignedState();
+    return true;
+}
+
+function renderRoster() {
+    const rosterList = document.getElementById("rosterList");
+    const showFullRoster = document.getElementById("showFullRoster").checked;
+    rosterList.innerHTML = "";
+    rosterList.classList.toggle("roster-two-column", showFullRoster);
+
+    const courtColumn = document.createElement("div");
+    courtColumn.className = "roster-column";
+
+    const courtHeading = document.createElement("h4");
+    courtHeading.className = "roster-section-title";
+    courtHeading.innerHTML = `Court Security <span id="courtSecurityCounts" class="counts-inline"></span>`;
+    courtColumn.appendChild(courtHeading);
+
+    const courtList = document.createElement("div");
+    courtList.id = "courtSecurityRosterList";
+    courtList.className = "draggable-roster-list";
+    const courtSecurityDeputies = allDeputies.filter(isCourtSecurityDeputy);
+    courtSecurityDeputies.forEach(deputy => {
+        courtList.appendChild(createRosterItem(deputy, { showDivision: false }));
+    });
+    courtColumn.appendChild(courtList);
+    rosterList.appendChild(courtColumn);
+
+    if (showFullRoster) {
+        const fullColumn = document.createElement("div");
+        fullColumn.className = "roster-column";
+
+        const fullHeading = document.createElement("h4");
+        fullHeading.className = "roster-section-title";
+        fullHeading.textContent = "Full Roster";
+        fullColumn.appendChild(fullHeading);
+
+        const fullList = document.createElement("div");
+        fullList.id = "fullRosterList";
+        fullList.className = "draggable-roster-list";
+
+        const fullRosterSorted = allDeputies
+            .filter(deputy => !isCourtSecurityDeputy(deputy))
+            .sort((a, b) => {
+                const divisionA = (a.division || "Unassigned Division").trim().toLowerCase();
+                const divisionB = (b.division || "Unassigned Division").trim().toLowerCase();
+                if (divisionA !== divisionB) {
+                    return divisionA.localeCompare(divisionB);
+                }
+                return (a.full_name || "").localeCompare(b.full_name || "");
+            });
+
+        let currentDivision = null;
+        fullRosterSorted.forEach(deputy => {
+            const division = (deputy.division || "Unassigned Division").trim() || "Unassigned Division";
+            if (division !== currentDivision) {
+                const divisionHeading = document.createElement("h5");
+                divisionHeading.className = "roster-section-title";
+                const safeDivision = division.replace(/"/g, '&quot;');
+                divisionHeading.innerHTML = `${division} <span class="counts-inline metric-blue" data-division-posted="${safeDivision.toLowerCase()}"></span>`;
+                fullList.appendChild(divisionHeading);
+                currentDivision = division;
+            }
+
+            fullList.appendChild(createRosterItem(deputy, { showDivision: false }));
+        });
+
+        fullColumn.appendChild(fullList);
+        rosterList.appendChild(fullColumn);
+    }
+
+    initRosterDrag();
+    refreshRosterAssignedState();
+}
+
+function isDeputyAvailable(deputy) {
+    const status = (deputy.current_status || '').trim().toLowerCase();
+    if (!status) return true;
+
+    return !status.includes('leave')
+        && !status.includes('sick')
+        && !status.includes('light duty');
+}
+
+function loadRoster() {
+    fetch(`/api/deputies?date=${document.getElementById("date").value || ""}`)
+        .then(response => response.json())
+        .then(data => {
+            rawDeputies = data || [];
+            allDeputies = rawDeputies
+                .filter(isDeputyAvailable)
+                .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
+            renderRoster();
+        });
+}
+
+function getCellAssignmentCategory(cell) {
+    if (cell.dataset.type === 'Courtroom') return 'courtroom';
+    if (cell.dataset.type === 'Fixed Post') return 'security';
+    return 'overtime';
+}
+
+function isArmedRole(role) {
+    return role === 'DEP' || role === 'SPO' || role === 'F';
+}
+
+function isEligibleForCell(cell, role) {
+    const category = getCellAssignmentCategory(cell);
+    if (category === 'courtroom') {
+        return isArmedRole(role);
+    }
+    return true;
+}
+
+function showCellWarning(cell, message) {
+    const existing = cell.querySelector('.cell-warning');
+    if (existing) existing.remove();
+    const warning = document.createElement('div');
+    warning.className = 'cell-warning';
+    warning.textContent = message;
+    cell.appendChild(warning);
+    setTimeout(() => warning.remove(), 2000);
+}
+
+function buildAssignmentChip(name, role) {
+    const chip = document.createElement('div');
+    chip.className = 'assignment-chip';
+    chip.dataset.name = name;
+    chip.dataset.role = role || '';
+    chip.textContent = name;
+    return chip;
+}
+
+function clearExistingAssignmentForName(name, excludeCell) {
+    document.querySelectorAll('.editable').forEach(cell => {
+        if (cell === excludeCell) return;
+
+        const chips = Array.from(cell.querySelectorAll('.assignment-chip'));
+        let removed = false;
+        chips.forEach(chip => {
+            const chipName = (chip.dataset.name || chip.textContent || '').trim();
+            if (chipName === name) {
+                chip.remove();
+                removed = true;
+            }
+        });
+
+        if (removed) {
+            setPendingAssignmentFromCell(cell);
+        }
+    });
+}
+
+function setPendingAssignmentFromCell(cell) {
+    const assignedName = getAssignedNamesFromCell(cell).join(' || ');
+    const payload = {
+        assignment_date: cell.dataset.date,
+        courthouse: cell.dataset.courthouse,
+        assignment_type: cell.dataset.type,
+        location_detail: cell.dataset.room,
+        part: cell.dataset.part,
+        assigned_member: assignedName
+    };
+
+    const key = [
+        payload.assignment_date,
+        payload.courthouse,
+        payload.assignment_type,
+        payload.location_detail,
+        payload.part
+    ].join('|');
+
+    pendingAssignments[key] = payload;
+}
+
+function ensureCellStructure(cell) {
+    let list = cell.querySelector('.assignment-list');
+    if (!list) {
+        list = document.createElement('div');
+        list.className = 'assignment-list';
+        cell.appendChild(list);
+    }
+
+    let addButton = cell.querySelector('.add-deputy-btn');
+    if (!addButton) {
+        addButton = document.createElement('button');
+        addButton.type = 'button';
+        addButton.className = 'add-deputy-btn';
+        addButton.textContent = '+';
+        addButton.title = 'Add additional deputy';
+        addButton.addEventListener('click', () => {
+            cell.dataset.appendMode = 'true';
+            cell.classList.add('append-mode');
+        });
+        cell.appendChild(addButton);
+    }
+
+    return list;
+}
+
+function initAssignmentDropzones() {
+    document.querySelectorAll('.editable').forEach(cell => {
+        const existingName = cell.textContent.trim();
+        cell.innerHTML = '';
+        const list = ensureCellStructure(cell);
+
+        if (existingName) {
+            parseAssignedMemberValue(existingName).forEach(name => {
+                list.appendChild(buildAssignmentChip(name, ''));
+            });
+        }
+
+        Sortable.create(cell, {
+            group: {
+                name: 'assignmentRoster',
+                pull: false,
+                put: (to, from) => from.el.classList.contains('draggable-roster-list')
+            },
+            animation: 100,
+            sort: false,
+            onAdd: (evt) => {
+                const dropCell = evt.to;
+                const item = evt.item;
+                const role = (item.dataset.role || '').trim().toUpperCase();
+                const assignedName = (item.dataset.name || item.textContent || '').trim();
+
+                item.remove();
+                applyDeputyToCell(dropCell, assignedName, role);
+            }
+        });
+    });
+}
+
+let rosterSortables = [];
+function initRosterDrag() {
+    rosterSortables.forEach(sortable => sortable.destroy());
+    rosterSortables = [];
+
+    document.querySelectorAll('.draggable-roster-list').forEach(rosterEl => {
+        const sortable = Sortable.create(rosterEl, {
+            group: {
+                name: 'assignmentRoster',
+                pull: 'clone',
+                put: false
+            },
+            animation: 100,
+            sort: false
+        });
+        rosterSortables.push(sortable);
+    });
+}
 
 function search() {
     const name = document.getElementById("name").value;
     const date = document.getElementById("date").value;
     const courthouse = document.getElementById("courthouse").value;
+
+    loadCachedDateState(date);
+    localStorage.setItem('searchPageDate', date || '');
+    fetchGlobalAssignmentTotals(date);
 
     fetch(`/api/search?name=${name}&date=${date}&courthouse=${courthouse}`)
         .then(response => response.json())
@@ -45,7 +670,11 @@ function search() {
             const container = document.getElementById("results");
             container.innerHTML = "";
 
-            if (!data || data.length === 0) return;
+            if (!data || data.length === 0) {
+                updateAssignmentCountBadges();
+                refreshRosterHeaderCounts();
+                return;
+            }
 
             const grouped = {};
 
@@ -60,7 +689,7 @@ function search() {
                 column.style.width = "50%";
 
                 const header = document.createElement("h3");
-                header.textContent = courthouse;
+                header.innerHTML = `${courthouse} <span class="counts-inline" data-courthouse-header="${courthouse}"></span>`;
                 column.appendChild(header);
 
                 const typeGroups = {};
@@ -280,68 +909,26 @@ function search() {
 
                 container.appendChild(column);
             }
+            initAssignmentDropzones();
+            refreshRosterAssignedState();
         });
 }
 
 window.onload = function() {
     const today = new Date().toISOString().split('T')[0];
-    document.getElementById("date").value = today;
+    const savedDate = localStorage.getItem('searchPageDate');
+    document.getElementById("date").value = savedDate || today;
+
+    document.getElementById("showFullRoster").addEventListener("change", renderRoster);
+    document.getElementById("courthouse").addEventListener("change", search);
+    document.getElementById("date").addEventListener("change", function() {
+        localStorage.setItem('searchPageDate', document.getElementById("date").value || '');
+        search();
+    });
+
+    loadRoster();
     search();
 };
-document.addEventListener("click", function(e) {
-
-    if (!e.target.classList.contains("editable")) return;
-
-    const cell = e.target;
-
-    fetch("/api/deputies-available")
-    .then(res => res.json())
-    .then(roster => {
-
-        const select = document.createElement("select");
-
-        const blank = document.createElement("option");
-        blank.value = "";
-        blank.textContent = "-- Select --";
-        select.appendChild(blank);
-
-        roster.forEach(dep => {
-            const option = document.createElement("option");
-            option.value = dep.full_name;
-            option.textContent = dep.full_name + " (" + dep.capacity_tag + ")";
-            select.appendChild(option);
-        });
-
-        select.value = cell.textContent.trim();
-
-        cell.innerHTML = "";
-        cell.appendChild(select);
-        select.focus();
-
-        select.addEventListener("change", function() {
-
-            const payload = {
-                assignment_date: cell.dataset.date,
-                courthouse: cell.dataset.courthouse,
-                assignment_type: cell.dataset.type,
-                location_detail: cell.dataset.room,
-                part: cell.dataset.part,
-                assigned_member: select.value
-            };
-
-            const key = [
-                payload.assignment_date,
-                payload.courthouse,
-                payload.assignment_type,
-                payload.location_detail,
-                payload.part
-            ].join("|");
-
-            pendingAssignments[key] = payload;
-            cell.textContent = select.value;
-        });
-    });
-});
 document.addEventListener("click", function(e) {
 
     const cell = e.target.closest(".editable-assignment");
@@ -385,6 +972,12 @@ document.addEventListener("click", function(e) {
 
 document.getElementById("saveAssignments").addEventListener("click", function() {
 
+    const saveStatus = document.getElementById("saveStatus");
+    if (saveStatus) {
+        saveStatus.className = "counts-inline";
+        saveStatus.textContent = "Saving...";
+    }
+
     const assignmentRequests = Object.values(pendingAssignments).map(payload =>
         fetch("/api/update-deputy", {
             method: "POST",
@@ -411,10 +1004,38 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         .then(() => {
             pendingAssignments = {};
             pendingNotes = {};
+            if (saveStatus) {
+                saveStatus.className = "counts-inline metric-green";
+                saveStatus.textContent = "Saved";
+            }
+            search();
+            loadRoster();
         })
         .catch(err => {
             console.error("Save failed:", err);
+            if (saveStatus) {
+                saveStatus.className = "counts-inline metric-red";
+                saveStatus.textContent = "Save failed";
+            }
+            alert("Save failed. Please try again.");
         });
+});
+
+document.addEventListener('click', function(e) {
+    const rosterItem = e.target.closest('#rosterList .roster-item');
+    if (rosterItem) {
+        setSelectedDeputyFromRosterItem(rosterItem);
+        return;
+    }
+
+    const editableCell = e.target.closest('.editable');
+    if (!editableCell || !selectedDeputy) return;
+
+    const applied = applyDeputyToCell(editableCell, selectedDeputy.name, selectedDeputy.role);
+    if (applied) {
+        clearRosterSelectionUI();
+        selectedDeputy = null;
+    }
 });
 
 function openRoster() {
