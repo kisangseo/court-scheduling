@@ -137,6 +137,44 @@ let selectedDeputy = null;
 let globalAssignmentTotals = { total: 0, filled: 0 };
 let globalPostedNames = new Set();
 
+function getPostedCacheKey(date) {
+    return `postedNames:${date || ''}`;
+}
+
+function getTotalsCacheKey(date) {
+    return `assignmentTotals:${date || ''}`;
+}
+
+function loadCachedDateState(date) {
+    try {
+        const postedRaw = localStorage.getItem(getPostedCacheKey(date));
+        const totalsRaw = localStorage.getItem(getTotalsCacheKey(date));
+
+        if (postedRaw) {
+            globalPostedNames = new Set(JSON.parse(postedRaw));
+        }
+
+        if (totalsRaw) {
+            const parsedTotals = JSON.parse(totalsRaw);
+            globalAssignmentTotals = {
+                total: parsedTotals.total || 0,
+                filled: parsedTotals.filled || 0
+            };
+        }
+    } catch (_) {
+        globalPostedNames = new Set();
+    }
+}
+
+function cacheDateState(date, postedSet, totals) {
+    try {
+        localStorage.setItem(getPostedCacheKey(date), JSON.stringify(Array.from(postedSet)));
+        localStorage.setItem(getTotalsCacheKey(date), JSON.stringify(totals));
+    } catch (_) {
+        // ignore storage failures
+    }
+}
+
 function isCourtSecurityDeputy(deputy) {
     const division = (deputy.division || "").trim().toLowerCase();
     const capacityTag = (deputy.capacity_tag || "").trim().toLowerCase();
@@ -216,6 +254,7 @@ function fetchGlobalAssignmentTotals(dateValue) {
             globalPostedNames = posted;
 
             globalAssignmentTotals = { total, filled };
+            cacheDateState(date, posted, globalAssignmentTotals);
             updateAssignmentCountBadges();
             refreshRosterHeaderCounts();
             refreshRosterAssignedState();
@@ -223,6 +262,7 @@ function fetchGlobalAssignmentTotals(dateValue) {
         .catch(() => {
             globalAssignmentTotals = { total: 0, filled: 0 };
             globalPostedNames = new Set();
+            cacheDateState(date, globalPostedNames, globalAssignmentTotals);
             updateAssignmentCountBadges();
             refreshRosterHeaderCounts();
             refreshRosterAssignedState();
@@ -608,6 +648,7 @@ function search() {
     const date = document.getElementById("date").value;
     const courthouse = document.getElementById("courthouse").value;
 
+    loadCachedDateState(date);
     localStorage.setItem('searchPageDate', date || '');
     fetchGlobalAssignmentTotals(date);
 
