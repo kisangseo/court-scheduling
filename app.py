@@ -142,12 +142,34 @@ def update_status_range():
     payload = _parse_status_payload(current_status)
 
     ranges = payload.get("ranges", [])
-    ranges = [r for r in ranges if not (r.get("status") == status and r.get("start_date") == start_date and r.get("end_date") == end_date)]
-    ranges.append({
-        "status": status,
-        "start_date": start_date,
-        "end_date": end_date
-    })
+    remove_only = bool(data.get("remove_only"))
+    new_ranges = []
+
+    target = _parse_date_value(start_date)
+
+    for r in ranges:
+        r_status = r.get("status")
+        r_start = _parse_date_value(r.get("start_date"))
+        r_end = _parse_date_value(r.get("end_date"))
+
+        # Remove if same status AND date falls inside that range
+        if (
+            r_status == status and
+            r_start and r_end and
+            target and
+            r_start <= target <= r_end
+        ):
+            continue
+
+        new_ranges.append(r)
+
+    ranges = new_ranges
+    if not remove_only:
+        ranges.append({
+            "status": status,
+            "start_date": start_date,
+            "end_date": end_date
+        })
     payload["ranges"] = ranges
 
     cursor.execute("""

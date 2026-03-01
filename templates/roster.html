@@ -120,13 +120,22 @@ function effectiveStatusForSelectedDate(dep) {
         const ranges = parsed && Array.isArray(parsed.ranges) ? parsed.ranges : [];
 
         if (selectedDate) {
-            for (let i = ranges.length - 1; i >= 0; i -= 1) {
+            let active = [];
+
+            for (let i = 0; i < ranges.length; i++) {
                 const entry = ranges[i];
                 const start = parseDateOnly(entry.start_date);
                 const end = parseDateOnly(entry.end_date);
+
                 if (start && end && selectedDate >= start && selectedDate <= end) {
-                    return entry.status || "";
+                    if (!active.includes(entry.status)) {
+                        active.push(entry.status);
+                    }
                 }
+            }
+
+            if (active.length > 0) {
+                return active.join(" / ");
             }
         }
 
@@ -149,13 +158,35 @@ function renderStatusControls(dep, hostTr) {
         <label><input type="checkbox" value="Sick" ${statusIncludes(dep, "Sick") ? "checked" : ""}> Sick</label>
         <label><input type="checkbox" value="Leave" ${statusIncludes(dep, "Leave") ? "checked" : ""}> Leave</label>
         <label><input type="checkbox" value="Light Duty" ${statusIncludes(dep, "Light Duty") ? "checked" : ""}> Light Duty</label>
-        <button class="clear-status" type="button">Clear</button>
+        
         <div class="small">Click a status checkbox to set date range.</div>
     `;
 
     wrapper.querySelectorAll("input[type=checkbox]").forEach(box => {
         box.addEventListener("change", function() {
-            if (!box.checked) return;
+
+            const selectedDate = document.getElementById("rosterDate").value;
+
+            // 🔴 If UNCHECKED → remove just this status for this date
+            if (!box.checked) {
+                fetch("/api/update-status-range", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        full_name: dep.full_name,
+                        status: box.value,
+                        start_date: selectedDate,
+                        end_date: selectedDate,
+                        remove_only: true
+                    })
+                })
+                .then(res => res.json())
+                .then(() => {
+                    loadRoster();
+                });
+
+                return;
+            }
 
             const rangeRow = document.createElement("div");
             rangeRow.className = "action-row";
@@ -168,7 +199,7 @@ function renderStatusControls(dep, hostTr) {
 
             const start = rangeRow.querySelector(".start-date");
             const end = rangeRow.querySelector(".end-date");
-            const selectedDate = document.getElementById("rosterDate").value;
+            
             start.value = selectedDate;
             end.value = selectedDate;
 
@@ -201,7 +232,11 @@ function renderStatusControls(dep, hostTr) {
                             alert(`Removed from ${result.removed_assignments} assignment(s).`);
                         }
 
-                        loadRoster();
+                        rangeRow.remove();   // remove the date picker UI
+                        box.checked = true;  // keep checkbox checked
+
+                        loadRoster();        // refresh after successful apply
+                       
 
                         // refresh assignments on search page if open
                         if (window.opener && typeof window.opener.search === "function") {
@@ -223,36 +258,7 @@ function renderStatusControls(dep, hostTr) {
         });
     });
 
-    wrapper.querySelector(".clear-status").addEventListener("click", function() {
-
-        if (!confirm(`Clear all status ranges for ${dep.full_name}?`)) return;
-
-        fetch("/api/update-status-range", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                full_name: dep.full_name,
-                status: "CLEAR_ALL",
-                start_date: null,
-                end_date: null
-            })
-        })
-        .then(res => {
-            if (!res.ok) throw new Error("Failed to clear status");
-            return res.json();
-        })
-        .then(() => {
-            loadRoster();
-
-            if (window.opener && typeof window.opener.search === "function") {
-                window.opener.search();
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            alert("Failed to clear status.");
-        });
-    });
+    
 
     return wrapper;
 }

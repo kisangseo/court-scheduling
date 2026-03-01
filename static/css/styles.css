@@ -150,3 +150,13 @@ th, td {
 .metric-green { color: #067647; font-weight: 700; }
 .metric-blue { color: #175cd3; font-weight: 700; }
 .counts-inline { margin-left: 10px; font-size: 0.9em; }
+h3 {
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+h4 {
+    font-weight: 500;
+    margin-top: 12px;
+    margin-bottom: 6px;
+}
