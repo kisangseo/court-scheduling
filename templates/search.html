@@ -533,6 +533,15 @@ function setPendingAssignmentFromCell(cell) {
     ].join('|');
 
     pendingAssignments[key] = payload;
+    const saveStatus = document.getElementById("saveStatus");
+    if (saveStatus) {
+        const totalChanges =
+            Object.keys(pendingAssignments).length +
+            Object.keys(pendingNotes).length;
+
+        saveStatus.className = "counts-inline metric-red";
+        saveStatus.textContent = `${totalChanges} change${totalChanges !== 1 ? "s" : ""} not saved`;
+    }
 }
 
 function ensureCellStructure(cell) {
@@ -987,6 +996,16 @@ document.addEventListener('click', function(e) {
 function openRoster() {
     window.open("/roster", "_blank");
 }
+window.addEventListener("beforeunload", function (e) {
+    const totalChanges =
+        Object.keys(pendingAssignments).length +
+        Object.keys(pendingNotes).length;
+
+    if (totalChanges > 0) {
+        e.preventDefault();
+        e.returnValue = ""; // Required for Chrome
+    }
+});
 </script>
 <hr>
 

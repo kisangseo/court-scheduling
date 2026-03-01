@@ -101,12 +101,9 @@ buildOptions(document.getElementById("newCapability"), capabilityOptions, "CSO")
 
 function isCourtSecurityDeputy(deputy) {
     const division = (deputy.division || "").trim().toLowerCase();
-    const capability = (deputy.capacity_tag || "").trim().toLowerCase();
-    return division === "court security"
-        || division === "court security division"
-        || capability.includes("court security")
-        || capability.includes("cso");
+    return division === "court security";
 }
+
 
 function parseDateOnly(value) {
     if (!value) return null;
@@ -227,11 +224,34 @@ function renderStatusControls(dep, hostTr) {
     });
 
     wrapper.querySelector(".clear-status").addEventListener("click", function() {
-        fetch("/api/update-status", {
+
+        if (!confirm(`Clear all status ranges for ${dep.full_name}?`)) return;
+
+        fetch("/api/update-status-range", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ full_name: dep.full_name, status: null })
-        }).then(() => loadRoster());
+            body: JSON.stringify({
+                full_name: dep.full_name,
+                status: "CLEAR_ALL",
+                start_date: null,
+                end_date: null
+            })
+        })
+        .then(res => {
+            if (!res.ok) throw new Error("Failed to clear status");
+            return res.json();
+        })
+        .then(() => {
+            loadRoster();
+
+            if (window.opener && typeof window.opener.search === "function") {
+                window.opener.search();
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Failed to clear status.");
+        });
     });
 
     return wrapper;
@@ -332,7 +352,13 @@ function updateCourtSecurityStatusCounts(deputies) {
     const leave = cs.filter(dep => statusIncludes(dep, "Leave")).length;
     const lightDuty = cs.filter(dep => statusIncludes(dep, "Light Duty")).length;
     const total = cs.length;
-    const available = total - sick - leave - lightDuty;
+    const out = cs.filter(dep =>
+        statusIncludes(dep, "Sick") ||
+        statusIncludes(dep, "Leave") ||
+        statusIncludes(dep, "Light Duty")
+    ).length;
+
+    const available = total - out;
 
     document.getElementById("courtSecurityStatusCounts").innerHTML =
         `<span class="status-red">Sick ${sick}</span> /

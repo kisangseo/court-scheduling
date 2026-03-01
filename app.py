@@ -107,9 +107,20 @@ def update_status_range():
     status = _normalize_status_type(data.get("status"))
     start_date = data.get("start_date")
     end_date = data.get("end_date")
-
     conn = get_conn()
     cursor = conn.cursor()
+    
+    if status == "CLEAR_ALL":
+        cursor.execute("""
+            UPDATE dbo.deputies
+            SET current_status = NULL
+            WHERE full_name = ?
+        """, (full_name,))
+        
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "cleared", "removed_assignments": 0})
+    
 
     cursor.execute("""
         SELECT current_status
