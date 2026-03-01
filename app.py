@@ -50,11 +50,21 @@ def _effective_status_for_date(status_text, target_date):
 
     if target_date:
         target = _parse_date_value(target_date)
-        for status_range in reversed(payload.get("ranges", [])):
+        active_statuses = []
+
+        for status_range in payload.get("ranges", []):
             start = _parse_date_value(status_range.get("start_date"))
             end = _parse_date_value(status_range.get("end_date"))
-            if start and end and start <= target <= end:
-                return status_range.get("status")
+            status_value = status_range.get("status")
+
+            if not (start and end and status_value):
+                continue
+
+            if start <= target <= end and status_value not in active_statuses:
+                active_statuses.append(status_value)
+
+        if active_statuses:
+            return " / ".join(active_statuses)
 
     return payload.get("legacy")
 
