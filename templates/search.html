@@ -218,11 +218,24 @@ function formatCountMetrics(vacant, filled, colorFilled = 'metric-green') {
 }
 
 function getPostedNameSetForPostsAndCourtrooms() {
-    const names = new Set(globalPostedNames);
+    const names = new Set();
+
     document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"]').forEach(cell => {
-        getAssignedNamesFromCell(cell).forEach(name => names.add(name));
+        const assignedNames = getAssignedNamesFromCell(cell);
+
+        if (assignedNames.length > 0) {
+            assignedNames.forEach(name => names.add(name));
+            return;
+        }
+
+        parseAssignedMemberValue(cell.textContent).forEach(name => names.add(name));
     });
-    return names;
+
+    if (names.size > 0 || document.querySelectorAll('.editable').length > 0) {
+        return names;
+    }
+
+    return new Set(globalPostedNames);
 }
 
 function fetchGlobalAssignmentTotals(dateValue) {
