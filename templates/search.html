@@ -133,6 +133,84 @@ function parseAssignedMemberValue(value) {
     return [text];
 }
 
+function normalizeDeputyName(value) {
+    return (value || '').trim().toLowerCase();
+}
+
+function getDeputyRecordByName(name) {
+    const target = normalizeDeputyName(name);
+    if (!target) return null;
+
+    return rawDeputies.find(dep => normalizeDeputyName(dep.full_name) === target) || null;
+}
+
+function formatBorrowedCourthouse(courthouse) {
+    const normalized = (courthouse || '').trim().toLowerCase();
+    if (normalized === 'juvenile') return 'Juv';
+    if (normalized === 'mitchell') return 'Mitchell';
+    if (normalized === 'cummings') return 'Cummings';
+    return courthouse || '';
+}
+
+function formatRoomPartTime(cell) {
+    const room = (cell.dataset.room || '').trim();
+    const part = (cell.dataset.part || '').trim();
+    const shift = (cell.dataset.shift || '').trim();
+
+    if (cell.dataset.type === 'Overtime') {
+        return `${room || '-'} / ${shift || 'Time TBD'}`;
+    }
+
+    const roomPart = [room, part ? `Part ${part}` : ''].filter(Boolean).join(' / ');
+    return `${roomPart || '-'} / Time TBD`;
+}
+
+function renderBorrowedDeputiesTable() {
+    const tbody = document.getElementById('csoDetailBody');
+    if (!tbody) return;
+
+    const borrowedRows = [];
+
+    document.querySelectorAll('.editable').forEach(cell => {
+        const assignedNames = getAssignedNamesFromCell(cell);
+        if (assignedNames.length === 0) return;
+
+        assignedNames.forEach(name => {
+            const deputy = getDeputyRecordByName(name);
+            if (!deputy || isCourtSecurityDeputy(deputy)) return;
+
+            borrowedRows.push({
+                deputyName: name,
+                division: (deputy.division || 'Unassigned Division').trim() || 'Unassigned Division',
+                courthouse: formatBorrowedCourthouse(cell.dataset.courthouse),
+                roomPartTime: formatRoomPartTime(cell)
+            });
+        });
+    });
+
+    tbody.innerHTML = '';
+
+    if (borrowedRows.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="4">No borrowed deputies assigned.</td>';
+        tbody.appendChild(tr);
+        return;
+    }
+
+    borrowedRows
+        .sort((a, b) => a.deputyName.localeCompare(b.deputyName) || a.courthouse.localeCompare(b.courthouse))
+        .forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.deputyName}</td>
+                <td>${item.division}</td>
+                <td>${item.courthouse}</td>
+                <td>${item.roomPartTime}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+}
+
 function getAssignedNames() {
     const names = new Set();
     document.querySelectorAll('.editable').forEach(cell => {
@@ -141,16 +219,46 @@ function getAssignedNames() {
     return names;
 }
 
+function getAssignedNamesAcrossGrid() {
+    const names = new Set();
+
+    document.querySelectorAll('.editable').forEach(cell => {
+        const assignedNames = getAssignedNamesFromCell(cell);
+
+        if (assignedNames.length > 0) {
+            assignedNames.forEach(name => names.add(name));
+            return;
+        }
+
+        parseAssignedMemberValue(cell.textContent).forEach(name => names.add(name));
+    });
+
+    return names;
+}
+
 function formatCountMetrics(vacant, filled, colorFilled = 'metric-green') {
     return `<span class="metric-red">Vacant ${vacant}</span> / <span class="${colorFilled}">Filled ${filled}</span>`;
 }
 
 function getPostedNameSetForPostsAndCourtrooms() {
-    const names = new Set(globalPostedNames);
+    const names = new Set();
+
     document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"]').forEach(cell => {
-        getAssignedNamesFromCell(cell).forEach(name => names.add(name));
+        const assignedNames = getAssignedNamesFromCell(cell);
+
+        if (assignedNames.length > 0) {
+            assignedNames.forEach(name => names.add(name));
+            return;
+        }
+
+        parseAssignedMemberValue(cell.textContent).forEach(name => names.add(name));
     });
-    return names;
+
+    if (names.size > 0 || document.querySelectorAll('.editable').length > 0) {
+        return names;
+    }
+
+    return new Set(globalPostedNames);
 }
 
 function fetchGlobalAssignmentTotals(dateValue) {
@@ -205,14 +313,17 @@ function updateAssignmentCountBadges() {
         statsByCourthouse[courthouse].total += 1;
         overallTotal += 1;
 
-        if (getAssignedNamesFromCell(cell).length > 0) {
+        const assignedNames = getAssignedNamesFromCell(cell);
+        const parsedTextNames = parseAssignedMemberValue(cell.textContent);
+        if (assignedNames.length > 0 || parsedTextNames.length > 0) {
             statsByCourthouse[courthouse].filled += 1;
             overallFilled += 1;
         }
     });
 
-    const sourceTotal = globalAssignmentTotals.total || overallTotal;
-    const sourceFilled = globalAssignmentTotals.total ? globalAssignmentTotals.filled : overallFilled;
+    const hasLiveAssignmentGrid = document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"]').length > 0;
+    const sourceTotal = hasLiveAssignmentGrid ? overallTotal : (globalAssignmentTotals.total || 0);
+    const sourceFilled = hasLiveAssignmentGrid ? overallFilled : (globalAssignmentTotals.filled || 0);
     const overallVacant = Math.max(sourceTotal - sourceFilled, 0);
     const overallBadge = document.getElementById('overallAssignmentCounts');
     if (overallBadge) {
@@ -256,7 +367,7 @@ function refreshRosterHeaderCounts() {
 }
 
 function refreshRosterAssignedState() {
-    const assignedNames = getPostedNameSetForPostsAndCourtrooms();
+    const assignedNames = getAssignedNamesAcrossGrid();
     document.querySelectorAll('#rosterList .roster-item').forEach(item => {
         const name = (item.dataset.name || '').trim();
         item.classList.toggle('assigned', !!name && assignedNames.has(name));
@@ -264,6 +375,7 @@ function refreshRosterAssignedState() {
 
     updateAssignmentCountBadges();
     refreshRosterHeaderCounts();
+    renderBorrowedDeputiesTable();
 }
 
 function clearRosterSelectionUI() {
@@ -840,6 +952,7 @@ function search() {
                                     data-courthouse="${courthouse}"
                                     data-type="Overtime"
                                     data-room="${row.location_detail}"
+                                    data-shift="${row.shift_time || ""}"
                                     data-part="">
                                     ${row.assigned_member || ""}
                                 </td>
@@ -1015,43 +1128,12 @@ window.addEventListener("beforeunload", function (e) {
     <thead>
         <tr>
             <th>Deputy Name</th>
-            <th>Building</th>
-            <th>Assignment Type</th>
-            <th>Room / Post / Part</th>
+            <th>Division</th>
+            <th>Courthouse</th>
+            <th>Room / Part / Time</th>
         </tr>
     </thead>
-    <tbody id="csoDetailBody">
-    <tr>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
-    </tr>
-    <tr>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
-    </tr>
-    <tr>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
-    </tr>
-    <tr>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
-    </tr>
-    <tr>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
-    </tr>
-</tbody>
+    <tbody id="csoDetailBody"></tbody>
 </table>
 </body>
 </html>
