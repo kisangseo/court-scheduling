@@ -290,14 +290,17 @@ function updateAssignmentCountBadges() {
         statsByCourthouse[courthouse].total += 1;
         overallTotal += 1;
 
-        if (getAssignedNamesFromCell(cell).length > 0) {
+        const assignedNames = getAssignedNamesFromCell(cell);
+        const parsedTextNames = parseAssignedMemberValue(cell.textContent);
+        if (assignedNames.length > 0 || parsedTextNames.length > 0) {
             statsByCourthouse[courthouse].filled += 1;
             overallFilled += 1;
         }
     });
 
-    const sourceTotal = globalAssignmentTotals.total || overallTotal;
-    const sourceFilled = globalAssignmentTotals.total ? globalAssignmentTotals.filled : overallFilled;
+    const hasLiveAssignmentGrid = document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"]').length > 0;
+    const sourceTotal = hasLiveAssignmentGrid ? overallTotal : (globalAssignmentTotals.total || 0);
+    const sourceFilled = hasLiveAssignmentGrid ? overallFilled : (globalAssignmentTotals.filled || 0);
     const overallVacant = Math.max(sourceTotal - sourceFilled, 0);
     const overallBadge = document.getElementById('overallAssignmentCounts');
     if (overallBadge) {
