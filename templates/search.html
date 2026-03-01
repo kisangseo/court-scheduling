@@ -155,6 +155,12 @@ function formatBorrowedCourthouse(courthouse) {
 function formatRoomPartTime(cell) {
     const room = (cell.dataset.room || '').trim();
     const part = (cell.dataset.part || '').trim();
+    const shift = (cell.dataset.shift || '').trim();
+
+    if (cell.dataset.type === 'Overtime') {
+        return `${room || '-'} / ${shift || 'Time TBD'}`;
+    }
+
     const roomPart = [room, part ? `Part ${part}` : ''].filter(Boolean).join(' / ');
     return `${roomPart || '-'} / Time TBD`;
 }
@@ -210,6 +216,23 @@ function getAssignedNames() {
     document.querySelectorAll('.editable').forEach(cell => {
         getAssignedNamesFromCell(cell).forEach(name => names.add(name));
     });
+    return names;
+}
+
+function getAssignedNamesAcrossGrid() {
+    const names = new Set();
+
+    document.querySelectorAll('.editable').forEach(cell => {
+        const assignedNames = getAssignedNamesFromCell(cell);
+
+        if (assignedNames.length > 0) {
+            assignedNames.forEach(name => names.add(name));
+            return;
+        }
+
+        parseAssignedMemberValue(cell.textContent).forEach(name => names.add(name));
+    });
+
     return names;
 }
 
@@ -344,7 +367,7 @@ function refreshRosterHeaderCounts() {
 }
 
 function refreshRosterAssignedState() {
-    const assignedNames = getPostedNameSetForPostsAndCourtrooms();
+    const assignedNames = getAssignedNamesAcrossGrid();
     document.querySelectorAll('#rosterList .roster-item').forEach(item => {
         const name = (item.dataset.name || '').trim();
         item.classList.toggle('assigned', !!name && assignedNames.has(name));
@@ -929,6 +952,7 @@ function search() {
                                     data-courthouse="${courthouse}"
                                     data-type="Overtime"
                                     data-room="${row.location_detail}"
+                                    data-shift="${row.shift_time || ""}"
                                     data-part="">
                                     ${row.assigned_member || ""}
                                 </td>
