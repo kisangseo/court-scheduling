@@ -297,3 +297,9 @@ h4 {
         margin-bottom: 12px;
     }
 }
+
+.transfer-caption {
+    font-size: 11px;
+    color: #667085;
+    margin-top: 4px;
+}

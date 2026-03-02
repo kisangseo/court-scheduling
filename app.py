@@ -967,7 +967,9 @@ def search():
             judge_name,
             part,
             assigned_member,
-            assignment_notes
+            assignment_notes,
+            start_time,
+            end_time
         FROM dbo.court_assignments
         WHERE 1=1
     """
@@ -998,6 +1000,82 @@ def search():
     conn.close()
 
     return jsonify(results)
+
+
+@app.route("/api/transfer-deputy", methods=["POST"])
+def transfer_deputy():
+    data = request.json or {}
+    assignment_date = data.get("assignment_date")
+    deputy_name = (data.get("deputy_name") or "").strip()
+    transfer_time = data.get("transfer_time")
+    from_assignment = data.get("from_assignment") or {}
+    to_assignment = data.get("to_assignment") or {}
+
+    if not assignment_date or not deputy_name or not transfer_time:
+        return jsonify({"status": "error", "message": "Missing required transfer fields"}), 400
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE dbo.court_assignments
+        SET end_time = ?,
+            assigned_member = NULL
+        WHERE assignment_date = ?
+          AND courthouse = ?
+          AND assignment_type = ?
+          AND ISNULL(location_group, '') = ISNULL(?, '')
+          AND ISNULL(location_detail, '') = ISNULL(?, '')
+          AND ISNULL(part, '') = ISNULL(?, '')
+          AND ISNULL(end_time, '') = ''
+          AND assigned_member = ?
+    """, (
+        transfer_time,
+        assignment_date,
+        from_assignment.get("courthouse"),
+        from_assignment.get("assignment_type"),
+        from_assignment.get("location_group"),
+        from_assignment.get("location_detail"),
+        from_assignment.get("part"),
+        deputy_name,
+    ))
+
+    to_type = to_assignment.get("assignment_type")
+    to_room = to_assignment.get("location_detail")
+    to_location_group = to_room if to_type == "Fixed Post" else None
+    to_location_detail = None if to_type == "Fixed Post" else to_room
+
+    cursor.execute("""
+        INSERT INTO dbo.court_assignments (
+            assignment_date,
+            courthouse,
+            assignment_type,
+            location_group,
+            location_detail,
+            part,
+            judge_name,
+            shift_time,
+            assigned_member,
+            assignment_notes,
+            start_time,
+            end_time,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL, ?, NULL, GETDATE())
+    """, (
+        assignment_date,
+        to_assignment.get("courthouse"),
+        to_type,
+        to_location_group,
+        to_location_detail,
+        to_assignment.get("part") or "",
+        deputy_name,
+        transfer_time,
+    ))
+
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success"})
 
 if __name__ == "__main__":
     app.run(debug=True)
