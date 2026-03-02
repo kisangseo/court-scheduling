@@ -26,7 +26,7 @@
 
 <div id="assignmentRosterLayout">
     <div id="assignmentsPanel">
-        <div id="results" style="display:flex; gap:40px; align-items:flex-start;"></div>
+        <div id="results" style="display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start;"></div>
     </div>
     <div id="rosterPanel">
         <h3>Court Security Roster</h3>
@@ -806,7 +806,9 @@ function search() {
             for (const courthouse in grouped) {
 
                 const column = document.createElement("div");
-                column.style.width = "50%";
+                column.style.flex = "1 1 420px";
+                column.style.minWidth = "360px";
+                column.style.maxWidth = "100%";
 
                 const header = document.createElement("h3");
                 header.innerHTML = `${courthouse} <span class="counts-inline" data-courthouse-header="${courthouse}"></span>`;
