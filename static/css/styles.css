@@ -40,11 +40,13 @@ th, td {
 }
 
 #assignmentsPanel {
-    width: 70%;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 #rosterPanel {
-    width: 30%;
+    flex: 0 0 320px;
+    width: 320px;
     max-height: 80vh;
     overflow-y: auto;
     position: sticky;
@@ -159,4 +161,17 @@ h4 {
     font-weight: 500;
     margin-top: 12px;
     margin-bottom: 6px;
+}
+
+@media (max-width: 1200px) {
+    #assignmentRosterLayout {
+        flex-direction: column;
+    }
+
+    #rosterPanel {
+        position: static;
+        width: 100%;
+        flex: 1 1 auto;
+        max-height: none;
+    }
 }
