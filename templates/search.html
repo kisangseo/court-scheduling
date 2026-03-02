@@ -42,6 +42,7 @@
 <script>
 let pendingAssignments = {};
 let pendingNotes = {};
+let pendingJudges = {};
 let allDeputies = [];
 let rawDeputies = [];
 let selectedDeputy = null;
@@ -161,7 +162,7 @@ function formatRoomPartTime(cell) {
         return `${room || '-'} / ${shift || 'Time TBD'}`;
     }
 
-    const roomPart = [room, part ? `Part ${part}` : ''].filter(Boolean).join(' / ');
+    const roomPart = [room, part].filter(Boolean).join('/');
     return `${roomPart || '-'} / Time TBD`;
 }
 
@@ -700,7 +701,8 @@ function setPendingAssignmentFromCell(cell) {
     if (saveStatus) {
         const totalChanges =
             Object.keys(pendingAssignments).length +
-            Object.keys(pendingNotes).length;
+            Object.keys(pendingNotes).length +
+            Object.keys(pendingJudges).length;
 
         saveStatus.className = "counts-inline metric-red";
         saveStatus.textContent = `${totalChanges} change${totalChanges !== 1 ? "s" : ""} not saved`;
@@ -859,7 +861,7 @@ function search() {
                             <thead>
                                 <tr>
                                     <th>Judge</th>
-                                    <th>Room / Part</th>
+                                    <th>Room</th>
                                     <th>Assignment</th>
                                     <th>Deputy</th>
                                 </tr>
@@ -875,8 +877,15 @@ function search() {
 
                             const tr = document.createElement("tr");
                             tr.innerHTML = `
-                                <td>${row ? (row.judge_name || "") : ""}</td>
-                                <td>${room} ${row && row.part ? "Part " + row.part : ""}</td>
+                                <td class="editable-judge"
+                                    data-date="${document.getElementById("date").value}"
+                                    data-courthouse="${courthouse}"
+                                    data-type="Courtroom"
+                                    data-room="${room}"
+                                    data-part="${row && row.part ? row.part : ""}">
+                                    ${row ? (row.judge_name || "") : ""}
+                                </td>
+                                <td>${room}${row && row.part ? "/" + row.part : ""}</td>
                                 <td class="editable-assignment"
                                     data-date="${document.getElementById("date").value}"
                                     data-courthouse="${courthouse}"
@@ -930,12 +939,17 @@ function search() {
 
                         if (courthouse === "Cummings") {
                             posts = [
-                                { post: "Cummings", detail: "", part: "" },
-                                { post: "Fayette St. H/C", detail: "", part: "" },
-                                { post: "Console Room", detail: "", part: "" },
-                                { post: "Lock Up East", detail: "", part: "" },
-                                { post: "Garage", detail: "", part: "" },
-                                { post: "Family Court", detail: "", part: "" },
+                                { post: "Cummings", detail: "8:00 AM", part: "0800" },
+                                { post: "Cummings", detail: "8:30 AM", part: "0830-1" },
+                                { post: "Cummings", detail: "8:30 AM", part: "0830-2" },
+                                { post: "Fayette St. H/C", detail: "7:15 AM", part: "0715" },
+                                { post: "Fayette St. H/C", detail: "9:00 AM", part: "0900" },
+                                { post: "Console Room", detail: "8:30 AM", part: "0830-1" },
+                                { post: "Console Room", detail: "8:30 AM", part: "0830-2" },
+                                { post: "Lock Up East", detail: "8:00 AM", part: "0800" },
+                                { post: "Garage", detail: "6:00 AM", part: "0600" },
+                                { post: "Garage", detail: "4:00 PM", part: "1600" },
+                                { post: "Family Court", detail: "8:00 AM", part: "0800" },
                                 { post: "Transportation", detail: "", part: "" }
                             ];
                         }
@@ -1070,6 +1084,57 @@ window.onload = function() {
 };
 document.addEventListener("click", function(e) {
 
+    const cell = e.target.closest(".editable-judge");
+    if (!cell) return;
+
+    if (cell.querySelector("input")) return;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = cell.textContent.trim();
+
+    cell.innerHTML = "";
+    cell.appendChild(input);
+    input.focus();
+
+    input.addEventListener("blur", function() {
+
+        const payload = {
+            assignment_date: cell.dataset.date,
+            courthouse: cell.dataset.courthouse,
+            assignment_type: cell.dataset.type,
+            location_detail: cell.dataset.room,
+            part: cell.dataset.part,
+            judge_name: input.value
+        };
+
+        const key = [
+            payload.assignment_date,
+            payload.courthouse,
+            payload.assignment_type,
+            payload.location_detail,
+            payload.part
+        ].join("|");
+
+        pendingJudges[key] = payload;
+        cell.textContent = input.value;
+
+        const saveStatus = document.getElementById("saveStatus");
+        if (saveStatus) {
+            const totalChanges =
+                Object.keys(pendingAssignments).length +
+                Object.keys(pendingNotes).length +
+                Object.keys(pendingJudges).length;
+            saveStatus.className = "counts-inline metric-red";
+            saveStatus.textContent = `${totalChanges} change${totalChanges !== 1 ? "s" : ""} not saved`;
+        }
+
+    });
+
+});
+
+document.addEventListener("click", function(e) {
+
     const cell = e.target.closest(".editable-assignment");
     if (!cell) return;
 
@@ -1139,10 +1204,22 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         })
     );
 
-    Promise.all([...assignmentRequests, ...notesRequests])
+    const judgeRequests = Object.values(pendingJudges).map(payload =>
+        fetch("/api/update-judge-name", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(res => {
+            if (!res.ok) throw new Error("Failed to save judge name");
+            return res.json();
+        })
+    );
+
+    Promise.all([...assignmentRequests, ...notesRequests, ...judgeRequests])
         .then(() => {
             pendingAssignments = {};
             pendingNotes = {};
+            pendingJudges = {};
             if (saveStatus) {
                 saveStatus.className = "counts-inline metric-green";
                 saveStatus.textContent = "Saved";
@@ -1183,7 +1260,8 @@ function openRoster() {
 window.addEventListener("beforeunload", function (e) {
     const totalChanges =
         Object.keys(pendingAssignments).length +
-        Object.keys(pendingNotes).length;
+        Object.keys(pendingNotes).length +
+            Object.keys(pendingJudges).length;
 
     if (totalChanges > 0) {
         e.preventDefault();
