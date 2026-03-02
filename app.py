@@ -18,7 +18,7 @@ def _ensure_courtroom_meta_table(cursor):
                 assignment_date DATE NOT NULL,
                 courthouse NVARCHAR(100) NOT NULL,
                 location_detail NVARCHAR(100) NOT NULL,
-                part NVARCHAR(100) NULL,
+                part NVARCHAR(100) NOT NULL DEFAULT '',
                 start_time NVARCHAR(16) NULL,
                 restart_time NVARCHAR(16) NULL,
                 adjourned_time NVARCHAR(16) NULL,

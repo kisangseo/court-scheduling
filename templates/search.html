@@ -313,13 +313,7 @@ function parseStoredTimeToInputValue(value) {
     return `${String(h).padStart(2, '0')}:${m}`;
 }
 
-function setNowForTimeInput(inputEl) {
-    const now = new Date();
-    inputEl.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    inputEl.dispatchEvent(new Event('change'));
-}
-
-function setPendingCourtroomMetaFromRow(rowEl, postImmediately = false) {
+function setPendingCourtroomMetaFromRow(rowEl) {
     const payload = {
         assignment_date: rowEl.dataset.date,
         courthouse: rowEl.dataset.courthouse,
@@ -334,14 +328,6 @@ function setPendingCourtroomMetaFromRow(rowEl, postImmediately = false) {
     const key = [payload.assignment_date, payload.courthouse, payload.location_detail, payload.part].join('|');
     pendingCourtroomMeta[key] = payload;
     updateSaveStatusBadge();
-
-    if (postImmediately) {
-        fetch('/api/update-courtroom-meta', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-    }
 }
 
 function syncTopCourthouseSectionHeights() {
@@ -989,7 +975,6 @@ function search() {
                                     <th class="courtroom-time-header">Restart Time</th>
                                     <th class="courtroom-time-header">Adjourned Time</th>
                                     <th class="courtroom-time-header">Down</th>
-                                    <th class="courtroom-time-header">Now</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -1037,18 +1022,10 @@ function search() {
                                 <td class="courtroom-time-cell"><input type="time" class="courtroom-time-input" data-field="restart_time" aria-label="${courthouse} ${room} restart time"></td>
                                 <td class="courtroom-time-cell"><input type="time" class="courtroom-time-input" data-field="adjourned_time" aria-label="${courthouse} ${room} adjourned time"></td>
                                 <td class="courtroom-down-cell"><input type="checkbox" class="courtroom-down-checkbox" aria-label="${courthouse} ${room} down"></td>
-                                <td class="courtroom-time-cell"><button type="button" class="courtroom-now-btn">Now</button></td>
                             `;
 
                             tr.querySelectorAll('.courtroom-time-input, .courtroom-down-checkbox').forEach(inputEl => {
                                 inputEl.addEventListener('change', () => setPendingCourtroomMetaFromRow(tr));
-                            });
-
-                            const nowBtn = tr.querySelector('.courtroom-now-btn');
-                            const startInput = tr.querySelector('.courtroom-time-input[data-field="start_time"]');
-                            nowBtn.addEventListener('click', () => {
-                                setNowForTimeInput(startInput);
-                                setPendingCourtroomMetaFromRow(tr, true);
                             });
 
                             tbody.appendChild(tr);
@@ -1518,6 +1495,8 @@ window.addEventListener("beforeunload", function (e) {
         e.returnValue = ""; // Required for Chrome
     }
 });
+
+window.addEventListener("resize", syncTopCourthouseSectionHeights);
 </script>
 <div id="bottomRightPanel">
     <div id="transportPanel">
