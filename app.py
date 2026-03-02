@@ -2,11 +2,77 @@ from flask import Flask, request, jsonify, render_template
 from db_connect import get_conn
 import pyodbc
 import os
+import json
 from datetime import datetime, timedelta
 
 
 
 app = Flask(__name__)
+
+
+def _normalize_status_type(status_type):
+    if not status_type:
+        return None
+    normalized = status_type.strip().lower()
+    if normalized in ["sick", "leave", "light duty"]:
+        return normalized.title() if normalized != "light duty" else "Light Duty"
+    return status_type
+
+
+def _parse_date_value(value):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _parse_status_payload(status_text):
+    if not status_text:
+        return {"legacy": None, "ranges": []}
+
+    try:
+        parsed = json.loads(status_text)
+        if isinstance(parsed, dict) and "ranges" in parsed:
+            return {
+                "legacy": parsed.get("legacy"),
+                "ranges": parsed.get("ranges") or []
+            }
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    return {"legacy": status_text, "ranges": []}
+
+
+def _effective_status_for_date(status_text, target_date):
+    payload = _parse_status_payload(status_text)
+
+    if target_date:
+        target = _parse_date_value(target_date)
+        active_statuses = []
+
+        for status_range in payload.get("ranges", []):
+            start = _parse_date_value(status_range.get("start_date"))
+            end = _parse_date_value(status_range.get("end_date"))
+            status_value = status_range.get("status")
+
+            if not (start and end and status_value):
+                continue
+
+            if start <= target <= end and status_value not in active_statuses:
+                active_statuses.append(status_value)
+
+        if active_statuses:
+            return " / ".join(active_statuses)
+
+    return payload.get("legacy")
+
+
+def _serialize_status_payload(payload):
+    if not payload.get("ranges") and not payload.get("legacy"):
+        return None
+    return json.dumps(payload)
 
 @app.route("/")
 def index():
@@ -19,11 +85,22 @@ def update_status():
     cursor = conn.cursor()
 
     cursor.execute("""
+        SELECT current_status
+        FROM dbo.deputies
+        WHERE full_name = ?
+    """, (data["full_name"],))
+    row = cursor.fetchone()
+    current_status = row[0] if row else None
+    payload = _parse_status_payload(current_status)
+
+    payload["legacy"] = data["status"]
+
+    cursor.execute("""
         UPDATE dbo.deputies
         SET current_status = ?
         WHERE full_name = ?
     """, (
-        data["status"],
+        _serialize_status_payload(payload),
         data["full_name"]
     ))
 
@@ -31,6 +108,224 @@ def update_status():
     conn.close()
 
     return {"status": "success"}
+
+
+@app.route("/api/update-status-range", methods=["POST"])
+def update_status_range():
+    data = request.json
+    full_name = data.get("full_name")
+    status = _normalize_status_type(data.get("status"))
+    start_date = data.get("start_date")
+    end_date = data.get("end_date")
+    conn = get_conn()
+    cursor = conn.cursor()
+    
+    if status == "CLEAR_ALL":
+        cursor.execute("""
+            UPDATE dbo.deputies
+            SET current_status = NULL
+            WHERE full_name = ?
+        """, (full_name,))
+        
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "cleared", "removed_assignments": 0})
+    
+
+    cursor.execute("""
+        SELECT current_status
+        FROM dbo.deputies
+        WHERE full_name = ?
+    """, (full_name,))
+    row = cursor.fetchone()
+    current_status = row[0] if row else None
+    payload = _parse_status_payload(current_status)
+
+    ranges = payload.get("ranges", [])
+    remove_only = bool(data.get("remove_only"))
+    new_ranges = []
+
+    target = _parse_date_value(start_date)
+
+    for r in ranges:
+        r_status = r.get("status")
+        r_start = _parse_date_value(r.get("start_date"))
+        r_end = _parse_date_value(r.get("end_date"))
+
+        # Remove if same status AND date falls inside that range
+        if (
+            r_status == status and
+            r_start and r_end and
+            target and
+            r_start <= target <= r_end
+        ):
+            continue
+
+        new_ranges.append(r)
+
+    ranges = new_ranges
+    if not remove_only:
+        ranges.append({
+            "status": status,
+            "start_date": start_date,
+            "end_date": end_date
+        })
+    payload["ranges"] = ranges
+
+    cursor.execute("""
+        UPDATE dbo.deputies
+        SET current_status = ?
+        WHERE full_name = ?
+    """, (
+        _serialize_status_payload(payload),
+        full_name
+    ))
+    removed_count = 0
+
+    if status in ["Sick", "Leave", "Light Duty"] and start_date and end_date:
+
+        cursor.execute("""
+            SELECT assignment_date, courthouse, assignment_type,
+                location_group, location_detail, part, assigned_member
+            FROM dbo.court_assignments
+            WHERE assignment_date BETWEEN ? AND ?
+            AND assigned_member LIKE ?
+        """, (
+            start_date,
+            end_date,
+            f"%{full_name}%"
+        ))
+
+        rows = cursor.fetchall()
+
+        for row in rows:
+            assignment_date = row[0]
+            courthouse = row[1]
+            assignment_type = row[2]
+            location_group = row[3]
+            location_detail = row[4]
+            part = row[5]
+            assigned_member = row[6] or ""
+
+            names = [n.strip() for n in assigned_member.split("||") if n.strip()]
+            names = [n for n in names if n != full_name]
+
+            new_value = " || ".join(names) if names else None
+
+            cursor.execute("""
+                UPDATE dbo.court_assignments
+                SET assigned_member = ?
+                WHERE assignment_date = ?
+                AND courthouse = ?
+                AND assignment_type = ?
+                AND ISNULL(location_group,'') = ISNULL(?, '')
+                AND ISNULL(location_detail,'') = ISNULL(?, '')
+                AND ISNULL(part,'') = ISNULL(?, '')
+            """, (
+                new_value,
+                assignment_date,
+                courthouse,
+                assignment_type,
+                location_group,
+                location_detail,
+                part
+            ))
+
+            removed_count += 1
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "status": "success",
+        "removed_assignments": removed_count
+    })
+
+@app.route("/api/upsert-deputy", methods=["POST"])
+def upsert_deputy():
+    data = request.json
+    original_full_name = data.get("original_full_name")
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    if original_full_name:
+        update_queries = [
+            ("""
+                UPDATE dbo.deputies
+                SET full_name = ?, division = ?, rank = ?, capacity_tag = ?
+                WHERE full_name = ?
+            """, (data.get("full_name"), data.get("division"), data.get("rank"), data.get("capacity_tag"), original_full_name)),
+            ("""
+                UPDATE dbo.deputies
+                SET full_name = ?, division = ?, capacity_tag = ?
+                WHERE full_name = ?
+            """, (data.get("full_name"), data.get("division"), data.get("capacity_tag"), original_full_name)),
+            ("""
+                UPDATE dbo.deputies
+                SET full_name = ?, rank = ?, capacity_tag = ?
+                WHERE full_name = ?
+            """, (data.get("full_name"), data.get("rank"), data.get("capacity_tag"), original_full_name)),
+            ("""
+                UPDATE dbo.deputies
+                SET full_name = ?, capacity_tag = ?
+                WHERE full_name = ?
+            """, (data.get("full_name"), data.get("capacity_tag"), original_full_name)),
+        ]
+
+        for query, params in update_queries:
+            try:
+                cursor.execute(query, params)
+                break
+            except pyodbc.ProgrammingError:
+                continue
+    else:
+        insert_queries = [
+            ("""
+                INSERT INTO dbo.deputies (full_name, division, rank, capacity_tag, current_status)
+                VALUES (?, ?, ?, ?, NULL)
+            """, (data.get("full_name"), data.get("division"), data.get("rank"), data.get("capacity_tag"))),
+            ("""
+                INSERT INTO dbo.deputies (full_name, division, capacity_tag, current_status)
+                VALUES (?, ?, ?, NULL)
+            """, (data.get("full_name"), data.get("division"), data.get("capacity_tag"))),
+            ("""
+                INSERT INTO dbo.deputies (full_name, rank, capacity_tag, current_status)
+                VALUES (?, ?, ?, NULL)
+            """, (data.get("full_name"), data.get("rank"), data.get("capacity_tag"))),
+            ("""
+                INSERT INTO dbo.deputies (full_name, capacity_tag, current_status)
+                VALUES (?, ?, NULL)
+            """, (data.get("full_name"), data.get("capacity_tag"))),
+        ]
+
+        for query, params in insert_queries:
+            try:
+                cursor.execute(query, params)
+                break
+            except pyodbc.ProgrammingError:
+                continue
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "success"}
+
+
+@app.route("/api/delete-deputy", methods=["POST"])
+def delete_deputy():
+    data = request.json
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM dbo.deputies WHERE full_name = ?", (data.get("full_name"),))
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "success"}
+
 @app.route("/staffing")
 def staffing():
     return render_template("staffing.html")
@@ -236,25 +531,68 @@ def update_assignment_notes():
     return {"status": "success"}
 @app.route("/api/deputies")
 def get_deputies():
+    target_date = request.args.get("date")
     conn = get_conn()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT full_name, email, capacity_tag, current_status
-        FROM dbo.deputies
-        
-        ORDER BY full_name
-    """)
+    query_options = [
+        ("""
+            SELECT full_name, email, capacity_tag, current_status, division, rank
+            FROM dbo.deputies
+            ORDER BY full_name
+        """, True, True),
+        ("""
+            SELECT full_name, email, capacity_tag, current_status, division
+            FROM dbo.deputies
+            ORDER BY full_name
+        """, True, False),
+        ("""
+            SELECT full_name, email, capacity_tag, current_status, rank
+            FROM dbo.deputies
+            ORDER BY full_name
+        """, False, True),
+        ("""
+            SELECT full_name, email, capacity_tag, current_status
+            FROM dbo.deputies
+            ORDER BY full_name
+        """, False, False),
+    ]
 
-    deputies = [
-        {
+    rows = []
+    has_division = False
+    has_rank = False
+
+    for query, query_has_division, query_has_rank in query_options:
+        try:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            has_division = query_has_division
+            has_rank = query_has_rank
+            break
+        except pyodbc.ProgrammingError:
+            continue
+
+    deputies = []
+    for row in rows:
+        deputy = {
             "full_name": row[0],
             "email": row[1],
             "capacity_tag": row[2],
-            "current_status": row[3]
+            "current_status": _effective_status_for_date(row[3], target_date),
+            "status_raw": row[3],
+            "division": None,
+            "rank": None,
         }
-        for row in cursor.fetchall()
-    ]
+
+        idx = 4
+        if has_division and len(row) > idx:
+            deputy["division"] = row[idx]
+            idx += 1
+
+        if has_rank and len(row) > idx:
+            deputy["rank"] = row[idx]
+
+        deputies.append(deputy)
 
     conn.close()
 
@@ -273,21 +611,45 @@ def update_deputy():
         WHERE assignment_date = ?
           AND courthouse = ?
           AND assignment_type = ?
-          AND location_detail = ?
-          AND part = ?
+          AND (
+                ISNULL(location_group, '') = ISNULL(?, '')
+                OR ISNULL(location_detail, '') = ISNULL(?, '')
+              )
+          AND ISNULL(part, '') = ISNULL(?, '')
     """, (
         data["assigned_member"],
         data["assignment_date"],
         data["courthouse"],
         data["assignment_type"],
         data["location_detail"],
+        data["location_detail"],
         data["part"]
     ))
+
+    if cursor.rowcount == 0:
+        cursor.execute("""
+            UPDATE dbo.court_assignments
+            SET assigned_member = ?
+            WHERE assignment_date = ?
+              AND courthouse = ?
+              AND assignment_type = ?
+              AND (
+                    ISNULL(location_group, '') = ISNULL(?, '')
+                    OR ISNULL(location_detail, '') = ISNULL(?, '')
+                  )
+        """, (
+            data["assigned_member"],
+            data["assignment_date"],
+            data["courthouse"],
+            data["assignment_type"],
+            data["location_detail"],
+            data["location_detail"]
+        ))
 
     conn.commit()
     conn.close()
 
-    return {"status": "success"}
+    return {"status": "success", "updated": cursor.rowcount}
 
 
 @app.route("/api/search")
