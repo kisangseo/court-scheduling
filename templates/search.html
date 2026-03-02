@@ -982,6 +982,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
 
     const courtroomRows = typeGroups["Courtroom"] || [];
     const courtroomTable = document.createElement("table");
+    courtroomTable.className = "courtroom-table";
     courtroomTable.border = "1";
     courtroomTable.innerHTML = `
         <thead>

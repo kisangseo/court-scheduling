@@ -243,10 +243,29 @@ h4 {
 }
 
 .courtroom-time-input {
-    width: 64px;
+    width: 58px;
     padding: 2px 4px;
     border: 1px solid #d0d5dd;
     border-radius: 2px;
+}
+
+.courtroom-table {
+    table-layout: auto !important;
+}
+
+.courtroom-table th:nth-child(2),
+.courtroom-table td:nth-child(2) {
+    width: 1%;
+    white-space: nowrap;
+}
+
+.courtroom-table th:nth-child(5),
+.courtroom-table th:nth-child(6),
+.courtroom-table th:nth-child(7),
+.courtroom-table td:nth-child(5),
+.courtroom-table td:nth-child(6),
+.courtroom-table td:nth-child(7) {
+    width: 70px;
 }
 
 .courtroom-down-checkbox {
