@@ -40,11 +40,13 @@ th, td {
 }
 
 #assignmentsPanel {
-    width: 70%;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 #rosterPanel {
-    width: 30%;
+    flex: 0 0 280px;
+    width: 280px;
     max-height: 80vh;
     overflow-y: auto;
     position: sticky;
@@ -159,4 +161,35 @@ h4 {
     font-weight: 500;
     margin-top: 12px;
     margin-bottom: 6px;
+}
+
+@media (max-width: 1024px) {
+    #assignmentRosterLayout {
+        flex-direction: column;
+    }
+
+    #rosterPanel {
+        position: static;
+        width: 100%;
+        flex: 1 1 auto;
+        max-height: none;
+    }
+}
+
+
+#results table {
+    font-size: 0.95em;
+}
+
+#results th,
+#results td {
+    padding: 5px 6px;
+}
+
+#results h3 {
+    font-size: 1.05em;
+}
+
+#results h4 {
+    font-size: 1em;
 }
