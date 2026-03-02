@@ -251,7 +251,7 @@ function formatCountMetrics(vacant, filled, colorFilled = 'metric-green') {
 function getPostedNameSetForPostsAndCourtrooms() {
     const names = new Set();
 
-    document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"], .editable[data-type="Transport"]').forEach(cell => {
+    document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"], .editable[data-type="Transport"], .editable[data-type="Overtime"]').forEach(cell => {
         const assignedNames = getAssignedNamesFromCell(cell);
 
         if (assignedNames.length > 0) {
@@ -355,9 +355,12 @@ function fetchGlobalAssignmentTotals(dateValue) {
             const filled = filledRows.length;
 
             const posted = new Set();
-            filledRows.forEach(row => {
+            (rows || [])
+                .filter(row => ['Courtroom', 'Fixed Post', 'Overtime', 'Transport'].includes(row.assignment_type))
+                .filter(row => (row.assigned_member || '').trim().length > 0)
+                .forEach(row => {
                 parseAssignedMemberValue(row.assigned_member).forEach(name => posted.add(name));
-            });
+                });
             globalPostedNames = posted;
 
             globalAssignmentTotals = { total, filled };
@@ -377,24 +380,30 @@ function fetchGlobalAssignmentTotals(dateValue) {
 }
 
 function updateAssignmentCountBadges() {
-    const statsByCourthouse = {};
+    const statsBySection = {};
     let overallTotal = 0;
     let overallFilled = 0;
 
-    document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"]').forEach(cell => {
+    document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"], .editable[data-type="Overtime"]').forEach(cell => {
         const courthouse = cell.dataset.courthouse || '';
-        if (!statsByCourthouse[courthouse]) {
-            statsByCourthouse[courthouse] = { total: 0, filled: 0 };
+        const sectionType = cell.dataset.type || '';
+        const key = `${courthouse}|${sectionType}`;
+        if (!statsBySection[key]) {
+            statsBySection[key] = { total: 0, filled: 0, type: sectionType };
         }
 
-        statsByCourthouse[courthouse].total += 1;
-        overallTotal += 1;
+        if (sectionType !== 'Overtime') {
+            statsBySection[key].total += 1;
+            overallTotal += 1;
+        }
 
         const assignedNames = getAssignedNamesFromCell(cell);
         const parsedTextNames = parseAssignedMemberValue(cell.textContent);
         if (assignedNames.length > 0 || parsedTextNames.length > 0) {
-            statsByCourthouse[courthouse].filled += 1;
-            overallFilled += 1;
+            statsBySection[key].filled += 1;
+            if (sectionType !== 'Overtime') {
+                overallFilled += 1;
+            }
         }
     });
 
@@ -407,9 +416,15 @@ function updateAssignmentCountBadges() {
         overallBadge.innerHTML = formatCountMetrics(overallVacant, sourceFilled);
     }
 
-    document.querySelectorAll('[data-courthouse-header]').forEach(el => {
-        const courthouse = el.dataset.courthouseHeader;
-        const stats = statsByCourthouse[courthouse] || { total: 0, filled: 0 };
+    document.querySelectorAll('[data-badge-key]').forEach(el => {
+        const key = el.dataset.badgeKey;
+        const stats = statsBySection[key] || { total: 0, filled: 0, type: '' };
+
+        if (stats.type === 'Overtime') {
+            el.innerHTML = `<span class="metric-blue">Filled ${stats.filled}</span>`;
+            return;
+        }
+
         const vacant = Math.max(stats.total - stats.filled, 0);
         el.innerHTML = formatCountMetrics(vacant, stats.filled);
     });
@@ -862,12 +877,14 @@ function initRosterDrag() {
     });
 }
 
-function createSectionCell(title, contentEl, headerCourthouse = "") {
+function createSectionCell(title, contentEl, headerCourthouse = "", headerSection = "") {
     const cell = document.createElement("div");
     cell.className = "section-cell";
 
     const header = document.createElement("h3");
-    if (headerCourthouse) {
+    if (headerCourthouse && headerSection) {
+        header.innerHTML = `${title} <span class="counts-inline" data-badge-key="${headerCourthouse}|${headerSection}"></span>`;
+    } else if (headerCourthouse) {
         header.innerHTML = `${title} <span class="counts-inline" data-courthouse-header="${headerCourthouse}"></span>`;
     } else {
         header.textContent = title;
@@ -1101,22 +1118,22 @@ function search() {
             const includeCummings = !courthouse || courthouse === "Cummings";
             const includeJuvenile = !courthouse || courthouse === "Juvenile";
 
-            postsRow.appendChild(includeMitchell ? createSectionCell("Mitchell", mitchell.posts, "Mitchell") : createEmptySectionCell());
-            postsRow.appendChild(includeCummings ? createSectionCell("Cummings", cummings.posts, "Cummings") : createEmptySectionCell());
+            postsRow.appendChild(includeMitchell ? createSectionCell("Security Post", mitchell.posts, "Mitchell", "Fixed Post") : createEmptySectionCell());
+            postsRow.appendChild(includeCummings ? createSectionCell("Cummings Security Post", cummings.posts, "Cummings", "Fixed Post") : createEmptySectionCell());
 
-            courtroomsRow.appendChild(includeMitchell ? createSectionCell("Mitchell Courtroom", mitchell.courtrooms, "Mitchell") : createEmptySectionCell());
-            courtroomsRow.appendChild(includeCummings ? createSectionCell("Cummings Courtroom", cummings.courtrooms, "Cummings") : createEmptySectionCell());
+            courtroomsRow.appendChild(includeMitchell ? createSectionCell("Mitchell Courtroom", mitchell.courtrooms, "Mitchell", "Courtroom") : createEmptySectionCell());
+            courtroomsRow.appendChild(includeCummings ? createSectionCell("Cummings Courtroom", cummings.courtrooms, "Cummings", "Courtroom") : createEmptySectionCell());
 
-            overtimeRow.appendChild(includeMitchell ? createSectionCell("Mitchell Overtime", mitchell.overtime, "Mitchell") : createEmptySectionCell());
-            overtimeRow.appendChild(includeCummings ? createSectionCell("Cummings Overtime", cummings.overtime, "Cummings") : createEmptySectionCell());
+            overtimeRow.appendChild(includeMitchell ? createSectionCell("Mitchell Overtime", mitchell.overtime, "Mitchell", "Overtime") : createEmptySectionCell());
+            overtimeRow.appendChild(includeCummings ? createSectionCell("Cummings Overtime", cummings.overtime, "Cummings", "Overtime") : createEmptySectionCell());
 
             const transportPanel = document.getElementById("transportPanel");
             const borrowedPanel = document.getElementById("borrowedDeputiesPanel");
 
-            juvRow.appendChild(includeJuvenile ? createSectionCell("Juvenile Courtroom", juvenile.courtrooms, "Juvenile") : createEmptySectionCell());
+            juvRow.appendChild(includeJuvenile ? createSectionCell("Juvenile Courtroom", juvenile.courtrooms, "Juvenile", "Courtroom") : createEmptySectionCell());
             juvRow.appendChild(includeJuvenile ? (transportPanel || createEmptySectionCell()) : createEmptySectionCell());
 
-            juvBottomRow.appendChild(includeJuvenile ? createSectionCell("Juvenile Overtime", juvenile.overtime, "Juvenile") : createEmptySectionCell());
+            juvBottomRow.appendChild(includeJuvenile ? createSectionCell("Juvenile Overtime", juvenile.overtime, "Juvenile", "Overtime") : createEmptySectionCell());
             juvBottomRow.appendChild(includeJuvenile ? (borrowedPanel || createEmptySectionCell()) : createEmptySectionCell());
 
             initAssignmentDropzones();
