@@ -134,8 +134,12 @@ function parseAssignedMemberValue(value) {
     const text = (value || '').trim();
     if (!text) return [];
 
-    if (text.includes(' || ')) {
-        return text.split(' || ').map(name => name.trim()).filter(Boolean);
+    if (text.includes('||')) {
+        return text.split(/\s*\|\|\s*/).map(name => name.trim()).filter(Boolean);
+    }
+
+    if (text.includes('\n')) {
+        return text.split(/\n+/).map(name => name.trim()).filter(Boolean);
     }
 
     return [text];
@@ -1138,19 +1142,19 @@ function search() {
             postsRow.appendChild(includeMitchell ? createSectionCell("Mitchell", mitchell.posts, "Mitchell", "main", "Security Post") : createEmptySectionCell());
             postsRow.appendChild(includeCummings ? createSectionCell("Cummings", cummings.posts, "Cummings", "main", "Security Post") : createEmptySectionCell());
 
-            courtroomsRow.appendChild(includeMitchell ? createSectionCell("Mitchell Courtroom", mitchell.courtrooms, "Mitchell", "Courtroom") : createEmptySectionCell());
-            courtroomsRow.appendChild(includeCummings ? createSectionCell("Cummings Courtroom", cummings.courtrooms, "Cummings", "Courtroom") : createEmptySectionCell());
+            courtroomsRow.appendChild(includeMitchell ? createSectionCell("Courtroom", mitchell.courtrooms, "Mitchell", "Courtroom") : createEmptySectionCell());
+            courtroomsRow.appendChild(includeCummings ? createSectionCell("Courtroom", cummings.courtrooms, "Cummings", "Courtroom") : createEmptySectionCell());
 
-            overtimeRow.appendChild(includeMitchell ? createSectionCell("Mitchell Overtime", mitchell.overtime, "Mitchell", "Overtime") : createEmptySectionCell());
-            overtimeRow.appendChild(includeCummings ? createSectionCell("Cummings Overtime", cummings.overtime, "Cummings", "Overtime") : createEmptySectionCell());
+            overtimeRow.appendChild(includeMitchell ? createSectionCell("Overtime", mitchell.overtime, "Mitchell", "Overtime") : createEmptySectionCell());
+            overtimeRow.appendChild(includeCummings ? createSectionCell("Overtime", cummings.overtime, "Cummings", "Overtime") : createEmptySectionCell());
 
             const transportPanel = document.getElementById("transportPanel");
             const borrowedPanel = document.getElementById("borrowedDeputiesPanel");
 
-            juvRow.appendChild(includeJuvenile ? createSectionCell("Juv", juvenile.courtrooms, "Juvenile", "main", "Courtroom") : createEmptySectionCell());
+            juvRow.appendChild(includeJuvenile ? createSectionCell("Juvenile", juvenile.courtrooms, "Juvenile", "main", "Courtroom") : createEmptySectionCell());
             juvRow.appendChild(includeJuvenile ? (transportPanel || createEmptySectionCell()) : createEmptySectionCell());
 
-            juvBottomRow.appendChild(includeJuvenile ? createSectionCell("Juvenile Overtime", juvenile.overtime, "Juvenile", "Overtime") : createEmptySectionCell());
+            juvBottomRow.appendChild(includeJuvenile ? createSectionCell("Overtime", juvenile.overtime, "Juvenile", "Overtime") : createEmptySectionCell());
             juvBottomRow.appendChild(includeJuvenile ? (borrowedPanel || createEmptySectionCell()) : createEmptySectionCell());
 
             initAssignmentDropzones();
