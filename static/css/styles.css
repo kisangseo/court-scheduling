@@ -44,6 +44,28 @@ th, td {
     min-width: 0;
 }
 
+#resultsGrid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.section-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    align-items: start;
+}
+
+.section-row > div {
+    min-width: 0;
+}
+
+#transportPanel,
+#borrowedDeputiesPanel {
+    min-width: 0;
+}
+
 #rosterPanel {
     flex: 0 0 280px;
     width: 280px;
@@ -89,6 +111,7 @@ th, td {
 
 .roster-item.assigned {
     opacity: 0.45;
+    cursor: not-allowed;
 }
 
 .editable {
@@ -168,6 +191,10 @@ h4 {
         flex-direction: column;
     }
 
+    .section-row {
+        grid-template-columns: 1fr;
+    }
+
     #rosterPanel {
         position: static;
         width: 100%;
@@ -177,19 +204,95 @@ h4 {
 }
 
 
-#results table {
+#resultsGrid table {
     font-size: 0.95em;
+    table-layout: fixed;
 }
 
-#results th,
-#results td {
+#resultsGrid th,
+#resultsGrid td {
     padding: 5px 6px;
 }
 
-#results h3 {
+#resultsGrid h3 {
     font-size: 1.05em;
 }
 
-#results h4 {
+#resultsGrid h4 {
     font-size: 1em;
+}
+
+.courtroom-time-header,
+.courtroom-time-cell,
+.courtroom-down-cell,
+.courtroom-time-input {
+    font-size: 11px;
+}
+
+.courtroom-time-cell,
+.courtroom-down-cell {
+    text-align: center;
+}
+
+.courtroom-down-header,
+.courtroom-down-cell {
+    width: 28px;
+    max-width: 28px;
+    padding-left: 2px !important;
+    padding-right: 2px !important;
+}
+
+.courtroom-time-input {
+    width: 58px;
+    padding: 2px 4px;
+    border: 1px solid #d0d5dd;
+    border-radius: 2px;
+}
+
+.courtroom-table {
+    table-layout: auto !important;
+}
+
+.courtroom-table th:nth-child(2),
+.courtroom-table td:nth-child(2) {
+    width: 1%;
+    white-space: nowrap;
+}
+
+.courtroom-table th:nth-child(5),
+.courtroom-table th:nth-child(6),
+.courtroom-table th:nth-child(7),
+.courtroom-table td:nth-child(5),
+.courtroom-table td:nth-child(6),
+.courtroom-table td:nth-child(7) {
+    width: 70px;
+}
+
+.courtroom-down-checkbox {
+    transform: scale(0.9);
+}
+
+@media print {
+    #rosterPanel,
+    .add-deputy-btn,
+    #saveAssignments,
+    #saveStatus,
+    .counts-inline {
+        display: none !important;
+    }
+
+    #assignmentRosterLayout {
+        display: block;
+    }
+
+    .section-row {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .section-row > div,
+    #borrowedDeputiesPanel {
+        width: 100%;
+        margin-bottom: 12px;
+    }
 }
