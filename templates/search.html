@@ -26,7 +26,13 @@
 
 <div id="assignmentRosterLayout">
     <div id="assignmentsPanel">
-        <div id="results" style="display:flex; flex-wrap:nowrap; gap:12px; align-items:flex-start;"></div>
+        <div id="resultsGrid">
+            <div id="postsRow" class="section-row"></div>
+            <div id="courtroomsRow" class="section-row"></div>
+            <div id="overtimeRow" class="section-row"></div>
+            <div id="juvRow" class="section-row"></div>
+            <div id="juvBottomRow" class="section-row"></div>
+        </div>
     </div>
     <div id="rosterPanel">
         <h3>Court Security Roster</h3>
@@ -43,6 +49,7 @@
 let pendingAssignments = {};
 let pendingNotes = {};
 let pendingJudges = {};
+let pendingCourtroomMeta = {};
 let allDeputies = [];
 let rawDeputies = [];
 let selectedDeputy = null;
@@ -244,7 +251,7 @@ function formatCountMetrics(vacant, filled, colorFilled = 'metric-green') {
 function getPostedNameSetForPostsAndCourtrooms() {
     const names = new Set();
 
-    document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"]').forEach(cell => {
+    document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"], .editable[data-type="Transport"], .editable[data-type="Overtime"]').forEach(cell => {
         const assignedNames = getAssignedNamesFromCell(cell);
 
         if (assignedNames.length > 0) {
@@ -260,6 +267,75 @@ function getPostedNameSetForPostsAndCourtrooms() {
     }
 
     return new Set(globalPostedNames);
+}
+
+function updateSaveStatusBadge() {
+    const saveStatus = document.getElementById("saveStatus");
+    if (!saveStatus) return;
+
+    const totalChanges =
+        Object.keys(pendingAssignments).length +
+        Object.keys(pendingNotes).length +
+        Object.keys(pendingJudges).length +
+        Object.keys(pendingCourtroomMeta).length;
+
+    if (totalChanges <= 0) {
+        saveStatus.className = "counts-inline";
+        saveStatus.textContent = "";
+        return;
+    }
+
+    saveStatus.className = "counts-inline metric-red";
+    saveStatus.textContent = `${totalChanges} change${totalChanges !== 1 ? "s" : ""} not saved`;
+}
+
+function formatToAmPmFromTimeValue(value) {
+    return normalizeUserTimeValue(value);
+}
+
+function normalizeUserTimeValue(value) {
+    if (!value) return "";
+    const raw = value.trim().toUpperCase();
+
+    const full = raw.match(/^(\d{1,2})[:\-](\d{1,2})\s*(AM|PM)?$/i);
+    if (!full) return "";
+
+    let h = parseInt(full[1], 10);
+    const m = String(parseInt(full[2], 10)).padStart(2, '0');
+    const explicitMeridiem = full[3] ? full[3].toUpperCase() : null;
+
+    if (Number.isNaN(h) || Number.isNaN(parseInt(m, 10)) || h < 1 || h > 12 || parseInt(m, 10) > 59) {
+        return "";
+    }
+
+    let meridiem = explicitMeridiem;
+    if (!meridiem) {
+        if (h >= 7 && h <= 11) meridiem = "AM";
+        else meridiem = "PM";
+    }
+
+    return `${h}:${m} ${meridiem}`;
+}
+
+function parseStoredTimeToInputValue(value) {
+    return normalizeUserTimeValue(value) || value || "";
+}
+
+function setPendingCourtroomMetaFromRow(rowEl) {
+    const payload = {
+        assignment_date: rowEl.dataset.date,
+        courthouse: rowEl.dataset.courthouse,
+        location_detail: rowEl.dataset.room,
+        part: rowEl.dataset.part || "",
+        start_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="start_time"]')?.value || ""),
+        restart_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="restart_time"]')?.value || ""),
+        adjourned_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="adjourned_time"]')?.value || ""),
+        is_down: !!rowEl.querySelector('.courtroom-down-checkbox')?.checked
+    };
+
+    const key = [payload.assignment_date, payload.courthouse, payload.location_detail, payload.part].join('|');
+    pendingCourtroomMeta[key] = payload;
+    updateSaveStatusBadge();
 }
 
 function fetchGlobalAssignmentTotals(dateValue) {
@@ -279,9 +355,12 @@ function fetchGlobalAssignmentTotals(dateValue) {
             const filled = filledRows.length;
 
             const posted = new Set();
-            filledRows.forEach(row => {
+            (rows || [])
+                .filter(row => ['Courtroom', 'Fixed Post', 'Overtime', 'Transport'].includes(row.assignment_type))
+                .filter(row => (row.assigned_member || '').trim().length > 0)
+                .forEach(row => {
                 parseAssignedMemberValue(row.assigned_member).forEach(name => posted.add(name));
-            });
+                });
             globalPostedNames = posted;
 
             globalAssignmentTotals = { total, filled };
@@ -301,24 +380,30 @@ function fetchGlobalAssignmentTotals(dateValue) {
 }
 
 function updateAssignmentCountBadges() {
-    const statsByCourthouse = {};
+    const statsBySection = {};
     let overallTotal = 0;
     let overallFilled = 0;
 
-    document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"]').forEach(cell => {
+    document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"], .editable[data-type="Overtime"]').forEach(cell => {
         const courthouse = cell.dataset.courthouse || '';
-        if (!statsByCourthouse[courthouse]) {
-            statsByCourthouse[courthouse] = { total: 0, filled: 0 };
+        const sectionType = cell.dataset.type || '';
+        const key = `${courthouse}|${sectionType}`;
+        if (!statsBySection[key]) {
+            statsBySection[key] = { total: 0, filled: 0, type: sectionType };
         }
 
-        statsByCourthouse[courthouse].total += 1;
-        overallTotal += 1;
+        if (sectionType !== 'Overtime') {
+            statsBySection[key].total += 1;
+            overallTotal += 1;
+        }
 
         const assignedNames = getAssignedNamesFromCell(cell);
         const parsedTextNames = parseAssignedMemberValue(cell.textContent);
         if (assignedNames.length > 0 || parsedTextNames.length > 0) {
-            statsByCourthouse[courthouse].filled += 1;
-            overallFilled += 1;
+            statsBySection[key].filled += 1;
+            if (sectionType !== 'Overtime') {
+                overallFilled += 1;
+            }
         }
     });
 
@@ -331,9 +416,15 @@ function updateAssignmentCountBadges() {
         overallBadge.innerHTML = formatCountMetrics(overallVacant, sourceFilled);
     }
 
-    document.querySelectorAll('[data-courthouse-header]').forEach(el => {
-        const courthouse = el.dataset.courthouseHeader;
-        const stats = statsByCourthouse[courthouse] || { total: 0, filled: 0 };
+    document.querySelectorAll('[data-badge-key]').forEach(el => {
+        const key = el.dataset.badgeKey;
+        const stats = statsBySection[key] || { total: 0, filled: 0, type: '' };
+
+        if (stats.type === 'Overtime') {
+            el.innerHTML = `<span class="metric-blue">Filled ${stats.filled}</span>`;
+            return;
+        }
+
         const vacant = Math.max(stats.total - stats.filled, 0);
         el.innerHTML = formatCountMetrics(vacant, stats.filled);
     });
@@ -715,16 +806,7 @@ function setPendingAssignmentFromCell(cell) {
     ].join('|');
 
     pendingAssignments[key] = payload;
-    const saveStatus = document.getElementById("saveStatus");
-    if (saveStatus) {
-        const totalChanges =
-            Object.keys(pendingAssignments).length +
-            Object.keys(pendingNotes).length +
-            Object.keys(pendingJudges).length;
-
-        saveStatus.className = "counts-inline metric-red";
-        saveStatus.textContent = `${totalChanges} change${totalChanges !== 1 ? "s" : ""} not saved`;
-    }
+    updateSaveStatusBadge();
 }
 
 function ensureCellStructure(cell) {
@@ -782,14 +864,220 @@ function initRosterDrag() {
         const sortable = Sortable.create(rosterEl, {
             group: {
                 name: 'assignmentRoster',
-                pull: 'clone',
+                pull: function (to, from, dragEl) {
+                    return !dragEl.classList.contains('assigned') ? 'clone' : false;
+                },
                 put: false
             },
             animation: 100,
-            sort: false
+            sort: false,
+            filter: '.assigned'
         });
         rosterSortables.push(sortable);
     });
+}
+
+function createSectionCell(title, contentEl, headerCourthouse = "", headerSection = "") {
+    const cell = document.createElement("div");
+    cell.className = "section-cell";
+
+    const header = document.createElement("h3");
+    if (headerCourthouse && headerSection) {
+        header.innerHTML = `${title} <span class="counts-inline" data-badge-key="${headerCourthouse}|${headerSection}"></span>`;
+    } else if (headerCourthouse) {
+        header.innerHTML = `${title} <span class="counts-inline" data-courthouse-header="${headerCourthouse}"></span>`;
+    } else {
+        header.textContent = title;
+    }
+
+    cell.appendChild(header);
+    if (contentEl) cell.appendChild(contentEl);
+    return cell;
+}
+
+function createEmptySectionCell() {
+    const cell = document.createElement("div");
+    cell.className = "section-cell";
+    return cell;
+}
+
+function buildCourthouseSections(courthouse, rows, selectedDate) {
+    const typeGroups = {};
+    rows.forEach(row => {
+        if (!typeGroups[row.assignment_type]) typeGroups[row.assignment_type] = [];
+        typeGroups[row.assignment_type].push(row);
+    });
+
+    const sections = { posts: null, courtrooms: null, overtime: null };
+
+    if (courthouse !== "Juvenile") {
+        const postsType = typeGroups["Fixed Post"] || [];
+        const postsTable = document.createElement("table");
+        postsTable.border = "1";
+        postsTable.innerHTML = `
+            <thead>
+                <tr>
+                    <th>Security Post</th>
+                    <th>Shift</th>
+                    <th>Deputy</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        `;
+
+        const posts = courthouse === "Mitchell"
+            ? [
+                { post: "Calvert", detail: "8:00 AM", part: "0800-1" },
+                { post: "Calvert", detail: "8:00 AM", part: "0800-2" },
+                { post: "Calvert", detail: "8:00 AM", part: "0800-3" },
+                { post: "Lexington", detail: "7:00 AM - 3:00 PM", part: "0700-1500" },
+                { post: "Lexington", detail: "3:00 PM - 11:00 PM", part: "1500-2300" },
+                { post: "Lexington", detail: "11:00 PM - 7:00 AM", part: "2300-0700" },
+                { post: "Fayette H/C Console room", detail: "7:00 AM", part: "0700" },
+                { post: "Fayette H/C Console room", detail: "7:15 AM", part: "0715" },
+                { post: "Lock Up West", detail: "1 of 2", part: "OPEN-1" },
+                { post: "Lock Up West", detail: "2 of 2", part: "OPEN-2" },
+                { post: "Jury Room", detail: "7:30 AM", part: "0730" },
+                { post: "St. Paul", detail: "7:30 AM", part: "0730" },
+                { post: "St. Paul", detail: "8:30 AM", part: "0830" },
+                { post: "Rover", detail: "7:00 AM", part: "0700" },
+                { post: "Judges", detail: "7:00 AM", part: "0700" }
+            ]
+            : [
+                { post: "Cummings", detail: "8:00 AM", part: "0800" },
+                { post: "Cummings", detail: "8:30 AM", part: "0830-1" },
+                { post: "Cummings", detail: "8:30 AM", part: "0830-2" },
+                { post: "Fayette St. H/C", detail: "7:15 AM", part: "0715" },
+                { post: "Fayette St. H/C", detail: "9:00 AM", part: "0900" },
+                { post: "Console Room", detail: "8:30 AM", part: "0830-1" },
+                { post: "Console Room", detail: "8:30 AM", part: "0830-2" },
+                { post: "Lock Up East", detail: "8:00 AM", part: "0800" },
+                { post: "Garage", detail: "6:00 AM", part: "0600" },
+                { post: "Garage", detail: "4:00 PM", part: "1600" },
+                { post: "Family Court", detail: "8:00 AM", part: "0800" },
+                { post: "Transportation", detail: "", part: "" }
+            ];
+
+        const postsBody = postsTable.querySelector("tbody");
+        posts.forEach((slot, index) => {
+            const slotMatches = postsType.filter(r =>
+                r.location_group === slot.post && (
+                    (slot.part && r.part === slot.part) ||
+                    (slot.detail && r.location_detail === slot.detail) ||
+                    (!slot.part && !slot.detail)
+                )
+            );
+            const fallbackMatches = postsType.filter(r => r.location_group === slot.post && !r.part && !r.location_detail);
+            const pickPreferredRow = (rowList) => rowList.find(r => (r.assigned_member || '').trim()) || rowList[0] || null;
+            const assigned = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
+
+            const tr = document.createElement("tr");
+            const showPost = index === 0 || posts[index - 1].post !== slot.post;
+            tr.innerHTML = `
+                <td>${showPost ? slot.post : ""}</td>
+                <td>${slot.detail || "General"}</td>
+                <td class="editable"
+                    data-date="${selectedDate}"
+                    data-courthouse="${courthouse}"
+                    data-type="Fixed Post"
+                    data-room="${slot.post}"
+                    data-slot-index="${index}"
+                    data-part="${slot.part || ""}">
+                    ${assigned ? (assigned.assigned_member || "") : ""}
+                </td>
+            `;
+            postsBody.appendChild(tr);
+        });
+        sections.posts = postsTable;
+    }
+
+    const rooms = courthouse === "Mitchell"
+        ? ["600M","231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"]
+        : courthouse === "Cummings"
+            ? ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C"]
+            : ["329C","428M","406M"];
+
+    const courtroomRows = typeGroups["Courtroom"] || [];
+    const courtroomTable = document.createElement("table");
+    courtroomTable.className = "courtroom-table";
+    courtroomTable.border = "1";
+    courtroomTable.innerHTML = `
+        <thead>
+            <tr>
+                <th>Judge</th>
+                <th>Room</th>
+                <th>Assignment</th>
+                <th>Deputy</th>
+                <th class="courtroom-time-header">Start</th>
+                <th class="courtroom-time-header">Restart</th>
+                <th class="courtroom-time-header">Adjourned</th>
+                <th class="courtroom-down-header">Down</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    `;
+    const courtroomBody = courtroomTable.querySelector("tbody");
+
+    rooms.forEach(room => {
+        const row = courtroomRows.find(r => r.location_detail === room);
+        const tr = document.createElement("tr");
+        tr.classList.add("courtroom-meta-row");
+        tr.dataset.date = selectedDate;
+        tr.dataset.courthouse = courthouse;
+        tr.dataset.room = room;
+        tr.dataset.part = row && row.part ? row.part : "";
+        tr.innerHTML = `
+            <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.judge_name || "") : ""}</td>
+            <td>${room}${row && row.part ? "/" + row.part : ""}</td>
+            <td class="editable-assignment" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.assignment_notes || "") : ""}</td>
+            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.assigned_member || "") : ""}</td>
+            <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="start_time" aria-label="${courthouse} ${room} start time"></td>
+            <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="restart_time" aria-label="${courthouse} ${room} restart time"></td>
+            <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="adjourned_time" aria-label="${courthouse} ${room} adjourned time"></td>
+            <td class="courtroom-down-cell"><input type="checkbox" class="courtroom-down-checkbox" aria-label="${courthouse} ${room} down"></td>
+        `;
+
+        tr.querySelectorAll('.courtroom-time-input, .courtroom-down-checkbox').forEach(inputEl => {
+            inputEl.addEventListener('change', () => setPendingCourtroomMetaFromRow(tr));
+        });
+        tr.querySelectorAll('.courtroom-time-input').forEach(inputEl => {
+            inputEl.addEventListener('blur', () => {
+                const normalized = normalizeUserTimeValue(inputEl.value);
+                if (normalized) inputEl.value = normalized;
+            });
+        });
+        courtroomBody.appendChild(tr);
+    });
+    sections.courtrooms = courtroomTable;
+
+    const overtimeRows = typeGroups["Overtime"] || [];
+    const overtimeTable = document.createElement("table");
+    overtimeTable.border = "1";
+    overtimeTable.innerHTML = `
+        <thead>
+            <tr>
+                <th>Detail</th>
+                <th>Shift</th>
+                <th>Member</th>
+                <th>Notes</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    `;
+    const overtimeBody = overtimeTable.querySelector("tbody");
+    overtimeRows.forEach(row => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${row.location_detail || ""}</td>
+            <td>${row.shift_time || ""}</td>
+            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${row.location_detail}" data-shift="${row.shift_time || ""}" data-part="">${row.assigned_member || ""}</td>
+            <td class="editable-assignment" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${row.location_detail || ""}" data-part="${row.assigned_member || ""}">${row.assignment_notes || ""}</td>
+        `;
+        overtimeBody.appendChild(tr);
+    });
+    sections.overtime = overtimeTable;
+
+    return sections;
 }
 
 function search() {
@@ -804,9 +1092,12 @@ function search() {
     fetch(`/api/search?name=${name}&date=${date}&courthouse=${courthouse}`)
         .then(response => response.json())
         .then(data => {
-
-            const container = document.getElementById("results");
-            container.innerHTML = "";
+            const postsRow = document.getElementById("postsRow");
+            const courtroomsRow = document.getElementById("courtroomsRow");
+            const overtimeRow = document.getElementById("overtimeRow");
+            const juvRow = document.getElementById("juvRow");
+            const juvBottomRow = document.getElementById("juvBottomRow");
+            [postsRow, courtroomsRow, overtimeRow, juvRow, juvBottomRow].forEach(row => row.innerHTML = "");
 
             if (!data || data.length === 0) {
                 updateAssignmentCountBadges();
@@ -815,286 +1106,100 @@ function search() {
             }
 
             const grouped = {};
-
             data.forEach(row => {
                 if (!grouped[row.courthouse]) grouped[row.courthouse] = [];
                 grouped[row.courthouse].push(row);
             });
 
-            for (const courthouse in grouped) {
+            const mitchell = buildCourthouseSections("Mitchell", grouped["Mitchell"] || [], date);
+            const cummings = buildCourthouseSections("Cummings", grouped["Cummings"] || [], date);
+            const juvenile = buildCourthouseSections("Juvenile", grouped["Juvenile"] || [], date);
+            const includeMitchell = !courthouse || courthouse === "Mitchell";
+            const includeCummings = !courthouse || courthouse === "Cummings";
+            const includeJuvenile = !courthouse || courthouse === "Juvenile";
 
-                const column = document.createElement("div");
-                column.style.flex = "1 1 0";
-                column.style.minWidth = "0";
-                column.style.maxWidth = "100%";
+            postsRow.appendChild(includeMitchell ? createSectionCell("Security Post", mitchell.posts, "Mitchell", "Fixed Post") : createEmptySectionCell());
+            postsRow.appendChild(includeCummings ? createSectionCell("Cummings Security Post", cummings.posts, "Cummings", "Fixed Post") : createEmptySectionCell());
 
-                const header = document.createElement("h3");
-                header.innerHTML = `${courthouse} <span class="counts-inline" data-courthouse-header="${courthouse}"></span>`;
-                column.appendChild(header);
+            courtroomsRow.appendChild(includeMitchell ? createSectionCell("Mitchell Courtroom", mitchell.courtrooms, "Mitchell", "Courtroom") : createEmptySectionCell());
+            courtroomsRow.appendChild(includeCummings ? createSectionCell("Cummings Courtroom", cummings.courtrooms, "Cummings", "Courtroom") : createEmptySectionCell());
 
-                const typeGroups = {};
+            overtimeRow.appendChild(includeMitchell ? createSectionCell("Mitchell Overtime", mitchell.overtime, "Mitchell", "Overtime") : createEmptySectionCell());
+            overtimeRow.appendChild(includeCummings ? createSectionCell("Cummings Overtime", cummings.overtime, "Cummings", "Overtime") : createEmptySectionCell());
 
-                grouped[courthouse].forEach(row => {
-                    if (!typeGroups[row.assignment_type])
-                        typeGroups[row.assignment_type] = [];
-                    typeGroups[row.assignment_type].push(row);
-                });
+            const transportPanel = document.getElementById("transportPanel");
+            const borrowedPanel = document.getElementById("borrowedDeputiesPanel");
 
-                const orderedTypes = ["Fixed Post", "Courtroom", "Overtime"];
+            juvRow.appendChild(includeJuvenile ? createSectionCell("Juvenile Courtroom", juvenile.courtrooms, "Juvenile", "Courtroom") : createEmptySectionCell());
+            juvRow.appendChild(includeJuvenile ? (transportPanel || createEmptySectionCell()) : createEmptySectionCell());
 
-                orderedTypes.forEach(type => {
+            juvBottomRow.appendChild(includeJuvenile ? createSectionCell("Juvenile Overtime", juvenile.overtime, "Juvenile", "Overtime") : createEmptySectionCell());
+            juvBottomRow.appendChild(includeJuvenile ? (borrowedPanel || createEmptySectionCell()) : createEmptySectionCell());
 
-                    if (!typeGroups[type]) return;
-                    if (courthouse === "Juvenile" && type === "Fixed Post") return;
-
-                    const typeHeader = document.createElement("h4");
-                    typeHeader.textContent = type === "Fixed Post" ? "Security Posts" : type;
-                    column.appendChild(typeHeader);
-
-                    /* ================= COURTROOM ================= */
-                    if (type === "Courtroom") {
-
-                        let rooms = [];
-
-                        if (courthouse === "Mitchell") {
-                            rooms = [
-                                "600M","231M","417M","556C","215M","441M","309M",
-                                "228C","226M","420M","400M","236M","203M","451M","438M"
-                            ];
-                        }
-
-                        if (courthouse === "Cummings") {
-                            rooms = [
-                                "225C","201C","430C","329C","230C","227C",
-                                "540C","404C","523C","528C","113C"
-                            ];
-                        }
-
-                        if (courthouse === "Juvenile") {
-                            rooms = ["329C","428M","406M"];
-                        }
-
-                        const table = document.createElement("table");
-                        table.border = "1";
-
-                        table.innerHTML = `
-                            <thead>
-                                <tr>
-                                    <th>Judge</th>
-                                    <th>Room</th>
-                                    <th>Assignment</th>
-                                    <th>Deputy</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        `;
-
-                        const tbody = table.querySelector("tbody");
-
-                        rooms.forEach(room => {
-
-                            const row = typeGroups[type].find(r => r.location_detail === room);
-
-                            const tr = document.createElement("tr");
-                            tr.innerHTML = `
-                                <td class="editable-judge"
-                                    data-date="${document.getElementById("date").value}"
-                                    data-courthouse="${courthouse}"
-                                    data-type="Courtroom"
-                                    data-room="${room}"
-                                    data-part="${row && row.part ? row.part : ""}">
-                                    ${row ? (row.judge_name || "") : ""}
-                                </td>
-                                <td>${room}${row && row.part ? "/" + row.part : ""}</td>
-                                <td class="editable-assignment"
-                                    data-date="${document.getElementById("date").value}"
-                                    data-courthouse="${courthouse}"
-                                    data-type="Courtroom"
-                                    data-room="${room}"
-                                    data-part="${row && row.part ? row.part : ""}">
-                                    ${row ? (row.assignment_notes || "") : ""}
-                                </td>
-                                <td class="editable"
-                                    data-date="${document.getElementById("date").value}"
-                                    data-courthouse="${courthouse}"
-                                    data-type="Courtroom"
-                                    data-room="${room}"
-                                    data-part="${row && row.part ? row.part : ""}">
-                                    ${row ? (row.assigned_member || "") : ""}
-                                </td>
-                            `;
-
-                            tbody.appendChild(tr);
-                        });
-
-                        column.appendChild(table);
-                        column.appendChild(document.createElement("br"));
-                        return;
-                    }
-
-                    /* ================= SECURITY POSTS ================= */
-                    if (type === "Fixed Post") {
-
-                        let posts = [];
-
-                        if (courthouse === "Mitchell") {
-                            posts = [
-                                { post: "Calvert", detail: "8:00 AM", part: "0800-1" },
-                                { post: "Calvert", detail: "8:00 AM", part: "0800-2" },
-                                { post: "Calvert", detail: "8:00 AM", part: "0800-3" },
-                                { post: "Lexington", detail: "7:00 AM - 3:00 PM", part: "0700-1500" },
-                                { post: "Lexington", detail: "3:00 PM - 11:00 PM", part: "1500-2300" },
-                                { post: "Lexington", detail: "11:00 PM - 7:00 AM", part: "2300-0700" },
-                                { post: "Fayette H/C Console room", detail: "7:00 AM", part: "0700" },
-                                { post: "Fayette H/C Console room", detail: "7:15 AM", part: "0715" },
-                                { post: "Lock Up West", detail: "1 of 2", part: "OPEN-1" },
-                                { post: "Lock Up West", detail: "2 of 2", part: "OPEN-2" },
-                                { post: "Jury Room", detail: "7:30 AM", part: "0730" },
-                                { post: "St. Paul", detail: "7:30 AM", part: "0730" },
-                                { post: "St. Paul", detail: "8:30 AM", part: "0830" },
-                                { post: "Rover", detail: "7:00 AM", part: "0700" },
-                                { post: "Judges", detail: "7:00 AM", part: "0700" }
-                            ];
-                        }
-
-                        if (courthouse === "Cummings") {
-                            posts = [
-                                { post: "Cummings", detail: "8:00 AM", part: "0800" },
-                                { post: "Cummings", detail: "8:30 AM", part: "0830-1" },
-                                { post: "Cummings", detail: "8:30 AM", part: "0830-2" },
-                                { post: "Fayette St. H/C", detail: "7:15 AM", part: "0715" },
-                                { post: "Fayette St. H/C", detail: "9:00 AM", part: "0900" },
-                                { post: "Console Room", detail: "8:30 AM", part: "0830-1" },
-                                { post: "Console Room", detail: "8:30 AM", part: "0830-2" },
-                                { post: "Lock Up East", detail: "8:00 AM", part: "0800" },
-                                { post: "Garage", detail: "6:00 AM", part: "0600" },
-                                { post: "Garage", detail: "4:00 PM", part: "1600" },
-                                { post: "Family Court", detail: "8:00 AM", part: "0800" },
-                                { post: "Transportation", detail: "", part: "" }
-                            ];
-                        }
-
-                        const table = document.createElement("table");
-                        table.border = "1";
-
-                        table.innerHTML = `
-                            <thead>
-                                <tr>
-                                    <th>Security Post</th>
-                                    <th>Shift</th>
-                                    <th>Deputy</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        `;
-
-                        const tbody = table.querySelector("tbody");
-
-                        posts.forEach((slot, index) => {
-
-                            const slotMatches = typeGroups[type].filter(r =>
-                                r.location_group === slot.post && (
-                                    (slot.part && r.part === slot.part) ||
-                                    (slot.detail && r.location_detail === slot.detail) ||
-                                    (!slot.part && !slot.detail)
-                                )
-                            );
-
-                            const fallbackMatches = typeGroups[type].filter(r =>
-                                r.location_group === slot.post && !r.part && !r.location_detail
-                            );
-
-                            const pickPreferredRow = (rows) => {
-                                if (!rows || rows.length === 0) return null;
-                                return rows.find(r => (r.assigned_member || '').trim()) || rows[0];
-                            };
-
-                            const assigned = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
-
-                            const assignmentLabel = slot.detail || "General";
-                            const showPost = index === 0 || posts[index - 1].post !== slot.post;
-
-                            const tr = document.createElement("tr");
-                            tr.innerHTML = `
-                                <td>${showPost ? slot.post : ""}</td>
-                                <td>${assignmentLabel}</td>
-                                <td class="editable"
-                                    data-date="${document.getElementById("date").value}"
-                                    data-courthouse="${courthouse}"
-                                    data-type="Fixed Post"
-                                    data-room="${slot.post}"
-                                    data-slot-index="${index}"
-                                    data-part="${slot.part || ""}">
-                                    ${assigned ? (assigned.assigned_member || "") : ""}
-                                </td>
-                            `;
-
-                            tbody.appendChild(tr);
-                        });
-
-                        column.appendChild(table);
-                        column.appendChild(document.createElement("br"));
-                        return;
-                    }
-
-                    /* ================= OVERTIME ================= */
-                    if (type === "Overtime") {
-
-                        const table = document.createElement("table");
-                        table.border = "1";
-
-                        table.innerHTML = `
-                            <thead>
-                                <tr>
-                                    <th>Detail</th>
-                                    <th>Shift</th>
-                                    <th>Member</th>
-                                    <th>Notes</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        `;
-
-                        const tbody = table.querySelector("tbody");
-
-                        typeGroups[type].forEach(row => {
-
-                            const tr = document.createElement("tr");
-                            tr.innerHTML = `
-                                <td>${row.location_detail || ""}</td>
-                                <td>${row.shift_time || ""}</td>
-                                <td class="editable"
-                                    data-date="${document.getElementById("date").value}"
-                                    data-courthouse="${courthouse}"
-                                    data-type="Overtime"
-                                    data-room="${row.location_detail}"
-                                    data-shift="${row.shift_time || ""}"
-                                    data-part="">
-                                    ${row.assigned_member || ""}
-                                </td>
-                                <td class="editable-assignment"
-                                    data-date="${document.getElementById("date").value}"
-                                    data-courthouse="${courthouse}"
-                                    data-type="Overtime"
-                                    data-room="${row.location_detail || ""}"
-                                    data-part="${row.assigned_member || ""}">
-                                    ${row.assignment_notes || ""}
-                                </td>
-                            `;
-
-                            tbody.appendChild(tr);
-                        });
-
-                        column.appendChild(table);
-                        column.appendChild(document.createElement("br"));
-                    }
-
-                });
-
-                container.appendChild(column);
-            }
             initAssignmentDropzones();
             refreshRosterAssignedState();
+            renderTransportTable(date);
+            loadCourtroomMeta(date);
+        });
+}
+
+function loadCourtroomMeta(date) {
+    if (!date) return;
+    fetch(`/api/get-courtroom-meta?date=${date}`)
+        .then(res => res.json())
+        .then(rows => {
+            rows.forEach(meta => {
+                const selector = `.courtroom-meta-row[data-date="${meta.assignment_date}"][data-courthouse="${meta.courthouse}"][data-room="${meta.location_detail}"][data-part="${meta.part || ''}"]`;
+                const row = document.querySelector(selector);
+                if (!row) return;
+
+                const startInput = row.querySelector('.courtroom-time-input[data-field="start_time"]');
+                const restartInput = row.querySelector('.courtroom-time-input[data-field="restart_time"]');
+                const adjournedInput = row.querySelector('.courtroom-time-input[data-field="adjourned_time"]');
+                const downInput = row.querySelector('.courtroom-down-checkbox');
+
+                if (startInput) startInput.value = parseStoredTimeToInputValue(meta.start_time || '');
+                if (restartInput) restartInput.value = parseStoredTimeToInputValue(meta.restart_time || '');
+                if (adjournedInput) adjournedInput.value = parseStoredTimeToInputValue(meta.adjourned_time || '');
+                if (downInput) downInput.checked = !!meta.is_down;
+            });
+        });
+}
+
+function renderTransportTable(date) {
+    const tbody = document.getElementById('transportBody');
+    if (!tbody || !date) return;
+
+    const fallbackCounties = ['Baltimore County', 'Anne Arundel County', 'Howard County', 'Carroll County'];
+
+    fetch(`/api/search?date=${date}&courthouse=Transport`)
+        .then(res => res.json())
+        .then(rows => {
+            const transportRows = (rows || []).filter(r => r.assignment_type === 'Transport');
+            const dataRows = transportRows.length > 0
+                ? transportRows.map(r => ({ county: r.location_detail || '', deputy: r.assigned_member || '' }))
+                : fallbackCounties.map(c => ({ county: c, deputy: '' }));
+
+            tbody.innerHTML = '';
+            dataRows.forEach(entry => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="editable"
+                        data-date="${date}"
+                        data-courthouse="Transport"
+                        data-type="Transport"
+                        data-room="${entry.county}"
+                        data-part="">${entry.deputy || ''}</td>
+                    <td>${entry.county}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            initAssignmentDropzones();
+            refreshRosterAssignedState();
+        })
+        .catch(() => {
+            tbody.innerHTML = '';
         });
 }
 
@@ -1150,15 +1255,7 @@ document.addEventListener("click", function(e) {
         pendingJudges[key] = payload;
         cell.textContent = input.value;
 
-        const saveStatus = document.getElementById("saveStatus");
-        if (saveStatus) {
-            const totalChanges =
-                Object.keys(pendingAssignments).length +
-                Object.keys(pendingNotes).length +
-                Object.keys(pendingJudges).length;
-            saveStatus.className = "counts-inline metric-red";
-            saveStatus.textContent = `${totalChanges} change${totalChanges !== 1 ? "s" : ""} not saved`;
-        }
+        updateSaveStatusBadge();
 
     });
 
@@ -1200,6 +1297,7 @@ document.addEventListener("click", function(e) {
 
         pendingNotes[key] = payload;
         cell.textContent = input.value;
+        updateSaveStatusBadge();
 
     });
 
@@ -1246,11 +1344,23 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         })
     );
 
-    Promise.all([...assignmentRequests, ...notesRequests, ...judgeRequests])
+    const courtroomMetaRequests = Object.values(pendingCourtroomMeta).map(payload =>
+        fetch("/api/update-courtroom-meta", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(res => {
+            if (!res.ok) throw new Error("Failed to save courtroom meta");
+            return res.json();
+        })
+    );
+
+    Promise.all([...assignmentRequests, ...notesRequests, ...judgeRequests, ...courtroomMetaRequests])
         .then(() => {
             pendingAssignments = {};
             pendingNotes = {};
             pendingJudges = {};
+            pendingCourtroomMeta = {};
             if (saveStatus) {
                 saveStatus.className = "counts-inline metric-green";
                 saveStatus.textContent = "Saved";
@@ -1292,28 +1402,68 @@ window.addEventListener("beforeunload", function (e) {
     const totalChanges =
         Object.keys(pendingAssignments).length +
         Object.keys(pendingNotes).length +
-            Object.keys(pendingJudges).length;
+            Object.keys(pendingJudges).length +
+            Object.keys(pendingCourtroomMeta).length;
 
     if (totalChanges > 0) {
         e.preventDefault();
         e.returnValue = ""; // Required for Chrome
     }
 });
+
 </script>
-<hr>
+<datalist id="courtroomTimeOptions">
+    <option value="7:00 AM"></option>
+    <option value="7:30 AM"></option>
+    <option value="8:00 AM"></option>
+    <option value="8:30 AM"></option>
+    <option value="9:00 AM"></option>
+    <option value="9:30 AM"></option>
+    <option value="10:00 AM"></option>
+    <option value="10:30 AM"></option>
+    <option value="11:00 AM"></option>
+    <option value="11:30 AM"></option>
+    <option value="12:00 PM"></option>
+    <option value="12:30 PM"></option>
+    <option value="1:00 PM"></option>
+    <option value="1:30 PM"></option>
+    <option value="2:00 PM"></option>
+    <option value="2:30 PM"></option>
+    <option value="3:00 PM"></option>
+    <option value="3:30 PM"></option>
+    <option value="4:00 PM"></option>
+    <option value="4:30 PM"></option>
+    <option value="5:00 PM"></option>
+    <option value="5:30 PM"></option>
+    <option value="6:00 PM"></option>
+</datalist>
+<div id="transportPanel">
+    <h3>Transport</h3>
+    <table border="1" id="transportTable">
+        <thead>
+            <tr>
+                <th>Deputy</th>
+                <th>County</th>
+            </tr>
+        </thead>
+        <tbody id="transportBody"></tbody>
+    </table>
+</div>
 
-<h2>CSO Detail - Borrowed Deputies</h2>
+<div id="borrowedDeputiesPanel">
+    <h3>CSO Detail - Borrowed Deputies</h3>
 
-<table border="1" id="csoDetailTable">
-    <thead>
-        <tr>
-            <th>Deputy Name</th>
-            <th>Division</th>
-            <th>Courthouse</th>
-            <th>Room / Part / Time</th>
-        </tr>
-    </thead>
-    <tbody id="csoDetailBody"></tbody>
-</table>
+    <table border="1" id="csoDetailTable">
+        <thead>
+            <tr>
+                <th>Deputy Name</th>
+                <th>Division</th>
+                <th>Courthouse</th>
+                <th>Room / Part / Time</th>
+            </tr>
+        </thead>
+        <tbody id="csoDetailBody"></tbody>
+    </table>
+</div>
 </body>
 </html>
