@@ -529,6 +529,36 @@ def update_assignment_notes():
     conn.close()
 
     return {"status": "success"}
+
+@app.route("/api/update-judge-name", methods=["POST"])
+def update_judge_name():
+    data = request.json
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE dbo.court_assignments
+        SET judge_name = ?
+        WHERE assignment_date = ?
+          AND courthouse = ?
+          AND assignment_type = ?
+          AND location_detail = ?
+          AND part = ?
+    """, (
+        data["judge_name"],
+        data["assignment_date"],
+        data["courthouse"],
+        data["assignment_type"],
+        data["location_detail"],
+        data["part"]
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "success"}
+
 @app.route("/api/deputies")
 def get_deputies():
     target_date = request.args.get("date")
