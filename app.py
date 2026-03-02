@@ -16,6 +16,8 @@ def _normalize_status_type(status_type):
     normalized = status_type.strip().lower()
     if normalized in ["sick", "leave", "light duty"]:
         return normalized.title() if normalized != "light duty" else "Light Duty"
+    if normalized in ["unscheduled", "unscheduled leave", "callout sick", "unscheduled leave or callout sick"]:
+        return "Unscheduled"
     return status_type
 
 
@@ -30,19 +32,20 @@ def _parse_date_value(value):
 
 def _parse_status_payload(status_text):
     if not status_text:
-        return {"legacy": None, "ranges": []}
+        return {"legacy": None, "ranges": [], "weekly_unavailable": []}
 
     try:
         parsed = json.loads(status_text)
         if isinstance(parsed, dict) and "ranges" in parsed:
             return {
                 "legacy": parsed.get("legacy"),
-                "ranges": parsed.get("ranges") or []
+                "ranges": parsed.get("ranges") or [],
+                "weekly_unavailable": parsed.get("weekly_unavailable") or []
             }
     except (json.JSONDecodeError, TypeError):
         pass
 
-    return {"legacy": status_text, "ranges": []}
+    return {"legacy": status_text, "ranges": [], "weekly_unavailable": []}
 
 
 def _effective_status_for_date(status_text, target_date):
@@ -63,6 +66,16 @@ def _effective_status_for_date(status_text, target_date):
             if start <= target <= end and status_value not in active_statuses:
                 active_statuses.append(status_value)
 
+        weekday_name = target.strftime("%A") if target else None
+        for rule in payload.get("weekly_unavailable", []):
+            rule_day = (rule.get("day") or "").strip()
+            rule_end = _parse_date_value(rule.get("end_date"))
+            if not rule_day or not rule_end or not weekday_name:
+                continue
+            if target <= rule_end and (rule_day == "Any Day" or rule_day == weekday_name):
+                if "Unavailable" not in active_statuses:
+                    active_statuses.append("Unavailable")
+
         if active_statuses:
             return " / ".join(active_statuses)
 
@@ -70,7 +83,7 @@ def _effective_status_for_date(status_text, target_date):
 
 
 def _serialize_status_payload(payload):
-    if not payload.get("ranges") and not payload.get("legacy"):
+    if not payload.get("ranges") and not payload.get("legacy") and not payload.get("weekly_unavailable"):
         return None
     return json.dumps(payload)
 
@@ -182,7 +195,7 @@ def update_status_range():
     ))
     removed_count = 0
 
-    if status in ["Sick", "Leave", "Light Duty"] and start_date and end_date:
+    if status in ["Sick", "Leave", "Light Duty", "Unscheduled"] and start_date and end_date:
 
         cursor.execute("""
             SELECT assignment_date, courthouse, assignment_type,
@@ -240,6 +253,49 @@ def update_status_range():
         "status": "success",
         "removed_assignments": removed_count
     })
+
+@app.route("/api/update-unavailability", methods=["POST"])
+def update_unavailability():
+    data = request.json
+    full_name = data.get("full_name")
+    day = data.get("day")
+    end_date = data.get("end_date")
+    remove_all = bool(data.get("remove_all"))
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT current_status
+        FROM dbo.deputies
+        WHERE full_name = ?
+    """, (full_name,))
+    row = cursor.fetchone()
+    current_status = row[0] if row else None
+    payload = _parse_status_payload(current_status)
+
+    rules = payload.get("weekly_unavailable", [])
+
+    if remove_all:
+        payload["weekly_unavailable"] = []
+    else:
+        rules = [r for r in rules if not (r.get("day") == day)]
+        rules.append({"day": day, "end_date": end_date})
+        payload["weekly_unavailable"] = rules
+
+    cursor.execute("""
+        UPDATE dbo.deputies
+        SET current_status = ?
+        WHERE full_name = ?
+    """, (
+        _serialize_status_payload(payload),
+        full_name
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "success"})
 
 @app.route("/api/upsert-deputy", methods=["POST"])
 def upsert_deputy():
