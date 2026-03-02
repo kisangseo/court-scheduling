@@ -26,7 +26,10 @@
 
 <div id="assignmentRosterLayout">
     <div id="assignmentsPanel">
-        <div id="results" style="display:flex; flex-wrap:nowrap; gap:12px; align-items:flex-start;"></div>
+        <div id="results">
+            <div id="resultsTopRow" class="results-row"></div>
+            <div id="resultsBottomRow" class="results-row"></div>
+        </div>
     </div>
     <div id="rosterPanel">
         <h3>Court Security Roster</h3>
@@ -806,7 +809,10 @@ function search() {
         .then(data => {
 
             const container = document.getElementById("results");
-            container.innerHTML = "";
+            const topRow = document.getElementById("resultsTopRow");
+            const bottomRow = document.getElementById("resultsBottomRow");
+            topRow.innerHTML = "";
+            bottomRow.innerHTML = "";
 
             if (!data || data.length === 0) {
                 updateAssignmentCountBadges();
@@ -820,6 +826,8 @@ function search() {
                 if (!grouped[row.courthouse]) grouped[row.courthouse] = [];
                 grouped[row.courthouse].push(row);
             });
+
+            const courthouseColumns = {};
 
             for (const courthouse in grouped) {
 
@@ -884,6 +892,10 @@ function search() {
                                     <th>Room</th>
                                     <th>Assignment</th>
                                     <th>Deputy</th>
+                                    <th class="courtroom-time-header">Start Time</th>
+                                    <th class="courtroom-time-header">Restart Time</th>
+                                    <th class="courtroom-time-header">Adjourned Time</th>
+                                    <th class="courtroom-time-header">Down</th>
                                 </tr>
                             </thead>
                             <tbody></tbody>
@@ -922,6 +934,10 @@ function search() {
                                     data-part="${row && row.part ? row.part : ""}">
                                     ${row ? (row.assigned_member || "") : ""}
                                 </td>
+                                <td class="courtroom-time-cell"><input type="text" class="courtroom-time-input" aria-label="${courthouse} ${room} start time"></td>
+                                <td class="courtroom-time-cell"><input type="text" class="courtroom-time-input" aria-label="${courthouse} ${room} restart time"></td>
+                                <td class="courtroom-time-cell"><input type="text" class="courtroom-time-input" aria-label="${courthouse} ${room} adjourned time"></td>
+                                <td class="courtroom-down-cell"><input type="checkbox" class="courtroom-down-checkbox" aria-label="${courthouse} ${room} down"></td>
                             `;
 
                             tbody.appendChild(tr);
@@ -1091,8 +1107,28 @@ function search() {
 
                 });
 
-                container.appendChild(column);
+                courthouseColumns[courthouse] = column;
             }
+
+            ["Mitchell", "Cummings"].forEach(courthouse => {
+                if (courthouseColumns[courthouse]) {
+                    topRow.appendChild(courthouseColumns[courthouse]);
+                }
+            });
+
+            if (courthouseColumns["Juvenile"]) {
+                bottomRow.appendChild(courthouseColumns["Juvenile"]);
+            }
+
+            const borrowedPanel = document.getElementById("borrowedDeputiesPanel");
+            if (borrowedPanel) {
+                bottomRow.appendChild(borrowedPanel);
+            }
+
+            Object.keys(courthouseColumns)
+                .filter(name => !["Mitchell", "Cummings", "Juvenile"].includes(name))
+                .forEach(name => topRow.appendChild(courthouseColumns[name]));
+
             initAssignmentDropzones();
             refreshRosterAssignedState();
         });
@@ -1300,20 +1336,20 @@ window.addEventListener("beforeunload", function (e) {
     }
 });
 </script>
-<hr>
+<div id="borrowedDeputiesPanel">
+    <h3>CSO Detail - Borrowed Deputies</h3>
 
-<h2>CSO Detail - Borrowed Deputies</h2>
-
-<table border="1" id="csoDetailTable">
-    <thead>
-        <tr>
-            <th>Deputy Name</th>
-            <th>Division</th>
-            <th>Courthouse</th>
-            <th>Room / Part / Time</th>
-        </tr>
-    </thead>
-    <tbody id="csoDetailBody"></tbody>
-</table>
+    <table border="1" id="csoDetailTable">
+        <thead>
+            <tr>
+                <th>Deputy Name</th>
+                <th>Division</th>
+                <th>Courthouse</th>
+                <th>Room / Part / Time</th>
+            </tr>
+        </thead>
+        <tbody id="csoDetailBody"></tbody>
+    </table>
+</div>
 </body>
 </html>
