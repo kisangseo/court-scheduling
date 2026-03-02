@@ -1135,8 +1135,8 @@ function search() {
             const includeCummings = !courthouse || courthouse === "Cummings";
             const includeJuvenile = !courthouse || courthouse === "Juvenile";
 
-            postsRow.appendChild(includeMitchell ? createSectionCell("Mitchell Courthouse", mitchell.posts, "Mitchell", "main", "Security Post") : createEmptySectionCell());
-            postsRow.appendChild(includeCummings ? createSectionCell("Cummings Courthouse", cummings.posts, "Cummings", "main", "Cummings Security Post") : createEmptySectionCell());
+            postsRow.appendChild(includeMitchell ? createSectionCell("Mitchell", mitchell.posts, "Mitchell", "main", "Security Post") : createEmptySectionCell());
+            postsRow.appendChild(includeCummings ? createSectionCell("Cummings", cummings.posts, "Cummings", "main", "Security Post") : createEmptySectionCell());
 
             courtroomsRow.appendChild(includeMitchell ? createSectionCell("Mitchell Courtroom", mitchell.courtrooms, "Mitchell", "Courtroom") : createEmptySectionCell());
             courtroomsRow.appendChild(includeCummings ? createSectionCell("Cummings Courtroom", cummings.courtrooms, "Cummings", "Courtroom") : createEmptySectionCell());
@@ -1147,7 +1147,7 @@ function search() {
             const transportPanel = document.getElementById("transportPanel");
             const borrowedPanel = document.getElementById("borrowedDeputiesPanel");
 
-            juvRow.appendChild(includeJuvenile ? createSectionCell("Juv Courthouse", juvenile.courtrooms, "Juvenile", "main", "Courtroom") : createEmptySectionCell());
+            juvRow.appendChild(includeJuvenile ? createSectionCell("Juv", juvenile.courtrooms, "Juvenile", "main", "Courtroom") : createEmptySectionCell());
             juvRow.appendChild(includeJuvenile ? (transportPanel || createEmptySectionCell()) : createEmptySectionCell());
 
             juvBottomRow.appendChild(includeJuvenile ? createSectionCell("Juvenile Overtime", juvenile.overtime, "Juvenile", "Overtime") : createEmptySectionCell());
