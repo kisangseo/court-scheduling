@@ -514,16 +514,32 @@ function effectiveStatusForSearchDate(deputy) {
         const raw = deputy.status_raw;
         const parsed = raw ? JSON.parse(raw) : null;
         const ranges = parsed && Array.isArray(parsed.ranges) ? parsed.ranges : [];
+        const weeklyUnavailable = parsed && Array.isArray(parsed.weekly_unavailable) ? parsed.weekly_unavailable : [];
+        const active = [];
 
         if (selectedDate) {
-            for (let i = ranges.length - 1; i >= 0; i -= 1) {
+            for (let i = 0; i < ranges.length; i += 1) {
                 const entry = ranges[i];
                 const start = parseDateOnly(entry.start_date);
                 const end = parseDateOnly(entry.end_date);
                 if (start && end && selectedDate >= start && selectedDate <= end) {
-                    return (entry.status || '').toLowerCase();
+                    const status = (entry.status || '').toLowerCase();
+                    if (status && !active.includes(status)) active.push(status);
                 }
             }
+
+            const weekday = selectedDate.toLocaleDateString("en-US", { weekday: "long" });
+            for (let i = 0; i < weeklyUnavailable.length; i += 1) {
+                const rule = weeklyUnavailable[i] || {};
+                const day = (rule.day || '').trim();
+                const ruleEnd = parseDateOnly(rule.end_date);
+                if (!day || !ruleEnd) continue;
+                if (selectedDate <= ruleEnd && (day === 'Any Day' || day === weekday)) {
+                    if (!active.includes('unavailable')) active.push('unavailable');
+                }
+            }
+
+            if (active.length > 0) return active.join(' / ');
         }
 
         if (parsed && parsed.legacy) {
@@ -542,7 +558,9 @@ function isDeputyAvailable(deputy) {
 
     return !status.includes('leave')
         && !status.includes('sick')
-        && !status.includes('light duty');
+        && !status.includes('light duty')
+        && !status.includes('unscheduled')
+        && !status.includes('unavailable');
 }
 
 function loadRoster() {

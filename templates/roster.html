@@ -468,14 +468,22 @@ function updateCourtSecurityStatusCounts(deputies) {
     ).length;
 
     const available = total - out;
+    const parts = [];
 
-    document.getElementById("courtSecurityStatusCounts").innerHTML =
-        `<span class="status-red">Sick ${sick}</span> /
-        <span class="status-red">Leave ${leave}</span> /
-        <span class="status-red">Light Duty ${lightDuty}</span> /
-        <span class="status-orange">Unscheduled ${unscheduled}</span> /
-        <span class="status-red">Unavailable ${unavailable}</span> /
-        <span class="status-green">Available ${available}</span>`;
+    if (sick > 0) parts.push(`<span class="status-red">Sick ${sick}</span>`);
+    if (leave > 0) parts.push(`<span class="status-red">Leave ${leave}</span>`);
+    if (lightDuty > 0) parts.push(`<span class="status-red">Light Duty ${lightDuty}</span>`);
+    if (unscheduled > 0) parts.push(`<span class="status-orange">Unscheduled ${unscheduled}</span>`);
+    if (unavailable > 0) parts.push(`<span class="status-red">Unavailable ${unavailable}</span>`);
+
+    if (parts.length === 0) {
+        document.getElementById("courtSecurityStatusCounts").innerHTML =
+            `<span class="status-green">Available ${available}</span>`;
+        return;
+    }
+
+    parts.push(`<span class="status-green">Available ${available}</span>`);
+    document.getElementById("courtSecurityStatusCounts").innerHTML = parts.join(' / ');
 }
 
 function loadRoster() {
