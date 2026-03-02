@@ -51,13 +51,13 @@ th, td {
 }
 
 .results-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
-    align-items: flex-start;
+    align-items: start;
 }
 
 .results-row > div {
-    flex: 1 1 0;
     min-width: 0;
 }
 
@@ -202,6 +202,10 @@ h4 {
         flex-direction: column;
     }
 
+    .results-row {
+        grid-template-columns: 1fr;
+    }
+
     #rosterPanel {
         position: static;
         width: 100%;
@@ -213,6 +217,7 @@ h4 {
 
 #results table {
     font-size: 0.95em;
+    table-layout: fixed;
 }
 
 #results th,
@@ -260,9 +265,13 @@ h4 {
         display: none !important;
     }
 
-    #assignmentRosterLayout,
-    .results-row {
+    #assignmentRosterLayout {
         display: block;
+    }
+
+    .results-row {
+        display: grid;
+        grid-template-columns: 1fr;
     }
 
     .results-row > div,

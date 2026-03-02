@@ -335,51 +335,6 @@ function setPendingCourtroomMetaFromRow(rowEl) {
     updateSaveStatusBadge();
 }
 
-function syncTopCourthouseSectionHeights() {
-    const mitchellCol = document.querySelector('.courthouse-column[data-courthouse-column="Mitchell"]');
-    const cummingsCol = document.querySelector('.courthouse-column[data-courthouse-column="Cummings"]');
-    if (!mitchellCol || !cummingsCol) return;
-
-    ['Courtroom', 'Overtime'].forEach(sectionType => {
-        const left = mitchellCol.querySelector(`.courthouse-section[data-section-type="${sectionType}"]`);
-        const right = cummingsCol.querySelector(`.courthouse-section[data-section-type="${sectionType}"]`);
-        if (!left || !right) return;
-
-        left.style.minHeight = '';
-        right.style.minHeight = '';
-
-        const maxHeight = Math.max(left.offsetHeight, right.offsetHeight);
-        left.style.minHeight = `${maxHeight}px`;
-        right.style.minHeight = `${maxHeight}px`;
-    });
-}
-
-function syncBottomSectionHeights() {
-    const juvenileCol = document.querySelector('.courthouse-column[data-courthouse-column="Juvenile"]');
-    if (!juvenileCol) return;
-
-    const juvenileCourtroom = juvenileCol.querySelector('.courthouse-section[data-section-type="Courtroom"]');
-    const juvenileOvertime = juvenileCol.querySelector('.courthouse-section[data-section-type="Overtime"]');
-    const transportPanel = document.getElementById('transportPanel');
-    const borrowedPanel = document.getElementById('borrowedDeputiesPanel');
-
-    if (juvenileCourtroom && transportPanel) {
-        juvenileCourtroom.style.minHeight = '';
-        transportPanel.style.minHeight = '';
-        const h = Math.max(juvenileCourtroom.offsetHeight, transportPanel.offsetHeight);
-        juvenileCourtroom.style.minHeight = `${h}px`;
-        transportPanel.style.minHeight = `${h}px`;
-    }
-
-    if (juvenileOvertime && borrowedPanel) {
-        juvenileOvertime.style.minHeight = '';
-        borrowedPanel.style.minHeight = '';
-        const h = Math.max(juvenileOvertime.offsetHeight, borrowedPanel.offsetHeight);
-        juvenileOvertime.style.minHeight = `${h}px`;
-        borrowedPanel.style.minHeight = `${h}px`;
-    }
-}
-
 function fetchGlobalAssignmentTotals(dateValue) {
     const date = dateValue || document.getElementById('date').value;
     if (!date) {
@@ -1259,10 +1214,8 @@ function search() {
 
             initAssignmentDropzones();
             refreshRosterAssignedState();
-            syncTopCourthouseSectionHeights();
             renderTransportTable(date);
             loadCourtroomMeta(date);
-            syncBottomSectionHeights();
         });
 }
 
@@ -1286,7 +1239,6 @@ function loadCourtroomMeta(date) {
                 if (adjournedInput) adjournedInput.value = parseStoredTimeToInputValue(meta.adjourned_time || '');
                 if (downInput) downInput.checked = !!meta.is_down;
             });
-            syncBottomSectionHeights();
         });
 }
 
@@ -1321,7 +1273,6 @@ function renderTransportTable(date) {
 
             initAssignmentDropzones();
             refreshRosterAssignedState();
-            syncBottomSectionHeights();
         })
         .catch(() => {
             tbody.innerHTML = '';
@@ -1536,10 +1487,6 @@ window.addEventListener("beforeunload", function (e) {
     }
 });
 
-window.addEventListener("resize", function() {
-    syncTopCourthouseSectionHeights();
-    syncBottomSectionHeights();
-});
 </script>
 <datalist id="courtroomTimeOptions">
     <option value="7:00 AM"></option>
