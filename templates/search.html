@@ -376,6 +376,7 @@ function refreshRosterAssignedState() {
     updateAssignmentCountBadges();
     refreshRosterHeaderCounts();
     renderBorrowedDeputiesTable();
+    updateFixedPostArmedWarnings();
 }
 
 function clearRosterSelectionUI() {
@@ -563,6 +564,56 @@ function getCellAssignmentCategory(cell) {
 
 function isArmedRole(role) {
     return role === 'DEP' || role === 'SPO' || role === 'F';
+}
+
+function isArmedByName(name) {
+    const deputy = getDeputyRecordByName(name);
+    const role = getDeputyRole(deputy || {});
+    return isArmedRole(role);
+}
+
+function updateFixedPostArmedWarnings() {
+    const slotsByPost = new Map();
+    document.querySelectorAll('.editable[data-type="Fixed Post"][data-courthouse="Mitchell"]').forEach(cell => {
+        const post = (cell.dataset.room || '').trim();
+        if (!post) return;
+        if (!slotsByPost.has(post)) slotsByPost.set(post, []);
+        slotsByPost.get(post).push(cell);
+    });
+
+    slotsByPost.forEach(cells => {
+        cells.sort((a, b) => {
+            const ai = Number(a.dataset.slotIndex || 0);
+            const bi = Number(b.dataset.slotIndex || 0);
+            return ai - bi;
+        });
+
+        cells.forEach(cell => {
+            cell.querySelectorAll('.armed-warning').forEach(el => el.remove());
+        });
+
+        let hasArmed = false;
+        let lastAssignedIndex = -1;
+
+        cells.forEach((cell, index) => {
+            const names = getAssignedNamesFromCell(cell);
+            if (names.length > 0) {
+                lastAssignedIndex = index;
+                if (names.some(isArmedByName)) {
+                    hasArmed = true;
+                }
+            }
+        });
+
+        if (!hasArmed && lastAssignedIndex >= 0 && lastAssignedIndex + 1 < cells.length) {
+            const warning = document.createElement('div');
+            warning.className = 'armed-warning';
+            warning.style.color = '#b42318';
+            warning.style.fontWeight = '700';
+            warning.textContent = 'require 1 armed';
+            cells[lastAssignedIndex + 1].appendChild(warning);
+        }
+    });
 }
 
 function isEligibleForCell(cell, role) {
@@ -859,25 +910,33 @@ function search() {
 
                         if (courthouse === "Mitchell") {
                             posts = [
-                                "Calvert",
-                                "Lexington",
-                                "Fayette H/C Console room",
-                                "Lock Up West",
-                                "Jury Room",
-                                "St. Paul St. Rover",
-                                "Judges"
+                                { post: "Calvert", detail: "8:00 AM", part: "0800-1" },
+                                { post: "Calvert", detail: "8:00 AM", part: "0800-2" },
+                                { post: "Calvert", detail: "8:00 AM", part: "0800-3" },
+                                { post: "Lexington", detail: "7:00 AM - 3:00 PM", part: "0700-1500" },
+                                { post: "Lexington", detail: "3:00 PM - 11:00 PM", part: "1500-2300" },
+                                { post: "Lexington", detail: "11:00 PM - 7:00 AM", part: "2300-0700" },
+                                { post: "Fayette H/C Console room", detail: "7:00 AM", part: "0700" },
+                                { post: "Fayette H/C Console room", detail: "7:15 AM", part: "0715" },
+                                { post: "Lock Up West", detail: "1 of 2", part: "OPEN-1" },
+                                { post: "Lock Up West", detail: "2 of 2", part: "OPEN-2" },
+                                { post: "Jury Room", detail: "7:30 AM", part: "0730" },
+                                { post: "St. Paul", detail: "7:30 AM", part: "0730" },
+                                { post: "St. Paul", detail: "8:30 AM", part: "0830" },
+                                { post: "Rover", detail: "7:00 AM", part: "0700" },
+                                { post: "Judges", detail: "7:00 AM", part: "0700" }
                             ];
                         }
 
                         if (courthouse === "Cummings") {
                             posts = [
-                                "Cummings",
-                                "Fayette St. H/C",
-                                "Console Room",
-                                "Lock Up East",
-                                "Garage",
-                                "Family Court",
-                                "Transportation"
+                                { post: "Cummings", detail: "", part: "" },
+                                { post: "Fayette St. H/C", detail: "", part: "" },
+                                { post: "Console Room", detail: "", part: "" },
+                                { post: "Lock Up East", detail: "", part: "" },
+                                { post: "Garage", detail: "", part: "" },
+                                { post: "Family Court", detail: "", part: "" },
+                                { post: "Transportation", detail: "", part: "" }
                             ];
                         }
 
@@ -888,6 +947,7 @@ function search() {
                             <thead>
                                 <tr>
                                     <th>Security Post</th>
+                                    <th>Shift</th>
                                     <th>Deputy</th>
                                 </tr>
                             </thead>
@@ -896,19 +956,30 @@ function search() {
 
                         const tbody = table.querySelector("tbody");
 
-                        posts.forEach(post => {
+                        posts.forEach((slot, index) => {
 
-                            const assigned = typeGroups[type].find(r => r.location_group === post);
+                            const assigned = typeGroups[type].find(r =>
+                                r.location_group === slot.post && (
+                                    (slot.part && r.part === slot.part) ||
+                                    (slot.detail && r.location_detail === slot.detail) ||
+                                    (!slot.part && !slot.detail)
+                                )
+                            ) || typeGroups[type].find(r => r.location_group === slot.post && !r.part && !r.location_detail);
+
+                            const assignmentLabel = slot.detail || "General";
+                            const showPost = index === 0 || posts[index - 1].post !== slot.post;
 
                             const tr = document.createElement("tr");
                             tr.innerHTML = `
-                                <td>${post}</td>
+                                <td>${showPost ? slot.post : ""}</td>
+                                <td>${assignmentLabel}</td>
                                 <td class="editable"
                                     data-date="${document.getElementById("date").value}"
                                     data-courthouse="${courthouse}"
                                     data-type="Fixed Post"
-                                    data-room="${post}"
-                                    data-part="">
+                                    data-room="${slot.post}"
+                                    data-slot-index="${index}"
+                                    data-part="${slot.part || ""}">
                                     ${assigned ? (assigned.assigned_member || "") : ""}
                                 </td>
                             `;
