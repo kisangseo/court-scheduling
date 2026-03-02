@@ -529,6 +529,36 @@ def update_assignment_notes():
     conn.close()
 
     return {"status": "success"}
+
+@app.route("/api/update-judge-name", methods=["POST"])
+def update_judge_name():
+    data = request.json
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE dbo.court_assignments
+        SET judge_name = ?
+        WHERE assignment_date = ?
+          AND courthouse = ?
+          AND assignment_type = ?
+          AND location_detail = ?
+          AND part = ?
+    """, (
+        data["judge_name"],
+        data["assignment_date"],
+        data["courthouse"],
+        data["assignment_type"],
+        data["location_detail"],
+        data["part"]
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "success"}
+
 @app.route("/api/deputies")
 def get_deputies():
     target_date = request.args.get("date")
@@ -605,28 +635,51 @@ def update_deputy():
     conn = get_conn()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        UPDATE dbo.court_assignments
-        SET assigned_member = ?
-        WHERE assignment_date = ?
-          AND courthouse = ?
-          AND assignment_type = ?
-          AND (
-                ISNULL(location_group, '') = ISNULL(?, '')
-                OR ISNULL(location_detail, '') = ISNULL(?, '')
-              )
-          AND ISNULL(part, '') = ISNULL(?, '')
-    """, (
-        data["assigned_member"],
-        data["assignment_date"],
-        data["courthouse"],
-        data["assignment_type"],
-        data["location_detail"],
-        data["location_detail"],
-        data["part"]
-    ))
+    is_fixed_post = data.get("assignment_type") == "Fixed Post"
 
-    if cursor.rowcount == 0:
+    if is_fixed_post:
+        cursor.execute("""
+            UPDATE dbo.court_assignments
+            SET assigned_member = ?
+            WHERE assignment_date = ?
+              AND courthouse = ?
+              AND assignment_type = ?
+              AND ISNULL(location_group, '') = ISNULL(?, '')
+              AND ISNULL(part, '') = ISNULL(?, '')
+        """, (
+            data["assigned_member"],
+            data["assignment_date"],
+            data["courthouse"],
+            data["assignment_type"],
+            data["location_detail"],
+            data.get("part")
+        ))
+
+        if cursor.rowcount == 0:
+            cursor.execute("""
+                INSERT INTO dbo.court_assignments (
+                    assignment_date,
+                    courthouse,
+                    assignment_type,
+                    location_group,
+                    location_detail,
+                    part,
+                    judge_name,
+                    shift_time,
+                    assigned_member,
+                    assignment_notes,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, NULL, GETDATE())
+            """, (
+                data["assignment_date"],
+                data["courthouse"],
+                data["assignment_type"],
+                data["location_detail"],
+                data.get("part"),
+                data["assigned_member"]
+            ))
+    else:
         cursor.execute("""
             UPDATE dbo.court_assignments
             SET assigned_member = ?
@@ -637,14 +690,61 @@ def update_deputy():
                     ISNULL(location_group, '') = ISNULL(?, '')
                     OR ISNULL(location_detail, '') = ISNULL(?, '')
                   )
+              AND ISNULL(part, '') = ISNULL(?, '')
         """, (
             data["assigned_member"],
             data["assignment_date"],
             data["courthouse"],
             data["assignment_type"],
             data["location_detail"],
-            data["location_detail"]
+            data["location_detail"],
+            data.get("part")
         ))
+
+        if cursor.rowcount == 0:
+            cursor.execute("""
+                UPDATE dbo.court_assignments
+                SET assigned_member = ?
+                WHERE assignment_date = ?
+                  AND courthouse = ?
+                  AND assignment_type = ?
+                  AND (
+                        ISNULL(location_group, '') = ISNULL(?, '')
+                        OR ISNULL(location_detail, '') = ISNULL(?, '')
+                      )
+            """, (
+                data["assigned_member"],
+                data["assignment_date"],
+                data["courthouse"],
+                data["assignment_type"],
+                data["location_detail"],
+                data["location_detail"]
+            ))
+
+        if cursor.rowcount == 0:
+            cursor.execute("""
+                INSERT INTO dbo.court_assignments (
+                    assignment_date,
+                    courthouse,
+                    assignment_type,
+                    location_group,
+                    location_detail,
+                    part,
+                    judge_name,
+                    shift_time,
+                    assigned_member,
+                    assignment_notes,
+                    created_at
+                )
+                VALUES (?, ?, ?, NULL, ?, ?, NULL, NULL, ?, NULL, GETDATE())
+            """, (
+                data["assignment_date"],
+                data["courthouse"],
+                data["assignment_type"],
+                data["location_detail"],
+                data.get("part"),
+                data["assigned_member"]
+            ))
 
     conn.commit()
     conn.close()
@@ -691,7 +791,8 @@ def search():
                 WHERE a.assignment_date = ?
                 AND a.courthouse = t.courthouse
                 AND a.assignment_type = t.assignment_type
-                AND a.location_detail = t.location_detail
+                AND ISNULL(a.location_group,'') = ISNULL(t.location_group,'')
+                AND ISNULL(a.location_detail,'') = ISNULL(t.location_detail,'')
                 AND ISNULL(a.part,'') = ISNULL(t.part,'')
             )
         """, (date, date))
