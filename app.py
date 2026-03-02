@@ -10,6 +10,26 @@ from datetime import datetime, timedelta
 app = Flask(__name__)
 
 
+def _ensure_courtroom_meta_table(cursor):
+    cursor.execute("""
+        IF OBJECT_ID('dbo.courtroom_meta', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.courtroom_meta (
+                assignment_date DATE NOT NULL,
+                courthouse NVARCHAR(100) NOT NULL,
+                location_detail NVARCHAR(100) NOT NULL,
+                part NVARCHAR(100) NULL,
+                start_time NVARCHAR(16) NULL,
+                restart_time NVARCHAR(16) NULL,
+                adjourned_time NVARCHAR(16) NULL,
+                is_down BIT NOT NULL DEFAULT 0,
+                updated_at DATETIME NOT NULL DEFAULT GETDATE(),
+                CONSTRAINT PK_courtroom_meta PRIMARY KEY (assignment_date, courthouse, location_detail, part)
+            )
+        END
+    """)
+
+
 def _normalize_status_type(status_type):
     if not status_type:
         return None
@@ -806,6 +826,87 @@ def update_deputy():
     conn.close()
 
     return {"status": "success", "updated": cursor.rowcount}
+
+
+@app.route("/api/get-courtroom-meta")
+def get_courtroom_meta():
+    date = request.args.get("date")
+    conn = get_conn()
+    cursor = conn.cursor()
+    _ensure_courtroom_meta_table(cursor)
+
+    cursor.execute("""
+        SELECT assignment_date, courthouse, location_detail, part, start_time, restart_time, adjourned_time, is_down
+        FROM dbo.courtroom_meta
+        WHERE assignment_date = ?
+    """, (date,))
+
+    rows = [
+        {
+            "assignment_date": str(row[0]),
+            "courthouse": row[1],
+            "location_detail": row[2],
+            "part": row[3] or "",
+            "start_time": row[4] or "",
+            "restart_time": row[5] or "",
+            "adjourned_time": row[6] or "",
+            "is_down": bool(row[7])
+        }
+        for row in cursor.fetchall()
+    ]
+
+    conn.close()
+    return jsonify(rows)
+
+
+@app.route("/api/update-courtroom-meta", methods=["POST"])
+def update_courtroom_meta():
+    data = request.json
+    conn = get_conn()
+    cursor = conn.cursor()
+    _ensure_courtroom_meta_table(cursor)
+
+    cursor.execute("""
+        MERGE dbo.courtroom_meta AS target
+        USING (
+            SELECT ? AS assignment_date, ? AS courthouse, ? AS location_detail, ? AS part
+        ) AS source
+        ON target.assignment_date = source.assignment_date
+           AND target.courthouse = source.courthouse
+           AND target.location_detail = source.location_detail
+           AND ISNULL(target.part, '') = ISNULL(source.part, '')
+        WHEN MATCHED THEN
+            UPDATE SET
+                start_time = ?,
+                restart_time = ?,
+                adjourned_time = ?,
+                is_down = ?,
+                updated_at = GETDATE()
+        WHEN NOT MATCHED THEN
+            INSERT (assignment_date, courthouse, location_detail, part, start_time, restart_time, adjourned_time, is_down, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, GETDATE());
+    """, (
+        data["assignment_date"],
+        data["courthouse"],
+        data["location_detail"],
+        data.get("part") or "",
+        data.get("start_time") or None,
+        data.get("restart_time") or None,
+        data.get("adjourned_time") or None,
+        1 if data.get("is_down") else 0,
+        data["assignment_date"],
+        data["courthouse"],
+        data["location_detail"],
+        data.get("part") or "",
+        data.get("start_time") or None,
+        data.get("restart_time") or None,
+        data.get("adjourned_time") or None,
+        1 if data.get("is_down") else 0,
+    ))
+
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
 
 
 @app.route("/api/search")
