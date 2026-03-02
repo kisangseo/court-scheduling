@@ -428,6 +428,16 @@ function updateAssignmentCountBadges() {
         const vacant = Math.max(stats.total - stats.filled, 0);
         el.innerHTML = formatCountMetrics(vacant, stats.filled);
     });
+
+    document.querySelectorAll('[data-main-badge]').forEach(el => {
+        const courthouse = el.dataset.mainBadge || '';
+        const postStats = statsBySection[`${courthouse}|Fixed Post`] || { total: 0, filled: 0 };
+        const courtroomStats = statsBySection[`${courthouse}|Courtroom`] || { total: 0, filled: 0 };
+        const total = postStats.total + courtroomStats.total;
+        const filled = postStats.filled + courtroomStats.filled;
+        const vacant = Math.max(total - filled, 0);
+        el.innerHTML = formatCountMetrics(vacant, filled);
+    });
 }
 
 function getCourtSecurityRosterStats() {
@@ -877,12 +887,14 @@ function initRosterDrag() {
     });
 }
 
-function createSectionCell(title, contentEl, headerCourthouse = "", headerSection = "") {
+function createSectionCell(title, contentEl, headerCourthouse = "", headerSection = "", subtitle = "") {
     const cell = document.createElement("div");
     cell.className = "section-cell";
 
     const header = document.createElement("h3");
-    if (headerCourthouse && headerSection) {
+    if (headerCourthouse && headerSection === "main") {
+        header.innerHTML = `${title} <span class="counts-inline" data-main-badge="${headerCourthouse}"></span>`;
+    } else if (headerCourthouse && headerSection) {
         header.innerHTML = `${title} <span class="counts-inline" data-badge-key="${headerCourthouse}|${headerSection}"></span>`;
     } else if (headerCourthouse) {
         header.innerHTML = `${title} <span class="counts-inline" data-courthouse-header="${headerCourthouse}"></span>`;
@@ -891,6 +903,11 @@ function createSectionCell(title, contentEl, headerCourthouse = "", headerSectio
     }
 
     cell.appendChild(header);
+    if (subtitle) {
+        const subHeader = document.createElement("h4");
+        subHeader.textContent = subtitle;
+        cell.appendChild(subHeader);
+    }
     if (contentEl) cell.appendChild(contentEl);
     return cell;
 }
@@ -1118,8 +1135,8 @@ function search() {
             const includeCummings = !courthouse || courthouse === "Cummings";
             const includeJuvenile = !courthouse || courthouse === "Juvenile";
 
-            postsRow.appendChild(includeMitchell ? createSectionCell("Security Post", mitchell.posts, "Mitchell", "Fixed Post") : createEmptySectionCell());
-            postsRow.appendChild(includeCummings ? createSectionCell("Cummings Security Post", cummings.posts, "Cummings", "Fixed Post") : createEmptySectionCell());
+            postsRow.appendChild(includeMitchell ? createSectionCell("Mitchell Courthouse", mitchell.posts, "Mitchell", "main", "Security Post") : createEmptySectionCell());
+            postsRow.appendChild(includeCummings ? createSectionCell("Cummings Courthouse", cummings.posts, "Cummings", "main", "Cummings Security Post") : createEmptySectionCell());
 
             courtroomsRow.appendChild(includeMitchell ? createSectionCell("Mitchell Courtroom", mitchell.courtrooms, "Mitchell", "Courtroom") : createEmptySectionCell());
             courtroomsRow.appendChild(includeCummings ? createSectionCell("Cummings Courtroom", cummings.courtrooms, "Cummings", "Courtroom") : createEmptySectionCell());
@@ -1130,7 +1147,7 @@ function search() {
             const transportPanel = document.getElementById("transportPanel");
             const borrowedPanel = document.getElementById("borrowedDeputiesPanel");
 
-            juvRow.appendChild(includeJuvenile ? createSectionCell("Juvenile Courtroom", juvenile.courtrooms, "Juvenile", "Courtroom") : createEmptySectionCell());
+            juvRow.appendChild(includeJuvenile ? createSectionCell("Juv Courthouse", juvenile.courtrooms, "Juvenile", "main", "Courtroom") : createEmptySectionCell());
             juvRow.appendChild(includeJuvenile ? (transportPanel || createEmptySectionCell()) : createEmptySectionCell());
 
             juvBottomRow.appendChild(includeJuvenile ? createSectionCell("Juvenile Overtime", juvenile.overtime, "Juvenile", "Overtime") : createEmptySectionCell());
