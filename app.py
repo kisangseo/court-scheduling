@@ -751,7 +751,8 @@ def search():
                 WHERE a.assignment_date = ?
                 AND a.courthouse = t.courthouse
                 AND a.assignment_type = t.assignment_type
-                AND a.location_detail = t.location_detail
+                AND ISNULL(a.location_group,'') = ISNULL(t.location_group,'')
+                AND ISNULL(a.location_detail,'') = ISNULL(t.location_detail,'')
                 AND ISNULL(a.part,'') = ISNULL(t.part,'')
             )
         """, (date, date))

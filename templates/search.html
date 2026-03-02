@@ -26,7 +26,7 @@
 
 <div id="assignmentRosterLayout">
     <div id="assignmentsPanel">
-        <div id="results" style="display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start;"></div>
+        <div id="results" style="display:flex; flex-wrap:nowrap; gap:12px; align-items:flex-start;"></div>
     </div>
     <div id="rosterPanel">
         <h3>Court Security Roster</h3>
@@ -806,8 +806,8 @@ function search() {
             for (const courthouse in grouped) {
 
                 const column = document.createElement("div");
-                column.style.flex = "1 1 420px";
-                column.style.minWidth = "360px";
+                column.style.flex = "1 1 0";
+                column.style.minWidth = "0";
                 column.style.maxWidth = "100%";
 
                 const header = document.createElement("h3");
@@ -974,13 +974,24 @@ function search() {
 
                         posts.forEach((slot, index) => {
 
-                            const assigned = typeGroups[type].find(r =>
+                            const slotMatches = typeGroups[type].filter(r =>
                                 r.location_group === slot.post && (
                                     (slot.part && r.part === slot.part) ||
                                     (slot.detail && r.location_detail === slot.detail) ||
                                     (!slot.part && !slot.detail)
                                 )
-                            ) || typeGroups[type].find(r => r.location_group === slot.post && !r.part && !r.location_detail);
+                            );
+
+                            const fallbackMatches = typeGroups[type].filter(r =>
+                                r.location_group === slot.post && !r.part && !r.location_detail
+                            );
+
+                            const pickPreferredRow = (rows) => {
+                                if (!rows || rows.length === 0) return null;
+                                return rows.find(r => (r.assigned_member || '').trim()) || rows[0];
+                            };
+
+                            const assigned = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
 
                             const assignmentLabel = slot.detail || "General";
                             const showPost = index === 0 || posts[index - 1].post !== slot.post;
