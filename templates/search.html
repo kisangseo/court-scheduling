@@ -849,11 +849,14 @@ function initRosterDrag() {
         const sortable = Sortable.create(rosterEl, {
             group: {
                 name: 'assignmentRoster',
-                pull: 'clone',
+                pull: function (to, from, dragEl) {
+                    return !dragEl.classList.contains('assigned') ? 'clone' : false;
+                },
                 put: false
             },
             animation: 100,
-            sort: false
+            sort: false,
+            filter: '.assigned'
         });
         rosterSortables.push(sortable);
     });
@@ -987,10 +990,10 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 <th>Room</th>
                 <th>Assignment</th>
                 <th>Deputy</th>
-                <th class="courtroom-time-header">Start Time</th>
-                <th class="courtroom-time-header">Restart Time</th>
-                <th class="courtroom-time-header">Adjourned Time</th>
-                <th class="courtroom-time-header">Down</th>
+                <th class="courtroom-time-header">Start</th>
+                <th class="courtroom-time-header">Restart</th>
+                <th class="courtroom-time-header">Adjourned</th>
+                <th class="courtroom-down-header">Down</th>
             </tr>
         </thead>
         <tbody></tbody>
