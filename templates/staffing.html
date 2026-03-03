@@ -59,27 +59,35 @@ document.addEventListener("DOMContentLoaded", function() {
         return [...items].sort((a, b) => a.full_name.localeCompare(b.full_name));
     }
 
+    function sortCourtSecurityFirst(items) {
+        return [...items].sort((a, b) => {
+            const aCourtSecurity = normalize(a.division) === "court security";
+            const bCourtSecurity = normalize(b.division) === "court security";
+
+            if (aCourtSecurity !== bCourtSecurity) {
+                return aCourtSecurity ? -1 : 1;
+            }
+
+            return a.full_name.localeCompare(b.full_name);
+        });
+    }
+
     function buildDynamicTable(deputies) {
         const assignedCourtSecurity = sortByName(
             deputies.filter(dep => normalize(dep.division) === "court security")
         ).map(dep => dep.full_name);
 
-        const certifiedCourtRoom = sortByName(
+        const certifiedCourtRoom = sortCourtSecurityFirst(
             deputies.filter(dep => {
-                const rank = normalize(dep.rank);
-                return rank === "dep" || rank === "spo";
+                const capacityTag = normalize(dep.capacity_tag);
+                return capacityTag === "f" || capacityTag === "spo";
             })
         ).map(dep => dep.full_name);
 
-        const certifiedDoor = sortByName(
+        const certifiedDoor = sortCourtSecurityFirst(
             deputies.filter(dep => {
-                const rank = normalize(dep.rank);
                 const capacityTag = normalize(dep.capacity_tag);
-                return (
-                    (rank === "dep" || rank === "spo") &&
-                    rank !== "spoua" &&
-                    capacityTag !== "spoua"
-                );
+                return ["f", "spo", "nospo", "cso"].includes(capacityTag);
             })
         ).map(dep => dep.full_name);
 
