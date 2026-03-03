@@ -33,7 +33,7 @@
     <div id="assignmentsPanel">
         <div id="resultsGrid">
             <div id="postsRow" class="section-row"></div>
-            <div id="courtroomsRow" class="section-row"></div>
+            <div id="courtroomsRow" class="section-row-single"></div>
             <div id="overtimeRow" class="section-row"></div>
             <div id="juvRow" class="section-row"></div>
             <div id="juvBottomRow" class="section-row"></div>
@@ -1159,8 +1159,13 @@ function search() {
             postsRow.appendChild(includeMitchell ? createSectionCell("Mitchell", mitchell.posts, "Mitchell", "main", "Security Post") : createEmptySectionCell());
             postsRow.appendChild(includeCummings ? createSectionCell("Cummings", cummings.posts, "Cummings", "main", "Security Post") : createEmptySectionCell());
 
-            courtroomsRow.appendChild(includeMitchell ? createSectionCell("Courtroom", mitchell.courtrooms, "Mitchell", "Courtroom") : createEmptySectionCell());
-            courtroomsRow.appendChild(includeCummings ? createSectionCell("Courtroom", cummings.courtrooms, "Cummings", "Courtroom") : createEmptySectionCell());
+            if (includeMitchell) {
+                courtroomsRow.appendChild(createSectionCell("Mitchell Courtroom", mitchell.courtrooms, "Mitchell", "Courtroom"));
+            }
+
+            if (includeCummings) {
+                courtroomsRow.appendChild(createSectionCell("Cummings Courtroom", cummings.courtrooms, "Cummings", "Courtroom"));
+            }
 
             overtimeRow.appendChild(includeMitchell ? createSectionCell("Overtime", mitchell.overtime, "Mitchell", "Overtime") : createEmptySectionCell());
             overtimeRow.appendChild(includeCummings ? createSectionCell("Overtime", cummings.overtime, "Cummings", "Overtime") : createEmptySectionCell());
