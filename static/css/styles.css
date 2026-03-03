@@ -274,8 +274,13 @@ h4 {
 
 .courtroom-table th:nth-child(2),
 .courtroom-table td:nth-child(2) {
-    width: 1%;
-    white-space: nowrap;
+    width: 12%;
+    white-space: normal;
+}
+
+.courtroom-table th:nth-child(4),
+.courtroom-table td:nth-child(4) {
+    width: 28%;
 }
 
 .courtroom-table th:nth-child(5),
