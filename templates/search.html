@@ -1136,7 +1136,17 @@ function search() {
             const overtimeRow = document.getElementById("overtimeRow");
             const juvRow = document.getElementById("juvRow");
             const juvBottomRow = document.getElementById("juvBottomRow");
-            [postsRow, mitchellCourtroomsRow, cummingsCourtroomsRow, overtimeRow, juvRow, juvBottomRow].forEach(row => row.innerHTML = "");
+
+            [postsRow, courtroomsRow, overtimeRow, juvRow, juvBottomRow]
+                .filter(Boolean)
+                .forEach(row => {
+                    row.innerHTML = "";
+                });
+
+            if (!postsRow || !courtroomsRow || !overtimeRow || !juvRow || !juvBottomRow) {
+                console.warn("Search layout row missing; skipping render to avoid runtime crash.");
+                return;
+            }
 
             if (!data || data.length === 0) {
                 updateAssignmentCountBadges();
