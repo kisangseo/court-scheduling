@@ -219,15 +219,9 @@ function parseAssignedMemberValue(value) {
     return [normalized];
 }
 
-function clearPendingTransferState() {
-    pendingTransfer = null;
-    document.querySelectorAll('.assignment-chip.transfer-ready').forEach(chip => {
-        chip.classList.remove('transfer-ready');
-    });
-}
-
 function buildTransferRosterMap(rows) {
     const summary = new Map();
+    const outTimes = new Map();
 
     (rows || []).forEach(row => {
         parseAssignedMemberValue(row.assigned_member).forEach(name => {
@@ -253,6 +247,9 @@ function buildTransferRosterMap(rows) {
                     transferred_out_at: endValue
                 };
             }
+
+            if (!outTimes.has(key)) outTimes.set(key, new Set());
+            outTimes.get(key).add(endValue);
         });
     });
 
@@ -264,6 +261,7 @@ function buildTransferRosterMap(rows) {
     });
 
     latestTransferByDeputy = transfers;
+    transferOutTimesByDeputy = outTimes;
 }
 
 function pickDisplayAssignmentRow(rowList) {
@@ -280,17 +278,33 @@ function pickDisplayAssignmentRow(rowList) {
 function renderAssignmentCellContent(row) {
     if (!row) return '';
 
-    const name = row.assigned_member || '';
-    if (!name) return '';
+    const names = parseAssignedMemberValue(row.assigned_member);
+    if (names.length === 0) return '';
+
+    const nameHtml = names.map(name => `<div class="assignment-name">${name}</div>`).join('');
 
     if ((row.transferred_out_at || '').trim()) {
-        return `${name}<div class="transfer-caption">Transferred out at ${row.transferred_out_at}</div>`;
+        return `${nameHtml}<div class="transfer-caption">Transferred out at ${row.transferred_out_at}</div>`;
     }
 
     const start = (row.transferred_in_at || '').trim();
-    if (!start) return name;
+    if (!start) return nameHtml;
 
-    return `${name}<div class="transfer-caption">Transferred in at ${start}</div>`;
+    const wasTransferredIn = names.some(name => {
+        const priorOutTimes = transferOutTimesByDeputy.get(normalizeDeputyName(name));
+        return priorOutTimes?.has(start);
+    });
+
+    if (!wasTransferredIn) return nameHtml;
+
+    return `${nameHtml}<div class="transfer-caption">Transferred in at ${start}</div>`;
+}
+
+function clearPendingTransferState() {
+    pendingTransfer = null;
+    document.querySelectorAll('.assignment-chip.transfer-ready').forEach(chip => {
+        chip.classList.remove('transfer-ready');
+    });
 }
 
 function buildTransferRosterMap(rows) {
@@ -854,6 +868,23 @@ function parseDateOnly(value) {
     if (!value) return null;
     const d = new Date(`${value}T00:00:00`);
     return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function normalizeDateInputValue(value) {
+    const raw = (value || '').trim();
+    if (!raw) return '';
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        return raw;
+    }
+
+    const mdy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (mdy) {
+        const [, m, d, y] = mdy;
+        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+
+    return '';
 }
 
 function effectiveStatusForSearchDate(deputy) {
@@ -1585,7 +1616,8 @@ function renderTransportTable(date) {
 window.onload = function() {
     const today = new Date().toISOString().split('T')[0];
     const savedDate = localStorage.getItem('searchPageDate');
-    document.getElementById("date").value = savedDate || today;
+    const normalizedSavedDate = normalizeDateInputValue(savedDate);
+    document.getElementById("date").value = normalizedSavedDate || today;
 
     document.getElementById("showFullRoster").addEventListener("change", renderRoster);
     document.getElementById("courthouse").addEventListener("change", search);
@@ -1594,9 +1626,13 @@ window.onload = function() {
         search();
     });
 
-    loadRoster().then(() => {
-        search();
-    });
+    loadRoster()
+        .catch(err => {
+            console.error('Roster load failed on init:', err);
+        })
+        .finally(() => {
+            search();
+        });
 };
 document.addEventListener("click", function(e) {
 
