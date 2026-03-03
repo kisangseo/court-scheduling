@@ -219,8 +219,99 @@ function parseAssignedMemberValue(value) {
     return [normalized];
 }
 
-function normalizeDeputyName(value) {
-    return (value || '').trim().toLowerCase();
+function clearPendingTransferState() {
+    pendingTransfer = null;
+    document.querySelectorAll('.assignment-chip.transfer-ready').forEach(chip => {
+        chip.classList.remove('transfer-ready');
+    });
+}
+
+function buildTransferRosterMap(rows) {
+    const summary = new Map();
+    const outTimes = new Map();
+
+    (rows || []).forEach(row => {
+        parseAssignedMemberValue(row.assigned_member).forEach(name => {
+            const key = normalizeDeputyName(name);
+            if (!key) return;
+
+            if (!summary.has(key)) {
+                summary.set(key, { active: false, latestEnded: null });
+            }
+
+            const item = summary.get(key);
+            const hasEnd = !!(row.transferred_out_at || '').trim();
+
+            if (!hasEnd) {
+                item.active = true;
+                return;
+            }
+
+            const endValue = (row.transferred_out_at || '').trim();
+            if (!item.latestEnded || endValue > item.latestEnded.transferred_out_at) {
+                item.latestEnded = {
+                    location: row.location_detail || row.location_group || 'Unknown location',
+                    transferred_out_at: endValue
+                };
+            }
+
+            if (!outTimes.has(key)) outTimes.set(key, new Set());
+            outTimes.get(key).add(endValue);
+        });
+    });
+
+    const transfers = new Map();
+    summary.forEach((value, key) => {
+        if (!value.active && value.latestEnded) {
+            transfers.set(key, value.latestEnded);
+        }
+    });
+
+    latestTransferByDeputy = transfers;
+    transferOutTimesByDeputy = outTimes;
+}
+
+function pickDisplayAssignmentRow(rowList) {
+    if (!Array.isArray(rowList) || rowList.length === 0) return null;
+    const active = rowList.find(r => !(r.transferred_out_at || '').trim());
+    if (active) return active;
+
+    const ended = rowList
+        .filter(r => (r.transferred_out_at || '').trim())
+        .sort((a, b) => (b.transferred_out_at || '').localeCompare(a.transferred_out_at || ''));
+    return ended[0] || rowList[0];
+}
+
+function renderAssignmentCellContent(row) {
+    if (!row) return '';
+
+    const names = parseAssignedMemberValue(row.assigned_member);
+    if (names.length === 0) return '';
+
+    const nameHtml = names.map(name => `<div class="assignment-name">${name}</div>`).join('');
+
+    if ((row.transferred_out_at || '').trim()) {
+        return `${nameHtml}<div class="transfer-caption">Transferred out at ${row.transferred_out_at}</div>`;
+    }
+
+    const start = (row.transferred_in_at || '').trim();
+    if (!start) return nameHtml;
+
+    const wasTransferredIn = names.some(name => {
+        const priorOutTimes = transferOutTimesByDeputy.get(normalizeDeputyName(name));
+        return priorOutTimes?.has(start);
+    });
+
+    if (!wasTransferredIn) return nameHtml;
+
+    return `${nameHtml}<div class="transfer-caption">Transferred in at ${start}</div>`;
+}
+
+function clearPendingTransferState() {
+    pendingTransfer = null;
+    document.querySelectorAll('.assignment-chip.transfer-ready').forEach(chip => {
+        chip.classList.remove('transfer-ready');
+    });
 }
 
 function buildTransferRosterMap(rows) {
