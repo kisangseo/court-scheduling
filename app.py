@@ -30,6 +30,28 @@ def _ensure_courtroom_meta_table(cursor):
     """)
 
 
+def _resolve_transfer_columns(cursor):
+    candidates = [
+        ("transferred_in_at", "transferred_out_at"),
+        ("transfer_in_time", "transfer_out_time"),
+        ("transfer_start_time", "transfer_end_time"),
+    ]
+
+    for in_col, out_col in candidates:
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = 'dbo'
+              AND TABLE_NAME = 'court_assignments'
+              AND COLUMN_NAME IN (?, ?)
+        """, (in_col, out_col))
+        count = cursor.fetchone()[0]
+        if count == 2:
+            return in_col, out_col
+
+    return None, None
+
+
 def _normalize_status_type(status_type):
     if not status_type:
         return None
@@ -957,7 +979,22 @@ def search():
         cursor.connection.close()
     courthouse = request.args.get("courthouse")
 
-    query = """
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    transfer_in_col, transfer_out_col = _resolve_transfer_columns(cursor)
+    if transfer_in_col and transfer_out_col:
+        transfer_select = f"""
+            {transfer_in_col} AS transferred_in_at,
+            {transfer_out_col} AS transferred_out_at
+        """
+    else:
+        transfer_select = """
+            CAST('' AS NVARCHAR(16)) AS transferred_in_at,
+            CAST('' AS NVARCHAR(16)) AS transferred_out_at
+        """
+
+    query = f"""
         SELECT TOP 200
             assignment_date,
             courthouse,
@@ -968,8 +1005,7 @@ def search():
             part,
             assigned_member,
             assignment_notes,
-            start_time,
-            end_time
+            {transfer_select}
         FROM dbo.court_assignments
         WHERE 1=1
     """
@@ -990,8 +1026,6 @@ def search():
 
     query += " ORDER BY assignment_date DESC"
 
-    conn = get_conn()
-    cursor = conn.cursor()
     cursor.execute(query, params)
 
     columns = [column[0] for column in cursor.description]
@@ -1017,17 +1051,21 @@ def transfer_deputy():
     conn = get_conn()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    transfer_in_col, transfer_out_col = _resolve_transfer_columns(cursor)
+    if not transfer_in_col or not transfer_out_col:
+        conn.close()
+        return jsonify({"status": "error", "message": "Transfer columns not found on court_assignments"}), 400
+
+    cursor.execute(f"""
         UPDATE dbo.court_assignments
-        SET end_time = ?,
-            assigned_member = NULL
+        SET {transfer_out_col} = ?
         WHERE assignment_date = ?
           AND courthouse = ?
           AND assignment_type = ?
           AND ISNULL(location_group, '') = ISNULL(?, '')
           AND ISNULL(location_detail, '') = ISNULL(?, '')
           AND ISNULL(part, '') = ISNULL(?, '')
-          AND ISNULL(end_time, '') = ''
+          AND ISNULL({transfer_out_col}, '') = ''
           AND assigned_member = ?
     """, (
         transfer_time,
@@ -1045,7 +1083,7 @@ def transfer_deputy():
     to_location_group = to_room if to_type == "Fixed Post" else None
     to_location_detail = None if to_type == "Fixed Post" else to_room
 
-    cursor.execute("""
+    cursor.execute(f"""
         INSERT INTO dbo.court_assignments (
             assignment_date,
             courthouse,
@@ -1057,8 +1095,8 @@ def transfer_deputy():
             shift_time,
             assigned_member,
             assignment_notes,
-            start_time,
-            end_time,
+            {transfer_in_col},
+            {transfer_out_col},
             created_at
         )
         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL, ?, NULL, GETDATE())

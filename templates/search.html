@@ -130,7 +130,7 @@ function createRosterItem(deputy, options = {}) {
     if (transferInfo) {
         const caption = document.createElement('div');
         caption.className = 'transfer-caption';
-        caption.textContent = `Transferred out of ${transferInfo.location} at ${transferInfo.end_time}`;
+        caption.textContent = `Transferred out of ${transferInfo.location} at ${transferInfo.transferred_out_at}`;
         deputyRow.appendChild(caption);
     }
 
@@ -179,18 +179,18 @@ function buildTransferRosterMap(rows) {
             }
 
             const item = summary.get(key);
-            const hasEnd = !!(row.end_time || '').trim();
+            const hasEnd = !!(row.transferred_out_at || '').trim();
 
             if (!hasEnd) {
                 item.active = true;
                 return;
             }
 
-            const endValue = (row.end_time || '').trim();
-            if (!item.latestEnded || endValue > item.latestEnded.end_time) {
+            const endValue = (row.transferred_out_at || '').trim();
+            if (!item.latestEnded || endValue > item.latestEnded.transferred_out_at) {
                 item.latestEnded = {
                     location: row.location_detail || row.location_group || 'Unknown location',
-                    end_time: endValue
+                    transferred_out_at: endValue
                 };
             }
         });
@@ -208,25 +208,27 @@ function buildTransferRosterMap(rows) {
 
 function pickDisplayAssignmentRow(rowList) {
     if (!Array.isArray(rowList) || rowList.length === 0) return null;
-    const active = rowList.find(r => !(r.end_time || '').trim());
+    const active = rowList.find(r => !(r.transferred_out_at || '').trim());
     if (active) return active;
 
     const ended = rowList
-        .filter(r => (r.end_time || '').trim())
-        .sort((a, b) => (b.end_time || '').localeCompare(a.end_time || ''));
+        .filter(r => (r.transferred_out_at || '').trim())
+        .sort((a, b) => (b.transferred_out_at || '').localeCompare(a.transferred_out_at || ''));
     return ended[0] || rowList[0];
 }
 
 function renderAssignmentCellContent(row) {
     if (!row) return '';
 
-    if ((row.end_time || '').trim()) {
-        return `TRANSFERRED OUT AT: ${row.end_time}`;
+    const name = row.assigned_member || '';
+    if (!name) return '';
+
+    if ((row.transferred_out_at || '').trim()) {
+        return `${name}<div class="transfer-caption">TRANSFERRED OUT AT: ${row.transferred_out_at}</div>`;
     }
 
-    const name = row.assigned_member || '';
-    const start = (row.start_time || '').trim();
-    if (!name) return '';
+    const start = (row.transferred_in_at || '').trim();
+    if (!start) return name;
 
     return `${name}<div class="transfer-caption">TRANSFERRED IN AT: ${start}</div>`;
 }
@@ -611,7 +613,7 @@ async function applyDeputyToCell(dropCell, assignedName, role) {
             return true;
         } catch (err) {
             console.error(err);
-            alert('Transfer failed. Please try again.');
+            alert(`Transfer failed: ${err.message || 'Please try again.'}`);
             return false;
         }
     }
@@ -881,7 +883,14 @@ async function submitTransfer(transferState, destinationCell) {
     });
 
     if (!response.ok) {
-        throw new Error('Transfer failed');
+        let message = 'Transfer failed';
+        try {
+            const data = await response.json();
+            if (data?.message) message = data.message;
+        } catch (_) {
+            // noop
+        }
+        throw new Error(message);
     }
 }
 
