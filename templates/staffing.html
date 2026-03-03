@@ -13,11 +13,11 @@
 <table>
     <thead>
         <tr>
-            <th>Assigned to Court Security</th>
-            <th>Certified for Court Room</th>
-            <th>Certified to Work Door</th>
-            <th>Available to Work</th>
-            <th>Unavailable (+ Leave Code)</th>
+            <th>Assigned to Court Security <span id="count-assigned" style="color: green;"></span></th>
+            <th>Certified for Court Room <span id="count-courtroom" style="color: green;"></span></th>
+            <th>Certified to Work Door <span id="count-door" style="color: green;"></span></th>
+            <th>Available to Work <span id="count-available" style="color: green;"></span></th>
+            <th>Unavailable (+ Leave Code) <span id="count-unavailable" style="color: red;"></span></th>
             <th>Supervisor / Roll Call</th>
         </tr>
     </thead>
@@ -28,6 +28,12 @@
 document.addEventListener("DOMContentLoaded", function() {
     const dateInput = document.getElementById("staffingDate");
     const tbody = document.getElementById("staffingBody");
+
+    const countAssigned = document.getElementById("count-assigned");
+    const countCourtroom = document.getElementById("count-courtroom");
+    const countDoor = document.getElementById("count-door");
+    const countAvailable = document.getElementById("count-available");
+    const countUnavailable = document.getElementById("count-unavailable");
 
     function normalize(text) {
         return (text || "").toString().trim().toLowerCase();
@@ -72,6 +78,14 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
+    function updateCounts({ assignedCourtSecurity, certifiedCourtRoom, certifiedDoor, available, unavailable }) {
+        countAssigned.textContent = `(${assignedCourtSecurity.length})`;
+        countCourtroom.textContent = `(${certifiedCourtRoom.length})`;
+        countDoor.textContent = `(${certifiedDoor.length})`;
+        countAvailable.textContent = `(${available.length})`;
+        countUnavailable.textContent = `(${unavailable.length})`;
+    }
+
     function buildDynamicTable(deputies) {
         const assignedCourtSecurity = sortByName(
             deputies.filter(dep => normalize(dep.division) === "court security")
@@ -98,6 +112,14 @@ document.addEventListener("DOMContentLoaded", function() {
         const unavailable = sortByName(
             deputies.filter(dep => isOutStatus(dep.current_status))
         ).map(formatUnavailable);
+
+        updateCounts({
+            assignedCourtSecurity,
+            certifiedCourtRoom,
+            certifiedDoor,
+            available,
+            unavailable
+        });
 
         const columns = [
             assignedCourtSecurity,
