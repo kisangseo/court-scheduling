@@ -33,7 +33,7 @@
     <div id="assignmentsPanel">
         <div id="resultsGrid">
             <div id="postsRow" class="section-row"></div>
-            <div id="courtroomsRow" class="section-row"></div>
+            <div id="courtroomsRow" class="section-row-single"></div>
             <div id="overtimeRow" class="section-row"></div>
             <div id="juvRow" class="section-row"></div>
             <div id="juvBottomRow" class="section-row"></div>
@@ -1068,7 +1068,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
             <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.judge_name || "") : ""}</td>
             <td>${room}${row && row.part ? "/" + row.part : ""}</td>
             <td class="editable-assignment" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.assignment_notes || "") : ""}</td>
-            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.assigned_member || "") : ""}</td>
+            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}" data-assigned="${row ? (row.assigned_member || "") : ""}">${row ? (row.assigned_member || "") : ""}</td>
             <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="start_time" aria-label="${courthouse} ${room} start time"></td>
             <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="restart_time" aria-label="${courthouse} ${room} restart time"></td>
             <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="adjourned_time" aria-label="${courthouse} ${room} adjourned time"></td>
@@ -1135,7 +1135,17 @@ function search() {
             const overtimeRow = document.getElementById("overtimeRow");
             const juvRow = document.getElementById("juvRow");
             const juvBottomRow = document.getElementById("juvBottomRow");
-            [postsRow, courtroomsRow, overtimeRow, juvRow, juvBottomRow].forEach(row => row.innerHTML = "");
+
+            [postsRow, courtroomsRow, overtimeRow, juvRow, juvBottomRow]
+                .filter(Boolean)
+                .forEach(row => {
+                    row.innerHTML = "";
+                });
+
+            if (!postsRow || !courtroomsRow || !overtimeRow || !juvRow || !juvBottomRow) {
+                console.warn("Search layout row missing; skipping render to avoid runtime crash.");
+                return;
+            }
 
             if (!data || data.length === 0) {
                 updateAssignmentCountBadges();
@@ -1159,8 +1169,13 @@ function search() {
             postsRow.appendChild(includeMitchell ? createSectionCell("Mitchell", mitchell.posts, "Mitchell", "main", "Security Post") : createEmptySectionCell());
             postsRow.appendChild(includeCummings ? createSectionCell("Cummings", cummings.posts, "Cummings", "main", "Security Post") : createEmptySectionCell());
 
-            courtroomsRow.appendChild(includeMitchell ? createSectionCell("Courtroom", mitchell.courtrooms, "Mitchell", "Courtroom") : createEmptySectionCell());
-            courtroomsRow.appendChild(includeCummings ? createSectionCell("Courtroom", cummings.courtrooms, "Cummings", "Courtroom") : createEmptySectionCell());
+            if (includeMitchell) {
+                courtroomsRow.appendChild(createSectionCell("Mitchell Courtroom", mitchell.courtrooms, "Mitchell", "Courtroom"));
+            }
+
+            if (includeCummings) {
+                courtroomsRow.appendChild(createSectionCell("Cummings Courtroom", cummings.courtrooms, "Cummings", "Courtroom"));
+            }
 
             overtimeRow.appendChild(includeMitchell ? createSectionCell("Overtime", mitchell.overtime, "Mitchell", "Overtime") : createEmptySectionCell());
             overtimeRow.appendChild(includeCummings ? createSectionCell("Overtime", cummings.overtime, "Cummings", "Overtime") : createEmptySectionCell());
