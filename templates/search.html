@@ -7,20 +7,25 @@
 </head>
 <body>
 
-<h2>Search Court Assignments <span id="overallAssignmentCounts" class="counts-inline"></span></h2>
+<div class="top-controls">
+    <h2>Search Court Assignments <span id="overallAssignmentCounts" class="counts-inline"></span></h2>
 
-<input type="text" id="name" placeholder="Search by Name">
-<input type="date" id="date">
-<select id="courthouse">
-    <option value="">All Courthouses</option>
-    <option value="Mitchell">Mitchell</option>
-    <option value="Cummings">Cummings</option>
-    <option value="Juvenile">Juvenile</option>
-</select>
-<button onclick="search()">Search</button><button onclick="openRoster()">Roster</button><button onclick="window.open('/staffing', '_blank')">
-    Staffing Resources Daily
-</button>
-<button id="saveAssignments">Save Assignments</button> <span id="saveStatus" class="counts-inline"></span>
+    <input type="text" id="name" placeholder="Search by Name">
+    <input type="date" id="date">
+
+    <select id="courthouse">
+        <option value="">All Courthouses</option>
+        <option value="Mitchell">Mitchell</option>
+        <option value="Cummings">Cummings</option>
+        <option value="Juvenile">Juvenile</option>
+    </select>
+
+    <button onclick="search()">Search</button>
+    <button onclick="openRoster()">Roster</button>
+    <button onclick="window.open('/staffing', '_blank')">Staffing Resources Daily</button>
+    <button id="saveAssignments">Save Assignments</button>
+    <span id="saveStatus" class="counts-inline"></span>
+</div>
 
 <br><br>
 
@@ -838,29 +843,40 @@ function ensureCellStructure(cell) {
 
 function initAssignmentDropzones() {
     document.querySelectorAll('.editable').forEach(cell => {
-        const existingName = cell.textContent.trim();
+
+        // Use raw DB value stored in data-assigned
+        const rawAssigned = cell.dataset.assigned || '';
+
+        // Clear existing HTML
         cell.innerHTML = '';
+
+        // Rebuild structured container
         const list = ensureCellStructure(cell);
 
-        if (existingName) {
-            parseAssignedMemberValue(existingName).forEach(name => {
+        // Recreate chips from raw DB string
+        if (rawAssigned) {
+            parseAssignedMemberValue(rawAssigned).forEach(name => {
                 list.appendChild(buildAssignmentChip(name, ''));
             });
         }
 
+        // Initialize drag/drop
         Sortable.create(cell, {
             group: {
                 name: 'assignmentRoster',
                 pull: false,
-                put: (to, from) => from.el.classList.contains('draggable-roster-list')
+                put: (to, from) =>
+                    from.el.classList.contains('draggable-roster-list')
             },
             animation: 100,
             sort: false,
             onAdd: (evt) => {
                 const dropCell = evt.to;
                 const item = evt.item;
+
                 const role = (item.dataset.role || '').trim().toUpperCase();
-                const assignedName = (item.dataset.name || item.textContent || '').trim();
+                const assignedName =
+                    (item.dataset.name || item.textContent || '').trim();
 
                 item.remove();
                 applyDeputyToCell(dropCell, assignedName, role);
@@ -1000,6 +1016,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 <td class="editable"
                     data-date="${selectedDate}"
                     data-courthouse="${courthouse}"
+                    data-assigned="${assigned ? (assigned.assigned_member || "") : ""}"
                     data-type="Fixed Post"
                     data-room="${slot.post}"
                     data-slot-index="${index}"
