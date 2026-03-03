@@ -56,6 +56,7 @@ let selectedDeputy = null;
 let globalAssignmentTotals = { total: 0, filled: 0 };
 let globalPostedNames = new Set();
 let latestTransferByDeputy = new Map();
+let transferOutTimesByDeputy = new Map();
 let pendingTransfer = null;
 
 function getPostedCacheKey(date) {
@@ -147,23 +148,108 @@ function parseAssignedMemberValue(value) {
     const rawText = (value || '').trim();
     if (!rawText) return [];
 
-    const text = rawText
-        .split(/\n+/)
-        .map(part => part.trim())
-        .filter(part => part && !part.toUpperCase().startsWith('TRANSFERRED OUT AT:') && !part.toUpperCase().startsWith('TRANSFERRED IN AT:'))
-        .join(' || ');
+    const withoutCaptions = rawText
+        .replace(/TRANSFERRED\s+OUT\s+AT:\s*[^\n|]*/gi, '')
+        .replace(/TRANSFERRED\s+IN\s+AT:\s*[^\n|]*/gi, '')
+        .replace(/Transferred\s+out\s+at\s*[^\n|]*/gi, '')
+        .replace(/Transferred\s+in\s+at\s*[^\n|]*/gi, '');
 
-    if (!text) return [];
-
-    if (text.includes('||')) {
-        return text.split(/\s*\|\|\s*/).map(name => name.trim()).filter(Boolean);
-    }
-
-    return [text];
+    return withoutCaptions
+        .split(/\s*\|\|\s*|\n+|\s*;\s*/)
+        .map(name => name.trim())
+        .filter(Boolean);
 }
 
 function normalizeDeputyName(value) {
     return (value || '').trim().toLowerCase();
+}
+
+function buildTransferRosterMap(rows) {
+    const summary = new Map();
+    const outTimes = new Map();
+
+    (rows || []).forEach(row => {
+        parseAssignedMemberValue(row.assigned_member).forEach(name => {
+            const key = normalizeDeputyName(name);
+            if (!key) return;
+
+            if (!summary.has(key)) {
+                summary.set(key, { active: false, latestEnded: null });
+            }
+
+            const item = summary.get(key);
+            const hasEnd = !!(row.transferred_out_at || '').trim();
+
+            if (!hasEnd) {
+                item.active = true;
+                return;
+            }
+
+            const endValue = (row.transferred_out_at || '').trim();
+            if (!item.latestEnded || endValue > item.latestEnded.transferred_out_at) {
+                item.latestEnded = {
+                    location: row.location_detail || row.location_group || 'Unknown location',
+                    transferred_out_at: endValue
+                };
+            }
+
+            if (!outTimes.has(key)) outTimes.set(key, new Set());
+            outTimes.get(key).add(endValue);
+        });
+    });
+
+    const transfers = new Map();
+    summary.forEach((value, key) => {
+        if (!value.active && value.latestEnded) {
+            transfers.set(key, value.latestEnded);
+        }
+    });
+
+    latestTransferByDeputy = transfers;
+    transferOutTimesByDeputy = outTimes;
+}
+
+function pickDisplayAssignmentRow(rowList) {
+    if (!Array.isArray(rowList) || rowList.length === 0) return null;
+    const active = rowList.find(r => !(r.transferred_out_at || '').trim());
+    if (active) return active;
+
+    const ended = rowList
+        .filter(r => (r.transferred_out_at || '').trim())
+        .sort((a, b) => (b.transferred_out_at || '').localeCompare(a.transferred_out_at || ''));
+    return ended[0] || rowList[0];
+}
+
+function renderAssignmentCellContent(row) {
+    if (!row) return '';
+
+    const names = parseAssignedMemberValue(row.assigned_member);
+    if (names.length === 0) return '';
+
+    const nameHtml = names.map(name => `<div class="assignment-name">${name}</div>`).join('');
+
+    if ((row.transferred_out_at || '').trim()) {
+        return `${nameHtml}<div class="transfer-caption">Transferred out at ${row.transferred_out_at}</div>`;
+    }
+
+    const start = (row.transferred_in_at || '').trim();
+    if (!start) return nameHtml;
+
+    const wasTransferredIn = names.some(name => {
+        const priorOutTimes = transferOutTimesByDeputy.get(normalizeDeputyName(name));
+        return priorOutTimes?.has(start);
+    });
+
+    if (!wasTransferredIn) return nameHtml;
+
+    return `${nameHtml}<div class="transfer-caption">Transferred in at ${start}</div>`;
+}
+
+function clearPendingTransferState() {
+    pendingTransfer = null;
+    document.querySelectorAll('.assignment-chip.transfer-ready').forEach(chip => {
+        chip.classList.remove('transfer-ready');
+    });
 }
 
 function buildTransferRosterMap(rows) {
@@ -605,7 +691,7 @@ async function applyDeputyToCell(dropCell, assignedName, role) {
     if (pendingTransfer && pendingTransfer.name === assignedName) {
         try {
             await submitTransfer(pendingTransfer, dropCell);
-            pendingTransfer = null;
+            clearPendingTransferState();
             selectedDeputy = null;
             clearRosterSelectionUI();
             search();
@@ -899,43 +985,88 @@ function buildAssignmentChip(name, role) {
     chip.className = 'assignment-chip';
     chip.dataset.name = name;
     chip.dataset.role = role || '';
-    chip.textContent = name;
 
-    chip.addEventListener('click', function () {
+    const nameLine = document.createElement('div');
+    nameLine.className = 'assignment-chip-name';
+    nameLine.textContent = name;
+
+    const controls = document.createElement('div');
+    controls.className = 'assignment-chip-controls';
+
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.className = 'chip-link';
+    removeButton.textContent = 'Remove';
+    removeButton.addEventListener('click', () => {
         const cell = chip.closest('.editable');
-        const actionRaw = prompt(`Choose action for ${name}: Delete or Transfer`, 'Delete');
-        if (!actionRaw) return;
-
-        const action = actionRaw.trim().toLowerCase();
-        if (action === 'delete') {
-            chip.remove();
-            setPendingAssignmentFromCell(cell);
-            refreshRosterAssignedState();
-            return;
+        chip.remove();
+        if (!cell) return;
+        if (pendingTransfer && pendingTransfer.name === name) {
+            clearPendingTransferState();
         }
-
-        if (action === 'transfer') {
-            const timeInput = prompt('Enter transfer time (e.g., 9:30 AM):', '');
-            if (!timeInput) return;
-            const normalizedTime = normalizeUserTimeValue(timeInput);
-            if (!normalizedTime) {
-                alert('Invalid time format. Use H:MM AM/PM.');
-                return;
-            }
-
-            pendingTransfer = {
-                name,
-                role: role || '',
-                time: normalizedTime,
-                fromAssignment: extractAssignmentFromCell(cell)
-            };
-            selectedDeputy = { name, role: role || '' };
-            alert(`Transfer mode enabled for ${name}. Click the destination assignment cell.`);
-            return;
-        }
-
-        alert('Action not recognized. Type Delete or Transfer.');
+        setPendingAssignmentFromCell(cell);
+        refreshRosterAssignedState();
     });
+
+    const transferLabel = document.createElement('label');
+    transferLabel.className = 'transfer-toggle';
+    const transferCheckbox = document.createElement('input');
+    transferCheckbox.type = 'checkbox';
+    const transferText = document.createElement('span');
+    transferText.textContent = 'Transfer';
+
+    const transferInput = document.createElement('input');
+    transferInput.type = 'text';
+    transferInput.className = 'transfer-time-input';
+    transferInput.placeholder = '9:30 AM';
+    transferInput.style.display = 'none';
+
+    transferCheckbox.addEventListener('change', () => {
+        const cell = chip.closest('.editable');
+        if (!cell) return;
+
+        if (!transferCheckbox.checked) {
+            transferInput.style.display = 'none';
+            transferInput.value = '';
+            if (pendingTransfer && pendingTransfer.name === name) clearPendingTransferState();
+            return;
+        }
+
+        clearPendingTransferState();
+        chip.classList.add('transfer-ready');
+        transferInput.style.display = 'inline-block';
+        transferInput.focus();
+    });
+
+    const armTransfer = () => {
+        if (!transferCheckbox.checked) return;
+        const cell = chip.closest('.editable');
+        if (!cell) return;
+
+        const normalizedTime = normalizeUserTimeValue(transferInput.value);
+        if (!normalizedTime) return;
+
+        transferInput.value = normalizedTime;
+        pendingTransfer = {
+            name,
+            role: role || '',
+            time: normalizedTime,
+            fromAssignment: extractAssignmentFromCell(cell)
+        };
+        selectedDeputy = { name, role: role || '' };
+    };
+
+    transferInput.addEventListener('change', armTransfer);
+    transferInput.addEventListener('blur', armTransfer);
+
+    transferLabel.appendChild(transferCheckbox);
+    transferLabel.appendChild(transferText);
+    controls.appendChild(removeButton);
+    controls.appendChild(transferLabel);
+
+    chip.appendChild(nameLine);
+    chip.appendChild(controls);
+    chip.appendChild(transferInput);
 
     return chip;
 }

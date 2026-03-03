@@ -32,8 +32,8 @@ def _ensure_courtroom_meta_table(cursor):
 
 def _resolve_transfer_columns(cursor):
     candidates = [
-        ("transferred_in_at", "transferred_out_at"),
         ("transfer_in_time", "transfer_out_time"),
+        ("transferred_in_at", "transferred_out_at"),
         ("transfer_start_time", "transfer_end_time"),
     ]
 
