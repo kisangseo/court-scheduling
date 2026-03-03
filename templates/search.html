@@ -144,6 +144,46 @@ function getAssignedNamesFromCell(cell) {
         .filter(Boolean);
 }
 
+function extractDeputyNamesFromText(value) {
+    const text = (value || '').trim();
+    if (!text || !Array.isArray(rawDeputies) || rawDeputies.length === 0) return [];
+
+    const haystack = text.toLowerCase();
+    const matches = [];
+
+    rawDeputies.forEach(dep => {
+        const fullName = (dep.full_name || '').trim();
+        if (!fullName) return;
+
+        const needle = fullName.toLowerCase();
+        let from = 0;
+        while (from < haystack.length) {
+            const index = haystack.indexOf(needle, from);
+            if (index === -1) break;
+            matches.push({ start: index, end: index + needle.length, name: fullName });
+            from = index + 1;
+        }
+    });
+
+    if (matches.length === 0) return [];
+
+    matches.sort((a, b) => {
+        if (a.start !== b.start) return a.start - b.start;
+        return (b.end - b.start) - (a.end - a.start);
+    });
+
+    const selected = [];
+    let lastEnd = -1;
+    matches.forEach(match => {
+        if (match.start >= lastEnd) {
+            selected.push(match);
+            lastEnd = match.end;
+        }
+    });
+
+    return selected.map(item => item.name);
+}
+
 function parseAssignedMemberValue(value) {
     const rawText = (value || '').trim();
     if (!rawText) return [];
@@ -154,14 +194,103 @@ function parseAssignedMemberValue(value) {
         .replace(/Transferred\s+out\s+at\s*[^\n|]*/gi, '')
         .replace(/Transferred\s+in\s+at\s*[^\n|]*/gi, '');
 
-    return withoutCaptions
+    const directoryMatches = extractDeputyNamesFromText(withoutCaptions);
+    if (directoryMatches.length > 0) return directoryMatches;
+
+    const normalized = withoutCaptions.trim();
+    if (!normalized) return [];
+
+    const splitByPrimaryDelimiters = normalized
         .split(/\s*\|\|\s*|\n+|\s*;\s*/)
         .map(name => name.trim())
         .filter(Boolean);
+
+    if (splitByPrimaryDelimiters.length > 1) return splitByPrimaryDelimiters;
+
+    const commaTokens = normalized.split(',').map(part => part.trim()).filter(Boolean);
+    if (commaTokens.length >= 4 && commaTokens.length % 2 === 0) {
+        const paired = [];
+        for (let i = 0; i < commaTokens.length; i += 2) {
+            paired.push(`${commaTokens[i]}, ${commaTokens[i + 1]}`);
+        }
+        return paired;
+    }
+
+    return [normalized];
 }
 
-function normalizeDeputyName(value) {
-    return (value || '').trim().toLowerCase();
+function clearPendingTransferState() {
+    pendingTransfer = null;
+    document.querySelectorAll('.assignment-chip.transfer-ready').forEach(chip => {
+        chip.classList.remove('transfer-ready');
+    });
+}
+
+function buildTransferRosterMap(rows) {
+    const summary = new Map();
+
+    (rows || []).forEach(row => {
+        parseAssignedMemberValue(row.assigned_member).forEach(name => {
+            const key = normalizeDeputyName(name);
+            if (!key) return;
+
+            if (!summary.has(key)) {
+                summary.set(key, { active: false, latestEnded: null });
+            }
+
+            const item = summary.get(key);
+            const hasEnd = !!(row.transferred_out_at || '').trim();
+
+            if (!hasEnd) {
+                item.active = true;
+                return;
+            }
+
+            const endValue = (row.transferred_out_at || '').trim();
+            if (!item.latestEnded || endValue > item.latestEnded.transferred_out_at) {
+                item.latestEnded = {
+                    location: row.location_detail || row.location_group || 'Unknown location',
+                    transferred_out_at: endValue
+                };
+            }
+        });
+    });
+
+    const transfers = new Map();
+    summary.forEach((value, key) => {
+        if (!value.active && value.latestEnded) {
+            transfers.set(key, value.latestEnded);
+        }
+    });
+
+    latestTransferByDeputy = transfers;
+}
+
+function pickDisplayAssignmentRow(rowList) {
+    if (!Array.isArray(rowList) || rowList.length === 0) return null;
+    const active = rowList.find(r => !(r.transferred_out_at || '').trim());
+    if (active) return active;
+
+    const ended = rowList
+        .filter(r => (r.transferred_out_at || '').trim())
+        .sort((a, b) => (b.transferred_out_at || '').localeCompare(a.transferred_out_at || ''));
+    return ended[0] || rowList[0];
+}
+
+function renderAssignmentCellContent(row) {
+    if (!row) return '';
+
+    const name = row.assigned_member || '';
+    if (!name) return '';
+
+    if ((row.transferred_out_at || '').trim()) {
+        return `${name}<div class="transfer-caption">Transferred out at ${row.transferred_out_at}</div>`;
+    }
+
+    const start = (row.transferred_in_at || '').trim();
+    if (!start) return name;
+
+    return `${name}<div class="transfer-caption">Transferred in at ${start}</div>`;
 }
 
 function buildTransferRosterMap(rows) {
@@ -250,73 +379,6 @@ function clearPendingTransferState() {
     document.querySelectorAll('.assignment-chip.transfer-ready').forEach(chip => {
         chip.classList.remove('transfer-ready');
     });
-}
-
-function buildTransferRosterMap(rows) {
-    const summary = new Map();
-
-    (rows || []).forEach(row => {
-        parseAssignedMemberValue(row.assigned_member).forEach(name => {
-            const key = normalizeDeputyName(name);
-            if (!key) return;
-
-            if (!summary.has(key)) {
-                summary.set(key, { active: false, latestEnded: null });
-            }
-
-            const item = summary.get(key);
-            const hasEnd = !!(row.transferred_out_at || '').trim();
-
-            if (!hasEnd) {
-                item.active = true;
-                return;
-            }
-
-            const endValue = (row.transferred_out_at || '').trim();
-            if (!item.latestEnded || endValue > item.latestEnded.transferred_out_at) {
-                item.latestEnded = {
-                    location: row.location_detail || row.location_group || 'Unknown location',
-                    transferred_out_at: endValue
-                };
-            }
-        });
-    });
-
-    const transfers = new Map();
-    summary.forEach((value, key) => {
-        if (!value.active && value.latestEnded) {
-            transfers.set(key, value.latestEnded);
-        }
-    });
-
-    latestTransferByDeputy = transfers;
-}
-
-function pickDisplayAssignmentRow(rowList) {
-    if (!Array.isArray(rowList) || rowList.length === 0) return null;
-    const active = rowList.find(r => !(r.transferred_out_at || '').trim());
-    if (active) return active;
-
-    const ended = rowList
-        .filter(r => (r.transferred_out_at || '').trim())
-        .sort((a, b) => (b.transferred_out_at || '').localeCompare(a.transferred_out_at || ''));
-    return ended[0] || rowList[0];
-}
-
-function renderAssignmentCellContent(row) {
-    if (!row) return '';
-
-    const name = row.assigned_member || '';
-    if (!name) return '';
-
-    if ((row.transferred_out_at || '').trim()) {
-        return `${name}<div class="transfer-caption">Transferred out at ${row.transferred_out_at}</div>`;
-    }
-
-    const start = (row.transferred_in_at || '').trim();
-    if (!start) return name;
-
-    return `${name}<div class="transfer-caption">Transferred in at ${start}</div>`;
 }
 
 function getDeputyRecordByName(name) {
@@ -851,7 +913,7 @@ function isDeputyAvailable(deputy) {
 }
 
 function loadRoster() {
-    fetch(`/api/deputies?date=${document.getElementById("date").value || ""}`)
+    return fetch(`/api/deputies?date=${document.getElementById("date").value || ""}`)
         .then(response => response.json())
         .then(data => {
             rawDeputies = data || [];
@@ -1412,6 +1474,7 @@ function search() {
 
             if (!data || data.length === 0) {
                 latestTransferByDeputy = new Map();
+                transferOutTimesByDeputy = new Map();
                 renderRoster();
                 updateAssignmentCountBadges();
                 refreshRosterHeaderCounts();
@@ -1531,8 +1594,9 @@ window.onload = function() {
         search();
     });
 
-    loadRoster();
-    search();
+    loadRoster().then(() => {
+        search();
+    });
 };
 document.addEventListener("click", function(e) {
 
