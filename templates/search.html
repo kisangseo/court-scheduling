@@ -219,8 +219,11 @@ function parseAssignedMemberValue(value) {
     return [normalized];
 }
 
-function normalizeDeputyName(value) {
-    return (value || '').trim().toLowerCase();
+function clearPendingTransferState() {
+    pendingTransfer = null;
+    document.querySelectorAll('.assignment-chip.transfer-ready').forEach(chip => {
+        chip.classList.remove('transfer-ready');
+    });
 }
 
 function buildTransferRosterMap(rows) {
