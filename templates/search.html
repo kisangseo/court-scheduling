@@ -33,7 +33,8 @@
     <div id="assignmentsPanel">
         <div id="resultsGrid">
             <div id="postsRow" class="section-row"></div>
-            <div id="courtroomsRow" class="section-row"></div>
+            <div id="mitchellCourtroomsRow" class="section-row-single"></div>
+            <div id="cummingsCourtroomsRow" class="section-row-single"></div>
             <div id="overtimeRow" class="section-row"></div>
             <div id="juvRow" class="section-row"></div>
             <div id="juvBottomRow" class="section-row"></div>
@@ -1131,11 +1132,12 @@ function search() {
         .then(response => response.json())
         .then(data => {
             const postsRow = document.getElementById("postsRow");
-            const courtroomsRow = document.getElementById("courtroomsRow");
+            const mitchellCourtroomsRow = document.getElementById("mitchellCourtroomsRow");
+            const cummingsCourtroomsRow = document.getElementById("cummingsCourtroomsRow");
             const overtimeRow = document.getElementById("overtimeRow");
             const juvRow = document.getElementById("juvRow");
             const juvBottomRow = document.getElementById("juvBottomRow");
-            [postsRow, courtroomsRow, overtimeRow, juvRow, juvBottomRow].forEach(row => row.innerHTML = "");
+            [postsRow, mitchellCourtroomsRow, cummingsCourtroomsRow, overtimeRow, juvRow, juvBottomRow].forEach(row => row.innerHTML = "");
 
             if (!data || data.length === 0) {
                 updateAssignmentCountBadges();
@@ -1159,8 +1161,13 @@ function search() {
             postsRow.appendChild(includeMitchell ? createSectionCell("Mitchell", mitchell.posts, "Mitchell", "main", "Security Post") : createEmptySectionCell());
             postsRow.appendChild(includeCummings ? createSectionCell("Cummings", cummings.posts, "Cummings", "main", "Security Post") : createEmptySectionCell());
 
-            courtroomsRow.appendChild(includeMitchell ? createSectionCell("Courtroom", mitchell.courtrooms, "Mitchell", "Courtroom") : createEmptySectionCell());
-            courtroomsRow.appendChild(includeCummings ? createSectionCell("Courtroom", cummings.courtrooms, "Cummings", "Courtroom") : createEmptySectionCell());
+            if (includeMitchell) {
+                mitchellCourtroomsRow.appendChild(createSectionCell("Mitchell Courtroom", mitchell.courtrooms, "Mitchell", "Courtroom"));
+            }
+
+            if (includeCummings) {
+                cummingsCourtroomsRow.appendChild(createSectionCell("Cummings Courtroom", cummings.courtrooms, "Cummings", "Courtroom"));
+            }
 
             overtimeRow.appendChild(includeMitchell ? createSectionCell("Overtime", mitchell.overtime, "Mitchell", "Overtime") : createEmptySectionCell());
             overtimeRow.appendChild(includeCummings ? createSectionCell("Overtime", cummings.overtime, "Cummings", "Overtime") : createEmptySectionCell());
