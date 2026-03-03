@@ -55,6 +55,9 @@ let rawDeputies = [];
 let selectedDeputy = null;
 let globalAssignmentTotals = { total: 0, filled: 0 };
 let globalPostedNames = new Set();
+let latestTransferByDeputy = new Map();
+let transferOutTimesByDeputy = new Map();
+let pendingTransfer = null;
 
 function getPostedCacheKey(date) {
     return `postedNames:${date || ''}`;
@@ -116,10 +119,21 @@ function createRosterItem(deputy, options = {}) {
 
     const showDivision = options.showDivision === true;
     const division = (deputy.division || "Unassigned Division").trim() || "Unassigned Division";
-
-    deputyRow.textContent = showDivision
+    const mainLabel = showDivision
         ? `${deputy.full_name} - ${division} (${deputy.capacity_tag || ""})`
         : `${deputy.full_name} (${deputy.capacity_tag || ""})`;
+
+    const nameLine = document.createElement('div');
+    nameLine.textContent = mainLabel;
+    deputyRow.appendChild(nameLine);
+
+    const transferInfo = latestTransferByDeputy.get(normalizeDeputyName(deputy.full_name));
+    if (transferInfo) {
+        const caption = document.createElement('div');
+        caption.className = 'transfer-caption';
+        caption.textContent = `Transferred out of ${transferInfo.location} at ${transferInfo.transferred_out_at}`;
+        deputyRow.appendChild(caption);
+    }
 
     return deputyRow;
 }
@@ -130,23 +144,171 @@ function getAssignedNamesFromCell(cell) {
         .filter(Boolean);
 }
 
-function parseAssignedMemberValue(value) {
+function extractDeputyNamesFromText(value) {
     const text = (value || '').trim();
-    if (!text) return [];
+    if (!text || !Array.isArray(rawDeputies) || rawDeputies.length === 0) return [];
 
-    if (text.includes('||')) {
-        return text.split(/\s*\|\|\s*/).map(name => name.trim()).filter(Boolean);
+    const haystack = text.toLowerCase();
+    const matches = [];
+
+    rawDeputies.forEach(dep => {
+        const fullName = (dep.full_name || '').trim();
+        if (!fullName) return;
+
+        const needle = fullName.toLowerCase();
+        let from = 0;
+        while (from < haystack.length) {
+            const index = haystack.indexOf(needle, from);
+            if (index === -1) break;
+            matches.push({ start: index, end: index + needle.length, name: fullName });
+            from = index + 1;
+        }
+    });
+
+    if (matches.length === 0) return [];
+
+    matches.sort((a, b) => {
+        if (a.start !== b.start) return a.start - b.start;
+        return (b.end - b.start) - (a.end - a.start);
+    });
+
+    const selected = [];
+    let lastEnd = -1;
+    matches.forEach(match => {
+        if (match.start >= lastEnd) {
+            selected.push(match);
+            lastEnd = match.end;
+        }
+    });
+
+    return selected.map(item => item.name);
+}
+
+function parseAssignedMemberValue(value) {
+    const rawText = (value || '').trim();
+    if (!rawText) return [];
+
+    const withoutCaptions = rawText
+        .replace(/TRANSFERRED\s+OUT\s+AT:\s*[^\n|]*/gi, '')
+        .replace(/TRANSFERRED\s+IN\s+AT:\s*[^\n|]*/gi, '')
+        .replace(/Transferred\s+out\s+at\s*[^\n|]*/gi, '')
+        .replace(/Transferred\s+in\s+at\s*[^\n|]*/gi, '');
+
+    const directoryMatches = extractDeputyNamesFromText(withoutCaptions);
+    if (directoryMatches.length > 0) return directoryMatches;
+
+    const normalized = withoutCaptions.trim();
+    if (!normalized) return [];
+
+    const splitByPrimaryDelimiters = normalized
+        .split(/\s*\|\|\s*|\n+|\s*;\s*/)
+        .map(name => name.trim())
+        .filter(Boolean);
+
+    if (splitByPrimaryDelimiters.length > 1) return splitByPrimaryDelimiters;
+
+    const commaTokens = normalized.split(',').map(part => part.trim()).filter(Boolean);
+    if (commaTokens.length >= 4 && commaTokens.length % 2 === 0) {
+        const paired = [];
+        for (let i = 0; i < commaTokens.length; i += 2) {
+            paired.push(`${commaTokens[i]}, ${commaTokens[i + 1]}`);
+        }
+        return paired;
     }
 
-    if (text.includes('\n')) {
-        return text.split(/\n+/).map(name => name.trim()).filter(Boolean);
-    }
-
-    return [text];
+    return [normalized];
 }
 
 function normalizeDeputyName(value) {
     return (value || '').trim().toLowerCase();
+}
+
+function buildTransferRosterMap(rows) {
+    const summary = new Map();
+    const outTimes = new Map();
+
+    (rows || []).forEach(row => {
+        parseAssignedMemberValue(row.assigned_member).forEach(name => {
+            const key = normalizeDeputyName(name);
+            if (!key) return;
+
+            if (!summary.has(key)) {
+                summary.set(key, { active: false, latestEnded: null });
+            }
+
+            const item = summary.get(key);
+            const hasEnd = !!(row.transferred_out_at || '').trim();
+
+            if (!hasEnd) {
+                item.active = true;
+                return;
+            }
+
+            const endValue = (row.transferred_out_at || '').trim();
+            if (!item.latestEnded || endValue > item.latestEnded.transferred_out_at) {
+                item.latestEnded = {
+                    location: row.location_detail || row.location_group || 'Unknown location',
+                    transferred_out_at: endValue
+                };
+            }
+
+            if (!outTimes.has(key)) outTimes.set(key, new Set());
+            outTimes.get(key).add(endValue);
+        });
+    });
+
+    const transfers = new Map();
+    summary.forEach((value, key) => {
+        if (!value.active && value.latestEnded) {
+            transfers.set(key, value.latestEnded);
+        }
+    });
+
+    latestTransferByDeputy = transfers;
+    transferOutTimesByDeputy = outTimes;
+}
+
+function pickDisplayAssignmentRow(rowList) {
+    if (!Array.isArray(rowList) || rowList.length === 0) return null;
+    const active = rowList.find(r => !(r.transferred_out_at || '').trim());
+    if (active) return active;
+
+    const ended = rowList
+        .filter(r => (r.transferred_out_at || '').trim())
+        .sort((a, b) => (b.transferred_out_at || '').localeCompare(a.transferred_out_at || ''));
+    return ended[0] || rowList[0];
+}
+
+function renderAssignmentCellContent(row) {
+    if (!row) return '';
+
+    const names = parseAssignedMemberValue(row.assigned_member);
+    if (names.length === 0) return '';
+
+    const nameHtml = names.map(name => `<div class="assignment-name">${name}</div>`).join('');
+
+    if ((row.transferred_out_at || '').trim()) {
+        return `${nameHtml}<div class="transfer-caption">Transferred out at ${row.transferred_out_at}</div>`;
+    }
+
+    const start = (row.transferred_in_at || '').trim();
+    if (!start) return nameHtml;
+
+    const wasTransferredIn = names.some(name => {
+        const priorOutTimes = transferOutTimesByDeputy.get(normalizeDeputyName(name));
+        return priorOutTimes?.has(start);
+    });
+
+    if (!wasTransferredIn) return nameHtml;
+
+    return `${nameHtml}<div class="transfer-caption">Transferred in at ${start}</div>`;
+}
+
+function clearPendingTransferState() {
+    pendingTransfer = null;
+    document.querySelectorAll('.assignment-chip.transfer-ready').forEach(chip => {
+        chip.classList.remove('transfer-ready');
+    });
 }
 
 function getDeputyRecordByName(name) {
@@ -512,18 +674,30 @@ function setSelectedDeputyFromRosterItem(item) {
     item.classList.add('selected');
 }
 
-function applyDeputyToCell(dropCell, assignedName, role) {
+async function applyDeputyToCell(dropCell, assignedName, role) {
     if (!isEligibleForCell(dropCell, role)) {
         showCellWarning(dropCell, 'Select eligible personnel');
         return false;
     }
 
-    const assignmentList = ensureCellStructure(dropCell);
-    // Remove placeholder if present
-    
-    clearExistingAssignmentForName(assignedName, dropCell);
+    if (pendingTransfer && pendingTransfer.name === assignedName) {
+        try {
+            await submitTransfer(pendingTransfer, dropCell);
+            clearPendingTransferState();
+            selectedDeputy = null;
+            clearRosterSelectionUI();
+            search();
+            loadRoster();
+            return true;
+        } catch (err) {
+            console.error(err);
+            alert(`Transfer failed: ${err.message || 'Please try again.'}`);
+            return false;
+        }
+    }
 
-   
+    const assignmentList = ensureCellStructure(dropCell);
+    clearExistingAssignmentForName(assignedName, dropCell);
 
     const item = buildAssignmentChip(assignedName, role);
     assignmentList.appendChild(item);
@@ -612,6 +786,23 @@ function parseDateOnly(value) {
     return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function normalizeDateInputValue(value) {
+    const raw = (value || '').trim();
+    if (!raw) return '';
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        return raw;
+    }
+
+    const mdy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (mdy) {
+        const [, m, d, y] = mdy;
+        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+
+    return '';
+}
+
 function effectiveStatusForSearchDate(deputy) {
     const selectedDate = parseDateOnly(document.getElementById("date").value);
 
@@ -669,7 +860,7 @@ function isDeputyAvailable(deputy) {
 }
 
 function loadRoster() {
-    fetch(`/api/deputies?date=${document.getElementById("date").value || ""}`)
+    return fetch(`/api/deputies?date=${document.getElementById("date").value || ""}`)
         .then(response => response.json())
         .then(data => {
             rawDeputies = data || [];
@@ -758,24 +949,133 @@ function showCellWarning(cell, message) {
     setTimeout(() => warning.remove(), 2000);
 }
 
+function extractAssignmentFromCell(cell) {
+    const type = cell.dataset.type;
+    const room = cell.dataset.room || '';
+    return {
+        courthouse: cell.dataset.courthouse,
+        assignment_type: type,
+        location_group: type === 'Fixed Post' ? room : null,
+        location_detail: type === 'Fixed Post' ? null : room,
+        part: cell.dataset.part || ''
+    };
+}
+
+async function submitTransfer(transferState, destinationCell) {
+    const selectedDate = document.getElementById('date').value;
+    const payload = {
+        assignment_date: selectedDate,
+        deputy_name: transferState.name,
+        transfer_time: transferState.time,
+        from_assignment: transferState.fromAssignment,
+        to_assignment: extractAssignmentFromCell(destinationCell)
+    };
+
+    const response = await fetch('/api/transfer-deputy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        let message = 'Transfer failed';
+        try {
+            const data = await response.json();
+            if (data?.message) message = data.message;
+        } catch (_) {
+            // noop
+        }
+        throw new Error(message);
+    }
+}
+
 function buildAssignmentChip(name, role) {
     const chip = document.createElement('div');
     chip.className = 'assignment-chip';
     chip.dataset.name = name;
     chip.dataset.role = role || '';
-    chip.textContent = name;
 
-    chip.addEventListener('click', function () {
+    const nameLine = document.createElement('div');
+    nameLine.className = 'assignment-chip-name';
+    nameLine.textContent = name;
 
-        const confirmed = confirm(`Remove ${name} from this assignment?`);
-        if (!confirmed) return;
+    const controls = document.createElement('div');
+    controls.className = 'assignment-chip-controls';
 
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.className = 'chip-link';
+    removeButton.textContent = 'Remove';
+    removeButton.addEventListener('click', () => {
         const cell = chip.closest('.editable');
         chip.remove();
-
+        if (!cell) return;
+        if (pendingTransfer && pendingTransfer.name === name) {
+            clearPendingTransferState();
+        }
         setPendingAssignmentFromCell(cell);
         refreshRosterAssignedState();
     });
+
+    const transferLabel = document.createElement('label');
+    transferLabel.className = 'transfer-toggle';
+    const transferCheckbox = document.createElement('input');
+    transferCheckbox.type = 'checkbox';
+    const transferText = document.createElement('span');
+    transferText.textContent = 'Transfer';
+
+    const transferInput = document.createElement('input');
+    transferInput.type = 'text';
+    transferInput.className = 'transfer-time-input';
+    transferInput.placeholder = '9:30 AM';
+    transferInput.style.display = 'none';
+
+    transferCheckbox.addEventListener('change', () => {
+        const cell = chip.closest('.editable');
+        if (!cell) return;
+
+        if (!transferCheckbox.checked) {
+            transferInput.style.display = 'none';
+            transferInput.value = '';
+            if (pendingTransfer && pendingTransfer.name === name) clearPendingTransferState();
+            return;
+        }
+
+        clearPendingTransferState();
+        chip.classList.add('transfer-ready');
+        transferInput.style.display = 'inline-block';
+        transferInput.focus();
+    });
+
+    const armTransfer = () => {
+        if (!transferCheckbox.checked) return;
+        const cell = chip.closest('.editable');
+        if (!cell) return;
+
+        const normalizedTime = normalizeUserTimeValue(transferInput.value);
+        if (!normalizedTime) return;
+
+        transferInput.value = normalizedTime;
+        pendingTransfer = {
+            name,
+            role: role || '',
+            time: normalizedTime,
+            fromAssignment: extractAssignmentFromCell(cell)
+        };
+        selectedDeputy = { name, role: role || '' };
+    };
+
+    transferInput.addEventListener('change', armTransfer);
+    transferInput.addEventListener('blur', armTransfer);
+
+    transferLabel.appendChild(transferCheckbox);
+    transferLabel.appendChild(transferText);
+    controls.appendChild(removeButton);
+    controls.appendChild(transferLabel);
+
+    chip.appendChild(nameLine);
+    chip.appendChild(controls);
+    chip.appendChild(transferInput);
 
     return chip;
 }
@@ -856,14 +1156,14 @@ function initAssignmentDropzones() {
             },
             animation: 100,
             sort: false,
-            onAdd: (evt) => {
+            onAdd: async (evt) => {
                 const dropCell = evt.to;
                 const item = evt.item;
                 const role = (item.dataset.role || '').trim().toUpperCase();
                 const assignedName = (item.dataset.name || item.textContent || '').trim();
 
                 item.remove();
-                applyDeputyToCell(dropCell, assignedName, role);
+                await applyDeputyToCell(dropCell, assignedName, role);
             }
         });
     });
@@ -989,8 +1289,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 )
             );
             const fallbackMatches = postsType.filter(r => r.location_group === slot.post && !r.part && !r.location_detail);
-            const pickPreferredRow = (rowList) => rowList.find(r => (r.assigned_member || '').trim()) || rowList[0] || null;
-            const assigned = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
+            const assigned = pickDisplayAssignmentRow(slotMatches) || pickDisplayAssignmentRow(fallbackMatches);
 
             const tr = document.createElement("tr");
             const showPost = index === 0 || posts[index - 1].post !== slot.post;
@@ -1004,7 +1303,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                     data-room="${slot.post}"
                     data-slot-index="${index}"
                     data-part="${slot.part || ""}">
-                    ${assigned ? (assigned.assigned_member || "") : ""}
+                    ${renderAssignmentCellContent(assigned)}
                 </td>
             `;
             postsBody.appendChild(tr);
@@ -1040,7 +1339,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
     const courtroomBody = courtroomTable.querySelector("tbody");
 
     rooms.forEach(room => {
-        const row = courtroomRows.find(r => r.location_detail === room);
+        const row = pickDisplayAssignmentRow(courtroomRows.filter(r => r.location_detail === room));
         const tr = document.createElement("tr");
         tr.classList.add("courtroom-meta-row");
         tr.dataset.date = selectedDate;
@@ -1051,7 +1350,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
             <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.judge_name || "") : ""}</td>
             <td>${room}${row && row.part ? "/" + row.part : ""}</td>
             <td class="editable-assignment" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.assignment_notes || "") : ""}</td>
-            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.assigned_member || "") : ""}</td>
+            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${renderAssignmentCellContent(row)}</td>
             <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="start_time" aria-label="${courthouse} ${room} start time"></td>
             <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="restart_time" aria-label="${courthouse} ${room} restart time"></td>
             <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="adjourned_time" aria-label="${courthouse} ${room} adjourned time"></td>
@@ -1091,7 +1390,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
         tr.innerHTML = `
             <td>${row.location_detail || ""}</td>
             <td>${row.shift_time || ""}</td>
-            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${row.location_detail}" data-shift="${row.shift_time || ""}" data-part="">${row.assigned_member || ""}</td>
+            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${row.location_detail}" data-shift="${row.shift_time || ""}" data-part="">${renderAssignmentCellContent(row)}</td>
             <td class="editable-assignment" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${row.location_detail || ""}" data-part="${row.assigned_member || ""}">${row.assignment_notes || ""}</td>
         `;
         overtimeBody.appendChild(tr);
@@ -1121,10 +1420,16 @@ function search() {
             [postsRow, courtroomsRow, overtimeRow, juvRow, juvBottomRow].forEach(row => row.innerHTML = "");
 
             if (!data || data.length === 0) {
+                latestTransferByDeputy = new Map();
+                transferOutTimesByDeputy = new Map();
+                renderRoster();
                 updateAssignmentCountBadges();
                 refreshRosterHeaderCounts();
                 return;
             }
+
+            buildTransferRosterMap(data);
+            renderRoster();
 
             const grouped = {};
             data.forEach(row => {
@@ -1227,7 +1532,8 @@ function renderTransportTable(date) {
 window.onload = function() {
     const today = new Date().toISOString().split('T')[0];
     const savedDate = localStorage.getItem('searchPageDate');
-    document.getElementById("date").value = savedDate || today;
+    const normalizedSavedDate = normalizeDateInputValue(savedDate);
+    document.getElementById("date").value = normalizedSavedDate || today;
 
     document.getElementById("showFullRoster").addEventListener("change", renderRoster);
     document.getElementById("courthouse").addEventListener("change", search);
@@ -1236,8 +1542,13 @@ window.onload = function() {
         search();
     });
 
-    loadRoster();
-    search();
+    loadRoster()
+        .catch(err => {
+            console.error('Roster load failed on init:', err);
+        })
+        .finally(() => {
+            search();
+        });
 };
 document.addEventListener("click", function(e) {
 
@@ -1399,7 +1710,7 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         });
 });
 
-document.addEventListener('click', function(e) {
+document.addEventListener('click', async function(e) {
     const rosterItem = e.target.closest('#rosterList .roster-item');
     if (rosterItem) {
         setSelectedDeputyFromRosterItem(rosterItem);
@@ -1409,7 +1720,7 @@ document.addEventListener('click', function(e) {
     const editableCell = e.target.closest('.editable');
     if (!editableCell || !selectedDeputy) return;
 
-    const applied = applyDeputyToCell(editableCell, selectedDeputy.name, selectedDeputy.role);
+    const applied = await applyDeputyToCell(editableCell, selectedDeputy.name, selectedDeputy.role);
     if (applied) {
         clearRosterSelectionUI();
         selectedDeputy = null;
