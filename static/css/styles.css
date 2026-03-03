@@ -60,7 +60,18 @@ th, td {
     align-items: start;
 }
 
+.section-row-single {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+
 .section-row > div {
+    min-width: 0;
+}
+
+.section-row-single > div {
     min-width: 0;
 }
 
@@ -198,6 +209,10 @@ h4 {
         grid-template-columns: 1fr;
     }
 
+    .section-row-single {
+        grid-template-columns: 1fr;
+    }
+
     #rosterPanel {
         position: static;
         width: 100%;
@@ -294,7 +309,13 @@ h4 {
         grid-template-columns: 1fr;
     }
 
+    .section-row-single {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
     .section-row > div,
+    .section-row-single > div,
     #borrowedDeputiesPanel {
         width: 100%;
         margin-bottom: 12px;
