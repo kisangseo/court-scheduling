@@ -21,6 +21,10 @@
             color: #067647;
             font-weight: 700;
         }
+        .status-blue {
+            color: #175cd3;
+            font-weight: 700;
+        }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
@@ -451,14 +455,26 @@ function createDeputyRow(dep, includeDivision) {
     return tr;
 }
 
+function getTotalPostsForSelectedDate() {
+    const date = (document.getElementById("rosterDate").value || "").trim();
+    if (!date) return 0;
+
+    try {
+        const raw = localStorage.getItem(`assignmentTotals:${date}`);
+        if (!raw) return 0;
+        const parsed = JSON.parse(raw);
+        return Number(parsed?.total || 0);
+    } catch (_) {
+        return 0;
+    }
+}
+
 function updateCourtSecurityStatusCounts(deputies) {
     const cs = deputies.filter(isCourtSecurityDeputy);
+    const totalPosts = getTotalPostsForSelectedDate();
     const sick = cs.filter(dep => statusIncludes(dep, "Sick")).length;
     const leave = cs.filter(dep => statusIncludes(dep, "Leave")).length;
-    const lightDuty = cs.filter(dep => statusIncludes(dep, "Light Duty")).length;
-    const unscheduled = cs.filter(dep => statusIncludes(dep, "Unscheduled")).length;
-    const unavailable = cs.filter(dep => statusIncludes(dep, "Unavailable")).length;
-    const total = cs.length;
+
     const out = cs.filter(dep =>
         statusIncludes(dep, "Sick") ||
         statusIncludes(dep, "Leave") ||
@@ -467,23 +483,14 @@ function updateCourtSecurityStatusCounts(deputies) {
         statusIncludes(dep, "Unavailable")
     ).length;
 
-    const available = total - out;
-    const parts = [];
+    const available = Math.max(cs.length - out, 0);
 
-    if (sick > 0) parts.push(`<span class="status-red">Sick ${sick}</span>`);
-    if (leave > 0) parts.push(`<span class="status-red">Leave ${leave}</span>`);
-    if (lightDuty > 0) parts.push(`<span class="status-red">Light Duty ${lightDuty}</span>`);
-    if (unscheduled > 0) parts.push(`<span class="status-orange">Unscheduled ${unscheduled}</span>`);
-    if (unavailable > 0) parts.push(`<span class="status-red">Unavailable ${unavailable}</span>`);
-
-    if (parts.length === 0) {
-        document.getElementById("courtSecurityStatusCounts").innerHTML =
-            `<span class="status-green">Available ${available}</span>`;
-        return;
-    }
-
-    parts.push(`<span class="status-green">Available ${available}</span>`);
-    document.getElementById("courtSecurityStatusCounts").innerHTML = parts.join(' / ');
+    document.getElementById("courtSecurityStatusCounts").innerHTML = [
+        `<span class="status-blue">Total Posts ${totalPosts}</span>`,
+        `<span class="status-green">Available ${available}</span>`,
+        `<span class="status-red">Sick ${sick}</span>`,
+        `<span class="status-red">Leave ${leave}</span>`
+    ].join(' / ');
 }
 
 function loadRoster() {
