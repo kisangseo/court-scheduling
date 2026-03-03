@@ -168,7 +168,7 @@ th, td {
 .cell-warning {
     color: #b42318;
     font-size: 12px;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
 .metric-red { color: #b42318; font-weight: 700; }
@@ -301,5 +301,5 @@ h4 {
 .transfer-caption {
     font-size: 11px;
     color: #667085;
-    margin-top: 4px;
+    margin-top: 2px;
 }

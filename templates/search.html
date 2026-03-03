@@ -224,13 +224,13 @@ function renderAssignmentCellContent(row) {
     if (!name) return '';
 
     if ((row.transferred_out_at || '').trim()) {
-        return `${name}<div class="transfer-caption">TRANSFERRED OUT AT: ${row.transferred_out_at}</div>`;
+        return `${name}<div class="transfer-caption">Transferred out at ${row.transferred_out_at}</div>`;
     }
 
     const start = (row.transferred_in_at || '').trim();
     if (!start) return name;
 
-    return `${name}<div class="transfer-caption">TRANSFERRED IN AT: ${start}</div>`;
+    return `${name}<div class="transfer-caption">Transferred in at ${start}</div>`;
 }
 
 function getDeputyRecordByName(name) {
