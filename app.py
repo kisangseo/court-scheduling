@@ -30,6 +30,29 @@ def _ensure_courtroom_meta_table(cursor):
     """)
 
 
+def _resolve_transfer_columns(cursor):
+    # Prefer the deployment's explicit transfer columns first.
+    candidates = [
+        ("transfer_in_time", "transfer_out_time"),
+        ("transferred_in_at", "transferred_out_at"),
+        ("transfer_start_time", "transfer_end_time"),
+    ]
+
+    for in_col, out_col in candidates:
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = 'dbo'
+              AND TABLE_NAME = 'court_assignments'
+              AND COLUMN_NAME IN (?, ?)
+        """, (in_col, out_col))
+        count = cursor.fetchone()[0]
+        if count == 2:
+            return in_col, out_col
+
+    return None, None
+
+
 def _normalize_status_type(status_type):
     if not status_type:
         return None
@@ -957,7 +980,22 @@ def search():
         cursor.connection.close()
     courthouse = request.args.get("courthouse")
 
-    query = """
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    transfer_in_col, transfer_out_col = _resolve_transfer_columns(cursor)
+    if transfer_in_col and transfer_out_col:
+        transfer_select = f"""
+            {transfer_in_col} AS transferred_in_at,
+            {transfer_out_col} AS transferred_out_at
+        """
+    else:
+        transfer_select = """
+            CAST('' AS NVARCHAR(16)) AS transferred_in_at,
+            CAST('' AS NVARCHAR(16)) AS transferred_out_at
+        """
+
+    query = f"""
         SELECT TOP 200
             assignment_date,
             courthouse,
@@ -967,7 +1005,8 @@ def search():
             judge_name,
             part,
             assigned_member,
-            assignment_notes
+            assignment_notes,
+            {transfer_select}
         FROM dbo.court_assignments
         WHERE 1=1
     """
@@ -988,8 +1027,6 @@ def search():
 
     query += " ORDER BY assignment_date DESC"
 
-    conn = get_conn()
-    cursor = conn.cursor()
     cursor.execute(query, params)
 
     columns = [column[0] for column in cursor.description]
@@ -998,6 +1035,86 @@ def search():
     conn.close()
 
     return jsonify(results)
+
+
+@app.route("/api/transfer-deputy", methods=["POST"])
+def transfer_deputy():
+    data = request.json or {}
+    assignment_date = data.get("assignment_date")
+    deputy_name = (data.get("deputy_name") or "").strip()
+    transfer_time = data.get("transfer_time")
+    from_assignment = data.get("from_assignment") or {}
+    to_assignment = data.get("to_assignment") or {}
+
+    if not assignment_date or not deputy_name or not transfer_time:
+        return jsonify({"status": "error", "message": "Missing required transfer fields"}), 400
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    transfer_in_col, transfer_out_col = _resolve_transfer_columns(cursor)
+    if not transfer_in_col or not transfer_out_col:
+        conn.close()
+        return jsonify({"status": "error", "message": "Transfer columns not found on court_assignments"}), 400
+
+    cursor.execute(f"""
+        UPDATE dbo.court_assignments
+        SET {transfer_out_col} = ?
+        WHERE assignment_date = ?
+          AND courthouse = ?
+          AND assignment_type = ?
+          AND ISNULL(location_group, '') = ISNULL(?, '')
+          AND ISNULL(location_detail, '') = ISNULL(?, '')
+          AND ISNULL(part, '') = ISNULL(?, '')
+          AND ISNULL({transfer_out_col}, '') = ''
+          AND assigned_member = ?
+    """, (
+        transfer_time,
+        assignment_date,
+        from_assignment.get("courthouse"),
+        from_assignment.get("assignment_type"),
+        from_assignment.get("location_group"),
+        from_assignment.get("location_detail"),
+        from_assignment.get("part"),
+        deputy_name,
+    ))
+
+    to_type = to_assignment.get("assignment_type")
+    to_room = to_assignment.get("location_detail")
+    to_location_group = to_room if to_type == "Fixed Post" else None
+    to_location_detail = None if to_type == "Fixed Post" else to_room
+
+    cursor.execute(f"""
+        INSERT INTO dbo.court_assignments (
+            assignment_date,
+            courthouse,
+            assignment_type,
+            location_group,
+            location_detail,
+            part,
+            judge_name,
+            shift_time,
+            assigned_member,
+            assignment_notes,
+            {transfer_in_col},
+            {transfer_out_col},
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL, ?, NULL, GETDATE())
+    """, (
+        assignment_date,
+        to_assignment.get("courthouse"),
+        to_type,
+        to_location_group,
+        to_location_detail,
+        to_assignment.get("part") or "",
+        deputy_name,
+        transfer_time,
+    ))
+
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success"})
 
 if __name__ == "__main__":
     app.run(debug=True)
