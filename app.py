@@ -31,6 +31,7 @@ def _ensure_courtroom_meta_table(cursor):
 
 
 def _resolve_transfer_columns(cursor):
+    # Prefer the deployment's explicit transfer columns first.
     candidates = [
         ("transfer_in_time", "transfer_out_time"),
         ("transferred_in_at", "transferred_out_at"),

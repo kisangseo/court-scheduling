@@ -219,6 +219,13 @@ function parseAssignedMemberValue(value) {
     return [normalized];
 }
 
+function clearPendingTransferState() {
+    pendingTransfer = null;
+    document.querySelectorAll('.assignment-chip.transfer-ready').forEach(chip => {
+        chip.classList.remove('transfer-ready');
+    });
+}
+
 function buildTransferRosterMap(rows) {
     const summary = new Map();
     const outTimes = new Map();
