@@ -537,6 +537,14 @@ function applyDeputyToCell(dropCell, assignedName, role) {
     
 
     setPendingAssignmentFromCell(dropCell);
+    fetch('/api/transfer-in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignment_date: dropCell.dataset.date, full_name: assignedName })
+        })
+        .then(() => fetchTransfersForDate())
+        .then(() => applyTransferCaptionToRosterAndGrid())
+        .catch(() => {});
     refreshRosterAssignedState();
     return true;
 }
@@ -765,26 +773,96 @@ function showCellWarning(cell, message) {
 }
 
 function buildAssignmentChip(name, role) {
-    const chip = document.createElement('div');
-    chip.className = 'assignment-chip';
-    chip.dataset.name = name;
-    chip.dataset.role = role || '';
-    chip.textContent = name;
+  const chip = document.createElement('span');
+  chip.className = 'assignment-chip';
+  chip.dataset.name = (name || '').trim();
+  chip.dataset.role = (role || '').trim();
+  chip.textContent = (name || '').trim();
 
-    chip.addEventListener('click', function () {
+  chip.addEventListener('click', function (e) {
+    e.stopPropagation();
 
-        const confirmed = confirm(`Remove ${name} from this assignment?`);
-        if (!confirmed) return;
+    // remove any existing popover
+    document.querySelectorAll('.assignment-action-popover').forEach(p => p.remove());
 
-        const cell = chip.closest('.editable');
-        chip.remove();
+    const cell = chip.closest('.editable');
+    if (!cell) return;
 
-        setPendingAssignmentFromCell(cell);
-        refreshRosterAssignedState();
+    const deputyName = (chip.dataset.name || chip.textContent || '').trim();
+    const date = cell.dataset.date;
+
+    const pop = document.createElement('div');
+    pop.className = 'assignment-action-popover';
+    pop.style.position = 'absolute';
+    pop.style.zIndex = 9999;
+    pop.style.background = 'white';
+    pop.style.border = '1px solid #D0D5DD';
+    pop.style.borderRadius = '8px';
+    pop.style.boxShadow = '0 8px 24px rgba(16,24,40,.12)';
+    pop.style.padding = '8px';
+    pop.style.display = 'flex';
+    pop.style.gap = '8px';
+
+    const btnTransfer = document.createElement('button');
+    btnTransfer.type = 'button';
+    btnTransfer.textContent = 'Transfer';
+
+    const btnRemove = document.createElement('button');
+    btnRemove.type = 'button';
+    btnRemove.textContent = 'Remove';
+
+    const btnCancel = document.createElement('button');
+    btnCancel.type = 'button';
+    btnCancel.textContent = 'Cancel';
+
+    pop.appendChild(btnTransfer);
+    pop.appendChild(btnRemove);
+    pop.appendChild(btnCancel);
+
+    const rect = chip.getBoundingClientRect();
+    pop.style.left = (window.scrollX + rect.left) + 'px';
+    pop.style.top  = (window.scrollY + rect.bottom + 6) + 'px';
+    document.body.appendChild(pop);
+
+    const closePop = () => pop.remove();
+
+    const removeChip = () => {
+      chip.remove();
+      setPendingAssignmentFromCell(cell);
+      refreshRosterAssignedState();
+      closePop();
+    };
+
+    btnCancel.addEventListener('click', (ev) => { ev.stopPropagation(); closePop(); });
+    btnRemove.addEventListener('click', (ev) => { ev.stopPropagation(); removeChip(); });
+
+    btnTransfer.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      fetch('/api/transfer-out', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignment_date: date, full_name: deputyName })
+      })
+      .then(() => fetchTransfersForDate())
+      .then(() => { removeChip(); applyTransferCaptionToRosterAndGrid(); })
+      .catch(() => { removeChip(); });
     });
 
-    return chip;
+    setTimeout(() => {
+      const onDocClick = (evt) => {
+        if (!evt.target.closest('.assignment-action-popover') && !evt.target.closest('.assignment-chip')) {
+          document.removeEventListener('click', onDocClick);
+          closePop();
+        }
+      };
+      document.addEventListener('click', onDocClick);
+    }, 0);
+  });
+
+  return chip;
 }
+
+
 
 function clearExistingAssignmentForName(name, excludeCell) {
     document.querySelectorAll('.editable').forEach(cell => {
@@ -913,13 +991,12 @@ function createSectionCell(title, contentEl, headerCourthouse = "", headerSectio
     cell.className = "section-cell";
 
     const header = document.createElement("h3");
+
+    // ✅ Only show per-courthouse badge on the courthouse MAIN header
     if (headerCourthouse && headerSection === "main") {
         header.innerHTML = `${title} <span class="counts-inline" data-main-badge="${headerCourthouse}"></span>`;
-    } else if (headerCourthouse && headerSection) {
-        header.innerHTML = `${title} <span class="counts-inline" data-badge-key="${headerCourthouse}|${headerSection}"></span>`;
-    } else if (headerCourthouse) {
-        header.innerHTML = `${title} <span class="counts-inline" data-courthouse-header="${headerCourthouse}"></span>`;
     } else {
+        // ✅ No counters on Courtrooms / Posts / Overtime headers
         header.textContent = title;
     }
 
@@ -955,7 +1032,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
         postsTable.innerHTML = `
             <thead>
                 <tr>
-                    <th>Security Post</th>
+                    <th>Post</th>
                     <th>Shift</th>
                     <th>Deputy</th>
                 </tr>
@@ -1118,7 +1195,70 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
 
     return sections;
 }
+let transferMap = {}; // { "Name": { out: "9:05 AM", in: "11:02 AM" } }
 
+function fetchTransfersForDate() {
+  const date = document.getElementById("date")?.value;
+  if (!date) { transferMap = {}; return Promise.resolve(); }
+
+  return fetch(`/api/transfers?date=${date}`)
+    .then(r => r.json())
+    .then(rows => {
+      transferMap = {};
+      (rows || []).forEach(row => {
+        const name = (row.full_name || '').trim();
+        if (!name) return;
+        transferMap[name] = { out: row.out_time || null, in: row.in_time || null };
+      });
+    })
+    .catch(() => { transferMap = {}; });
+}
+
+function applyTransferCaptionToRosterAndGrid() {
+  const format = (name) => {
+    const t = transferMap[(name || '').trim()];
+    if (!t || !t.out) return "";
+    return t.in ? `Transferred out: ${t.out}, In: ${t.in}` : `Transferred out: ${t.out}`;
+  };
+
+  // add caption under roster names
+  document.querySelectorAll('#rosterList .roster-item').forEach(item => {
+    const name = (item.dataset.name || '').trim();
+    const text = format(name);
+
+    let cap = item.querySelector('.transfer-caption');
+    if (!text) { if (cap) cap.remove(); return; }
+
+    if (!cap) {
+      cap = document.createElement('div');
+      cap.className = 'transfer-caption';
+      cap.style.color = '#667085';
+      cap.style.fontSize = '11px';
+      cap.style.marginTop = '2px';
+      item.appendChild(cap);
+    }
+    cap.textContent = text;
+  });
+
+  // add caption next to chips in grid
+  document.querySelectorAll('.assignment-chip').forEach(chip => {
+    const name = (chip.dataset.name || chip.textContent || '').trim();
+    const text = format(name);
+
+    let cap = chip.querySelector('.transfer-caption');
+    if (!text) { if (cap) cap.remove(); return; }
+
+    if (!cap) {
+      cap = document.createElement('span');
+      cap.className = 'transfer-caption';
+      cap.style.color = '#667085';
+      cap.style.fontSize = '11px';
+      cap.style.marginLeft = '6px';
+      chip.appendChild(cap);
+    }
+    cap.textContent = `(${text})`;
+  });
+}
 function search() {
     const name = document.getElementById("name").value;
     const date = document.getElementById("date").value;
@@ -1128,21 +1268,22 @@ function search() {
     localStorage.setItem('searchPageDate', date || '');
     fetchGlobalAssignmentTotals(date);
 
-    fetch(`/api/search?name=${name}&date=${date}&courthouse=${courthouse}`)
+    fetch(`/api/search?name=${encodeURIComponent(name)}&date=${encodeURIComponent(date)}&courthouse=${encodeURIComponent(courthouse)}`)
         .then(response => response.json())
         .then(data => {
             const postsRow = document.getElementById("postsRow");
-            const mitchellCourtroomsRow = document.getElementById("mitchellCourtroomsRow");
-            const cummingsCourtroomsRow = document.getElementById("cummingsCourtroomsRow");
+            const courtroomsRow = document.getElementById("courtroomsRow");
             const overtimeRow = document.getElementById("overtimeRow");
             const juvRow = document.getElementById("juvRow");
             const juvBottomRow = document.getElementById("juvBottomRow");
 
+            // Panels that already exist in the DOM (move them into the right column later)
+            const transportPanel = document.getElementById("transportPanel");
+            const borrowedPanel = document.getElementById("borrowedDeputiesPanel");
+
             [postsRow, courtroomsRow, overtimeRow, juvRow, juvBottomRow]
                 .filter(Boolean)
-                .forEach(row => {
-                    row.innerHTML = "";
-                });
+                .forEach(row => row.innerHTML = "");
 
             if (!postsRow || !courtroomsRow || !overtimeRow || !juvRow || !juvBottomRow) {
                 console.warn("Search layout row missing; skipping render to avoid runtime crash.");
@@ -1164,40 +1305,103 @@ function search() {
             const mitchell = buildCourthouseSections("Mitchell", grouped["Mitchell"] || [], date);
             const cummings = buildCourthouseSections("Cummings", grouped["Cummings"] || [], date);
             const juvenile = buildCourthouseSections("Juvenile", grouped["Juvenile"] || [], date);
+
             const includeMitchell = !courthouse || courthouse === "Mitchell";
             const includeCummings = !courthouse || courthouse === "Cummings";
             const includeJuvenile = !courthouse || courthouse === "Juvenile";
 
-            postsRow.appendChild(includeMitchell ? createSectionCell("Mitchell", mitchell.posts, "Mitchell", "main", "Security Post") : createEmptySectionCell());
-            postsRow.appendChild(includeCummings ? createSectionCell("Cummings", cummings.posts, "Cummings", "main", "Security Post") : createEmptySectionCell());
+            // =========================
+            // POSTS (top headers KEEP counters)
+            // =========================
+            postsRow.appendChild(
+                includeMitchell
+                    ? createSectionCell("Mitchell", mitchell.posts, "Mitchell", "main", "Security Post")
+                    : createEmptySectionCell()
+            );
+
+            postsRow.appendChild(
+                includeCummings
+                    ? createSectionCell("Cummings", cummings.posts, "Cummings", "main", "Security Post")
+                    : createEmptySectionCell()
+            );
+
+            // COURTROOMS (each courthouse gets its OWN full-width row)
+
+            // Mitchell Courtroom (NO counter)
+            if (includeMitchell) {
+                const mCell = createSectionCell("Mitchell Courtroom", mitchell.courtrooms);
+                mCell.style.gridColumn = "1 / span 2";
+                courtroomsRow.appendChild(mCell);
+            }
+
+            // Cummings Courtroom (NO counter)
+            if (includeCummings) {
+                const cCell = createSectionCell("Cummings Courtroom", cummings.courtrooms);
+                cCell.style.gridColumn = "1 / span 2";
+                courtroomsRow.appendChild(cCell);
+            }
+
+            // Juvenile Courtroom (WITH counter)
+            if (includeJuvenile) {
+                const jCell = createSectionCell("Juvenile", juvenile.courtrooms, "Juvenile", "main", "Courtroom");
+                jCell.style.gridColumn = "1 / span 2";
+                courtroomsRow.appendChild(jCell);
+            }
+
+            // Not used anymore for juvenile courtrooms
+            juvRow.innerHTML = "";
+            juvBottomRow.innerHTML = "";
+
+            // =========================
+            // OVERTIME LEFT + DETAILS RIGHT
+            // =========================
+            const overtimeLeft = document.createElement("div");
 
             if (includeMitchell) {
-                courtroomsRow.appendChild(createSectionCell("Mitchell Courtroom", mitchell.courtrooms, "Mitchell", "Courtroom"));
+                const h = document.createElement("h4");
+                h.textContent = "Mitchell Overtime";
+                overtimeLeft.appendChild(h);
+                overtimeLeft.appendChild(mitchell.overtime);
             }
 
             if (includeCummings) {
-                courtroomsRow.appendChild(createSectionCell("Cummings Courtroom", cummings.courtrooms, "Cummings", "Courtroom"));
+                const h = document.createElement("h4");
+                h.textContent = "Cummings Overtime";
+                overtimeLeft.appendChild(h);
+                overtimeLeft.appendChild(cummings.overtime);
             }
 
-            overtimeRow.appendChild(includeMitchell ? createSectionCell("Overtime", mitchell.overtime, "Mitchell", "Overtime") : createEmptySectionCell());
-            overtimeRow.appendChild(includeCummings ? createSectionCell("Overtime", cummings.overtime, "Cummings", "Overtime") : createEmptySectionCell());
+            if (includeJuvenile) {
+                const h = document.createElement("h4");
+                h.textContent = "Juvenile Overtime";
+                overtimeLeft.appendChild(h);
+                overtimeLeft.appendChild(juvenile.overtime);
+            }
 
-            const transportPanel = document.getElementById("transportPanel");
-            const borrowedPanel = document.getElementById("borrowedDeputiesPanel");
+            overtimeRow.appendChild(createSectionCell("Overtime", overtimeLeft));
 
-            juvRow.appendChild(includeJuvenile ? createSectionCell("Juvenile", juvenile.courtrooms, "Juvenile", "main", "Courtroom") : createEmptySectionCell());
-            juvRow.appendChild(includeJuvenile ? (transportPanel || createEmptySectionCell()) : createEmptySectionCell());
+            // Right side: Transport + Borrowed stacked
+            const rightStack = document.createElement("div");
+            rightStack.style.display = "flex";
+            rightStack.style.flexDirection = "column";
+            rightStack.style.gap = "16px";
 
-            juvBottomRow.appendChild(includeJuvenile ? createSectionCell("Overtime", juvenile.overtime, "Juvenile", "Overtime") : createEmptySectionCell());
-            juvBottomRow.appendChild(includeJuvenile ? (borrowedPanel || createEmptySectionCell()) : createEmptySectionCell());
+            if (transportPanel) rightStack.appendChild(transportPanel);
+            if (borrowedPanel) rightStack.appendChild(borrowedPanel);
 
+            // Put it into a real section cell so it aligns in the grid
+            overtimeRow.appendChild(createSectionCell("Details", rightStack));
+
+            // =========================
+            // Init + repaint
+            // =========================
             initAssignmentDropzones();
+            fetchTransfersForDate().then(() => applyTransferCaptionToRosterAndGrid());
             refreshRosterAssignedState();
             renderTransportTable(date);
             loadCourtroomMeta(date);
         });
 }
-
 function loadCourtroomMeta(date) {
     if (!date) return;
     fetch(`/api/get-courtroom-meta?date=${date}`)
@@ -1251,6 +1455,7 @@ function renderTransportTable(date) {
             });
 
             initAssignmentDropzones();
+            fetchTransfersForDate().then(() => applyTransferCaptionToRosterAndGrid());
             refreshRosterAssignedState();
         })
         .catch(() => {

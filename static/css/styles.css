@@ -132,7 +132,29 @@ th, td {
     min-height: 28px;
 }
 
+.assignment-action-popover {
+  position: absolute;
+  z-index: 9999;
+  background: white;
+  border: 1px solid #D0D5DD;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(16,24,40,0.12);
+  padding: 8px;
+  display: flex;
+  gap: 8px;
+}
 
+.assignment-action-popover button {
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.transfer-caption {
+  color: #667085;
+  font-size: 11px;
+  margin-left: 6px;
+}
 
 .assignment-list {
     display: flex;
@@ -274,9 +296,15 @@ h4 {
 
 .courtroom-table th:nth-child(2),
 .courtroom-table td:nth-child(2) {
-    width: 12%;
+    width: 5%;
     white-space: normal;
 }
+.courtroom-table th:nth-child(1),
+.courtroom-table td:nth-child(1) {
+  width: 140px;  /* Judge */
+}
+
+
 
 .courtroom-table th:nth-child(4),
 .courtroom-table td:nth-child(4) {
