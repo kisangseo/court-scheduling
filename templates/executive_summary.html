@@ -150,6 +150,10 @@ function normalizeDeputyName(value) {
     return (value || '').trim().toLowerCase();
 }
 
+function countHighProfileCases(courtroomMetaRows) {
+    return (courtroomMetaRows || []).filter(row => !!row.is_high_profile).length;
+}
+
 function countBorrowedDeputies(assignments, deputies) {
     const deputyByName = new Map(
         deputies.map(dep => [normalizeDeputyName(dep.full_name), dep])
@@ -187,9 +191,10 @@ async function loadSummary() {
         const dayResults = await Promise.all(weekDates.map(async (dateObj) => {
             const dayIso = formatDateISO(dateObj);
 
-            const [deputiesRes, assignmentsRes] = await Promise.all([
+            const [deputiesRes, assignmentsRes, courtroomMetaRes] = await Promise.all([
                 fetch(`/api/deputies?date=${encodeURIComponent(dayIso)}`),
-                fetch(`/api/search?date=${encodeURIComponent(dayIso)}`)
+                fetch(`/api/search?date=${encodeURIComponent(dayIso)}`),
+                fetch(`/api/get-courtroom-meta?date=${encodeURIComponent(dayIso)}`)
             ]);
 
             if (!deputiesRes.ok) {
@@ -200,8 +205,13 @@ async function loadSummary() {
                 throw new Error(`Failed to load assignments for ${dayIso}`);
             }
 
+            if (!courtroomMetaRes.ok) {
+                throw new Error(`Failed to load courtroom metadata for ${dayIso}`);
+            }
+
             const deputies = await deputiesRes.json();
             const assignments = await assignmentsRes.json();
+            const courtroomMetaRows = await courtroomMetaRes.json();
             const courtSecurityDeputies = deputies.filter(isCourtSecurity);
             const unavailableBreakdown = courtSecurityDeputies.reduce((totals, dep) => {
                 const breakdown = getUnavailableBreakdown(dep.current_status);
@@ -218,11 +228,13 @@ async function loadSummary() {
             const availableCount = courtSecurityDeputies.length - unavailableAnyCount;
             const borrowedCount = countBorrowedDeputies(assignments, deputies);
             const neededCount = getTotalNeededFromAssignments(assignments);
+            const highProfileCaseCount = countHighProfileCases(courtroomMetaRows);
 
             return {
                 label: dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }),
                 needed: neededCount,
                 available: availableCount,
+                highProfileCases: highProfileCaseCount,
                 unavailableBreakdown,
                 borrowed: borrowedCount
             };
@@ -240,6 +252,7 @@ function renderSummary(dayResults) {
     const headers = dayResults.map(day => `<th>${day.label}</th>`).join('');
     const neededCells = dayResults.map(day => `<td>${day.needed}</td>`).join('');
     const availableCells = dayResults.map(day => `<td>${day.available}</td>`).join('');
+    const highProfileCells = dayResults.map(day => `<td>${day.highProfileCases || 0}</td>`).join('');
     const sickCells = dayResults.map(day => `<td>Sick: ${day.unavailableBreakdown.sick}</td>`).join('');
     const unavailableCells = dayResults.map(day => `<td>Unavailable: ${day.unavailableBreakdown.unavailable}</td>`).join('');
     const leaveCells = dayResults.map(day => `<td>Leave: ${day.unavailableBreakdown.leave}</td>`).join('');
@@ -262,6 +275,10 @@ function renderSummary(dayResults) {
                 <tr>
                     <td class="metric-label">Available in Division (Court Security)</td>
                     ${availableCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">High Profile Case</td>
+                    ${highProfileCells}
                 </tr>
                 <tr>
                     <td class="metric-label">Number Unavailable Breakdown</td>

@@ -23,9 +23,15 @@ def _ensure_courtroom_meta_table(cursor):
                 restart_time NVARCHAR(16) NULL,
                 adjourned_time NVARCHAR(16) NULL,
                 is_down BIT NOT NULL DEFAULT 0,
+                is_high_profile BIT NOT NULL DEFAULT 0,
                 updated_at DATETIME NOT NULL DEFAULT GETDATE(),
                 CONSTRAINT PK_courtroom_meta PRIMARY KEY (assignment_date, courthouse, location_detail, part)
             )
+        END
+
+        IF COL_LENGTH('dbo.courtroom_meta', 'is_high_profile') IS NULL
+        BEGIN
+            ALTER TABLE dbo.courtroom_meta ADD is_high_profile BIT NOT NULL CONSTRAINT DF_courtroom_meta_is_high_profile DEFAULT 0;
         END
     """)
 
@@ -1042,7 +1048,7 @@ def get_courtroom_meta():
     _ensure_courtroom_meta_table(cursor)
 
     cursor.execute("""
-        SELECT assignment_date, courthouse, location_detail, part, start_time, restart_time, adjourned_time, is_down
+        SELECT assignment_date, courthouse, location_detail, part, start_time, restart_time, adjourned_time, is_down, is_high_profile
         FROM dbo.courtroom_meta
         WHERE assignment_date = ?
     """, (date,))
@@ -1056,7 +1062,8 @@ def get_courtroom_meta():
             "start_time": row[4] or "",
             "restart_time": row[5] or "",
             "adjourned_time": row[6] or "",
-            "is_down": bool(row[7])
+            "is_down": bool(row[7]),
+            "is_high_profile": bool(row[8])
         }
         for row in cursor.fetchall()
     ]
@@ -1087,10 +1094,11 @@ def update_courtroom_meta():
                 restart_time = ?,
                 adjourned_time = ?,
                 is_down = ?,
+                is_high_profile = ?,
                 updated_at = GETDATE()
         WHEN NOT MATCHED THEN
-            INSERT (assignment_date, courthouse, location_detail, part, start_time, restart_time, adjourned_time, is_down, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, GETDATE());
+            INSERT (assignment_date, courthouse, location_detail, part, start_time, restart_time, adjourned_time, is_down, is_high_profile, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE());
     """, (
         data["assignment_date"],
         data["courthouse"],
@@ -1100,6 +1108,7 @@ def update_courtroom_meta():
         data.get("restart_time") or None,
         data.get("adjourned_time") or None,
         1 if data.get("is_down") else 0,
+        1 if data.get("is_high_profile") else 0,
         data["assignment_date"],
         data["courthouse"],
         data["location_detail"],
@@ -1108,6 +1117,7 @@ def update_courtroom_meta():
         data.get("restart_time") or None,
         data.get("adjourned_time") or None,
         1 if data.get("is_down") else 0,
+        1 if data.get("is_high_profile") else 0,
     ))
 
     conn.commit()

@@ -399,7 +399,8 @@ function setPendingCourtroomMetaFromRow(rowEl) {
         start_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="start_time"]')?.value || ""),
         restart_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="restart_time"]')?.value || ""),
         adjourned_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="adjourned_time"]')?.value || ""),
-        is_down: !!rowEl.querySelector('.courtroom-down-checkbox')?.checked
+        is_down: !!rowEl.querySelector('.courtroom-down-checkbox')?.checked,
+        is_high_profile: !!rowEl.querySelector('.courtroom-high-profile-checkbox')?.checked
     };
 
     const key = [payload.assignment_date, payload.courthouse, payload.location_detail, payload.part].join('|');
@@ -1256,6 +1257,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
         <thead>
             <tr>
                 <th>Judge</th>
+                <th>High Profile</th>
                 <th>Room</th>
                 <th>Assignment</th>
                 <th>Deputy</th>
@@ -1283,6 +1285,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
         tr.dataset.part = row && row.part ? row.part : "";
         tr.innerHTML = `
             <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.judge_name || "") : ""}</td>
+            <td class="courtroom-high-profile-cell"><label><input type="checkbox" class="courtroom-high-profile-checkbox" aria-label="${courthouse} ${room} high profile"> High Profile</label></td>
             <td>${room}${row && row.part ? "/" + row.part : ""}</td>
             <td class="editable-assignment" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.assignment_notes || "") : ""}</td>
             <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}" data-assigned="${row ? (row.assigned_member || "") : ""}">${row ? (row.assigned_member || "") : ""}</td>
@@ -1292,7 +1295,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
             <td class="courtroom-down-cell"><input type="checkbox" class="courtroom-down-checkbox" aria-label="${courthouse} ${room} down"></td>
         `;
 
-        tr.querySelectorAll('.courtroom-time-input, .courtroom-down-checkbox').forEach(inputEl => {
+        tr.querySelectorAll('.courtroom-time-input, .courtroom-down-checkbox, .courtroom-high-profile-checkbox').forEach(inputEl => {
             inputEl.addEventListener('change', () => setPendingCourtroomMetaFromRow(tr));
         });
         tr.querySelectorAll('.courtroom-time-input').forEach(inputEl => {
@@ -1601,11 +1604,13 @@ function loadCourtroomMeta(date) {
                 const restartInput = row.querySelector('.courtroom-time-input[data-field="restart_time"]');
                 const adjournedInput = row.querySelector('.courtroom-time-input[data-field="adjourned_time"]');
                 const downInput = row.querySelector('.courtroom-down-checkbox');
+                const highProfileInput = row.querySelector('.courtroom-high-profile-checkbox');
 
                 if (startInput) startInput.value = parseStoredTimeToInputValue(meta.start_time || '');
                 if (restartInput) restartInput.value = parseStoredTimeToInputValue(meta.restart_time || '');
                 if (adjournedInput) adjournedInput.value = parseStoredTimeToInputValue(meta.adjourned_time || '');
                 if (downInput) downInput.checked = !!meta.is_down;
+                if (highProfileInput) highProfileInput.checked = !!meta.is_high_profile;
             });
         });
 }

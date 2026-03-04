@@ -464,8 +464,8 @@ function searchSimple() {
     localStorage.setItem('searchPageDate', date || '');
 
     Promise.all([
-        fetch(`/api/search?name=${encodeURIComponent(name)}&date=${date}&courthouse=${courthouse}`).then(res => res.json()),
-        fetch(`/api/deputies?date=${date}`).then(res => res.json())
+        fetch(`/api/search?name=${encodeURIComponent(name)}&date=${date}&courthouse=${courthouse}`, { cache: 'no-store' }).then(res => res.json()),
+        fetch(`/api/deputies?date=${date}`, { cache: 'no-store' }).then(res => res.json())
     ]).then(([rows, deputies]) => {
         latestRows = rows || [];
         allDeputies = deputies || [];
