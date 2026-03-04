@@ -4,3 +4,5 @@ __pycache__/
 venv/
 .env.local
 .DS_Store
+/__pycache__
+__pycache__/db_connect.cpython-314.pyc
