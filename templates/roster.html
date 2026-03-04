@@ -489,11 +489,30 @@ function createDeputyRow(dep, includeDivision) {
     return tr;
 }
 
-const TOTAL_NEEDED = 56;
 
-function updateCourtSecurityStatusCounts(deputies) {
+function getTotalNeededFromAssignments(assignments) {
+    const FIXED_REQUIRED_SLOTS = {
+        mitchell: { courtroom: 16, fixedPost: 15 },
+        cummings: { courtroom: 11, fixedPost: 12 }
+    };
+
+    // Mirror main-page counting behavior: each rendered slot row counts, including repeated time slots.
+    const juvenileCourtroomCount = (assignments || []).filter(row =>
+        row.assignment_type === 'Courtroom' &&
+        (row.courthouse || '').trim().toLowerCase() === 'juvenile'
+    ).length;
+
+    return (
+        FIXED_REQUIRED_SLOTS.mitchell.courtroom +
+        FIXED_REQUIRED_SLOTS.mitchell.fixedPost +
+        FIXED_REQUIRED_SLOTS.cummings.courtroom +
+        FIXED_REQUIRED_SLOTS.cummings.fixedPost +
+        juvenileCourtroomCount
+    );
+}
+
+function updateCourtSecurityStatusCounts(deputies, totalNeeded) {
     const cs = deputies.filter(isCourtSecurityDeputy);
-    const totalNeeded = TOTAL_NEEDED;
     const sick = cs.filter(dep => statusIncludes(dep, "Sick")).length;
     const leave = cs.filter(dep => statusIncludes(dep, "Leave")).length;
 
@@ -517,26 +536,29 @@ function updateCourtSecurityStatusCounts(deputies) {
 
 function loadRoster() {
     const date = document.getElementById("rosterDate").value;
-    fetch(`/api/deputies?date=${date}`)
-        .then(res => res.json())
-        .then(data => {
-            const deputies = (data || []).sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
 
-            const csBody = document.querySelector("#courtSecurityTable tbody");
-            const otherBody = document.querySelector("#otherDivisionsTable tbody");
-            csBody.innerHTML = "";
-            otherBody.innerHTML = "";
+    Promise.all([
+        fetch(`/api/deputies?date=${date}`).then(res => res.json()),
+        fetch(`/api/search?date=${date}`).then(res => res.json())
+    ]).then(([deputiesData, assignments]) => {
+        const deputies = (deputiesData || []).sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
 
-            deputies.forEach(dep => {
-                if (isCourtSecurityDeputy(dep)) {
-                    csBody.appendChild(createDeputyRow(dep, false));
-                } else {
-                    otherBody.appendChild(createDeputyRow(dep, true));
-                }
-            });
+        const csBody = document.querySelector("#courtSecurityTable tbody");
+        const otherBody = document.querySelector("#otherDivisionsTable tbody");
+        csBody.innerHTML = "";
+        otherBody.innerHTML = "";
 
-            updateCourtSecurityStatusCounts(deputies);
+        deputies.forEach(dep => {
+            if (isCourtSecurityDeputy(dep)) {
+                csBody.appendChild(createDeputyRow(dep, false));
+            } else {
+                otherBody.appendChild(createDeputyRow(dep, true));
+            }
         });
+
+        const totalNeeded = getTotalNeededFromAssignments(assignments);
+        updateCourtSecurityStatusCounts(deputies, totalNeeded);
+    });
 }
 
 document.getElementById("addDeputyBtn").addEventListener("click", () => {
