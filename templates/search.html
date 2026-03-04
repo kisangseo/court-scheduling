@@ -627,10 +627,10 @@ function renderRoster() {
     rosterList.classList.toggle("roster-two-column", showFullRoster);
 
     const courtColumn = document.createElement("div");
-    courtColumn.className = "roster-column";
+    courtColumn.className = "roster-column roster-column-court";
 
     const courtHeading = document.createElement("h4");
-    courtHeading.className = "roster-section-title";
+    courtHeading.className = "roster-section-title roster-section-title-court";
     courtHeading.innerHTML = `Court Security <span id="courtSecurityCounts" class="counts-inline"></span>`;
     courtColumn.appendChild(courtHeading);
     courtColumn.appendChild(buildHidePostedToggle());
@@ -651,10 +651,10 @@ function renderRoster() {
 
     if (showFullRoster) {
         const fullColumn = document.createElement("div");
-        fullColumn.className = "roster-column";
+        fullColumn.className = "roster-column roster-column-full";
 
         const fullHeading = document.createElement("h4");
-        fullHeading.className = "roster-section-title";
+        fullHeading.className = "roster-section-title roster-section-title-full";
         fullHeading.textContent = "Full Roster";
         fullColumn.appendChild(fullHeading);
         fullColumn.appendChild(buildHidePostedToggle());
@@ -679,7 +679,7 @@ function renderRoster() {
             const division = (deputy.division || "Unassigned Division").trim() || "Unassigned Division";
             if (division !== currentDivision) {
                 const divisionHeading = document.createElement("h5");
-                divisionHeading.className = "roster-section-title";
+                divisionHeading.className = "roster-section-title roster-section-title-full";
                 const safeDivision = division.replace(/"/g, '&quot;');
                 divisionHeading.innerHTML = `${division} <span class="counts-inline metric-blue" data-division-posted="${safeDivision.toLowerCase()}"></span>`;
                 fullList.appendChild(divisionHeading);

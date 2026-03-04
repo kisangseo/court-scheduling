@@ -100,23 +100,52 @@ th, td {
 
 
 #rosterList {
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    padding: 8px;
+}
+
+.roster-section-title {
+    border-radius: 4px;
+    padding: 4px 6px;
+}
+
+.roster-item {
+    border-radius: 4px;
+    margin-bottom: 4px;
+    padding: 4px 6px;
+}
+
+.roster-column-court {
+    background: #fff9db;
+    border: 1px solid #f3e6a3;
+    border-radius: 8px;
+    padding: 8px;
+}
+
+.roster-column-court .roster-section-title,
+.roster-section-title-court {
+    background: #fff2b8;
+}
+
+.roster-column-court .roster-item {
+    background: #fffdf0;
+}
+
+.roster-column-full {
     background: #f0faf0;
     border: 1px solid #d1e9d1;
     border-radius: 8px;
     padding: 8px;
 }
 
-.roster-section-title {
+.roster-column-full .roster-section-title,
+.roster-section-title-full {
     background: #e8f7e8;
-    border-radius: 4px;
-    padding: 4px 6px;
 }
 
-.roster-item {
+.roster-column-full .roster-item {
     background: #f4fbf4;
-    border-radius: 4px;
-    margin-bottom: 4px;
-    padding: 4px 6px;
 }
 
 
