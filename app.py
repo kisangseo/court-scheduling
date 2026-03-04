@@ -405,6 +405,13 @@ def delete_deputy():
 @app.route("/staffing")
 def staffing():
     return render_template("staffing.html")
+
+
+@app.route("/executive-summary")
+def executive_summary():
+    return render_template("executive_summary.html")
+
+
 @app.route("/api/import-previous-column", methods=["POST"])
 def import_previous_column():
     data = request.json
