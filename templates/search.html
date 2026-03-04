@@ -528,7 +528,8 @@ function refreshRosterAssignedState() {
     const assignedNames = getAssignedNamesAcrossGrid();
     document.querySelectorAll('#rosterList .roster-item').forEach(item => {
         const name = (item.dataset.name || '').trim();
-        const isAssigned = !!name && assignedNames.has(name);
+        const isTransferredOut = isCurrentlyTransferredOut(name);
+        const isAssigned = !!name && assignedNames.has(name) && !isTransferredOut;
         item.classList.toggle('assigned', isAssigned);
         item.classList.toggle('hide-posted', hidePosted && isAssigned);
     });
@@ -1335,6 +1336,15 @@ function rememberTransferredChip(cell, name) {
 function forgetTransferredChip(cell, name) {
   const key = getTransferredChipKey(cell, name);
   if (key) transferredOutChipKeys.delete(key);
+}
+
+function isCurrentlyTransferredOut(name) {
+  const t = transferMap[(name || '').trim()];
+  return !!(t && t.out && !t.in);
+}
+
+function isChipMarkedTransferredOut(chip) {
+  return (chip?.dataset?.transferredOut || '').trim() === 'true';
 }
 
 function fetchTransfersForDate() {
