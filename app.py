@@ -106,7 +106,89 @@ def _serialize_status_payload(payload):
     if not payload.get("ranges") and not payload.get("legacy") and not payload.get("weekly_unavailable"):
         return None
     return json.dumps(payload)
+@app.route("/api/transfers")
+def get_transfers():
+    assignment_date = request.args.get("date")
+    if not assignment_date:
+        return jsonify([])
 
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT full_name, transfer_out_time, transfer_in_time
+        FROM dbo.deputy_transfers
+        WHERE assignment_date = ?
+    """, (assignment_date,))
+    rows = cursor.fetchall()
+    conn.close()
+
+    def fmt(dt):
+        if not dt:
+            return None
+        # "9:05 AM" formatting
+        return dt.strftime("%I:%M %p").lstrip("0")
+
+    return jsonify([
+        {
+            "full_name": r[0],
+            "out_time": fmt(r[1]),
+            "in_time": fmt(r[2]),
+        }
+        for r in rows
+    ])
+
+
+@app.route("/api/transfer-out", methods=["POST"])
+def transfer_out():
+    data = request.json or {}
+    assignment_date = data.get("assignment_date")
+    full_name = data.get("full_name")
+    if not assignment_date or not full_name:
+        return jsonify({"status": "error", "message": "missing assignment_date/full_name"}), 400
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    # Upsert: set OUT if not set (or overwrite if you want; I’m doing "set/overwrite" for simplicity)
+    cursor.execute("""
+        MERGE dbo.deputy_transfers AS t
+        USING (SELECT ? AS assignment_date, ? AS full_name) AS s
+        ON t.assignment_date = s.assignment_date AND t.full_name = s.full_name
+        WHEN MATCHED THEN
+            UPDATE SET transfer_out_time = GETDATE()
+        WHEN NOT MATCHED THEN
+            INSERT (assignment_date, full_name, transfer_out_time, transfer_in_time)
+            VALUES (?, ?, GETDATE(), NULL);
+    """, (assignment_date, full_name, assignment_date, full_name))
+
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success"})
+
+
+@app.route("/api/transfer-in", methods=["POST"])
+def transfer_in():
+    data = request.json or {}
+    assignment_date = data.get("assignment_date")
+    full_name = data.get("full_name")
+    if not assignment_date or not full_name:
+        return jsonify({"status": "error", "message": "missing assignment_date/full_name"}), 400
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    # Only set IN if the row exists + has an OUT time (so “in” only happens after a real transfer-out)
+    cursor.execute("""
+        UPDATE dbo.deputy_transfers
+        SET transfer_in_time = GETDATE()
+        WHERE assignment_date = ?
+          AND full_name = ?
+          AND transfer_out_time IS NOT NULL
+    """, (assignment_date, full_name))
+
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success"})
 @app.route("/")
 def index():
     return render_template("search.html")
