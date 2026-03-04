@@ -495,8 +495,7 @@ function getTotalNeededFromAssignments(assignments) {
         row.assignment_type === 'Courtroom' || row.assignment_type === 'Fixed Post'
     );
 
-    const filledCount = requiredRows.filter(row => (row.assigned_member || '').trim().length > 0).length;
-    return Math.max(requiredRows.length - filledCount, 0);
+    return requiredRows.length;
 }
 
 function updateCourtSecurityStatusCounts(deputies, totalNeeded) {
