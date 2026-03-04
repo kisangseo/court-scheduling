@@ -580,9 +580,18 @@ function setSelectedDeputyFromRosterItem(item) {
     item.classList.add('selected');
 }
 
+function getIneligibleAssignmentMessage(cell) {
+    const category = getCellAssignmentCategory(cell);
+    if (category === 'courtroom') {
+        return 'Select a Court Certified Personnel';
+    }
+
+    return 'Select an Armed Personnel First';
+}
+
 function applyDeputyToCell(dropCell, assignedName, role) {
     if (!isEligibleForCell(dropCell, role)) {
-        showCellWarning(dropCell, 'Select an Armed Personnel First');
+        showCellWarning(dropCell, getIneligibleAssignmentMessage(dropCell));
         return false;
     }
 
