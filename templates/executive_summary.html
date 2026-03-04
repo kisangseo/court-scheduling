@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Executive Summary</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <style>
+        .summary-wrapper {
+            padding: 20px;
+        }
+
+        .summary-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        .summary-table th,
+        .summary-table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .summary-table th {
+            background: #f5f7fa;
+        }
+
+        .summary-table td.metric-label {
+            text-align: left;
+            font-weight: 600;
+            background: #fafafa;
+        }
+
+        .status-note {
+            margin-top: 12px;
+            color: #555;
+            font-size: 0.95rem;
+        }
+
+        .error-text {
+            color: #b00020;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+<div class="summary-wrapper">
+    <h2>Executive Summary</h2>
+
+    <div class="summary-controls">
+        <label for="summaryDate"><strong>Select a date:</strong></label>
+        <input type="date" id="summaryDate">
+        <button id="refreshSummaryBtn">Refresh</button>
+    </div>
+
+    <div id="summaryContent"></div>
+    <div id="summaryStatus" class="status-note"></div>
+</div>
+
+<script>
+const PERSONNEL_NEEDED_FIXED = 56;
+const summaryDateInput = document.getElementById('summaryDate');
+const refreshSummaryBtn = document.getElementById('refreshSummaryBtn');
+const summaryContent = document.getElementById('summaryContent');
+const summaryStatus = document.getElementById('summaryStatus');
+
+function formatDateISO(dateObj) {
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function getMonday(dateObj) {
+    const date = new Date(dateObj);
+    const day = date.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    date.setDate(date.getDate() + diff);
+    return date;
+}
+
+function buildWorkWeek(dateObj) {
+    const monday = getMonday(dateObj);
+    return Array.from({ length: 5 }, (_, idx) => {
+        const day = new Date(monday);
+        day.setDate(monday.getDate() + idx);
+        return day;
+    });
+}
+
+function isCourtSecurity(deputy) {
+    const division = (deputy.division || '').trim().toLowerCase();
+    return division === 'court security' || division === 'court security division';
+}
+
+function isUnavailableStatus(status) {
+    if (!status) return false;
+    const normalized = status.toLowerCase();
+    return normalized.includes('sick')
+        || normalized.includes('unavailable')
+        || normalized.includes('leave')
+        || normalized.includes('callout');
+}
+
+function parseAssignedMemberValue(value) {
+    const text = (value || '').trim();
+    if (!text) return [];
+
+    if (text.includes('||')) {
+        return text.split(/\s*\|\|\s*/).map(name => name.trim()).filter(Boolean);
+    }
+
+    if (text.includes('\n')) {
+        return text.split(/\n+/).map(name => name.trim()).filter(Boolean);
+    }
+
+    return [text];
+}
+
+function normalizeDeputyName(value) {
+    return (value || '').trim().toLowerCase();
+}
+
+function countBorrowedDeputies(assignments, deputies) {
+    const deputyByName = new Map(
+        deputies.map(dep => [normalizeDeputyName(dep.full_name), dep])
+    );
+
+    const borrowed = new Set();
+
+    assignments.forEach(assignment => {
+        parseAssignedMemberValue(assignment.assigned_member).forEach(name => {
+            const normalizedName = normalizeDeputyName(name);
+            if (!normalizedName) return;
+
+            const deputy = deputyByName.get(normalizedName);
+            if (!deputy) return;
+            if (isCourtSecurity(deputy)) return;
+
+            borrowed.add(normalizedName);
+        });
+    });
+
+    return borrowed.size;
+}
+
+async function loadSummary() {
+    const selectedValue = summaryDateInput.value;
+    if (!selectedValue) return;
+
+    summaryStatus.textContent = 'Loading summary...';
+    summaryContent.innerHTML = '';
+
+    try {
+        const baseDate = new Date(`${selectedValue}T00:00:00`);
+        const weekDates = buildWorkWeek(baseDate);
+
+        const dayResults = await Promise.all(weekDates.map(async (dateObj) => {
+            const dayIso = formatDateISO(dateObj);
+
+            const [deputiesRes, assignmentsRes] = await Promise.all([
+                fetch(`/api/deputies?date=${encodeURIComponent(dayIso)}`),
+                fetch(`/api/search?date=${encodeURIComponent(dayIso)}`)
+            ]);
+
+            if (!deputiesRes.ok) {
+                throw new Error(`Failed to load deputies for ${dayIso}`);
+            }
+
+            if (!assignmentsRes.ok) {
+                throw new Error(`Failed to load assignments for ${dayIso}`);
+            }
+
+            const deputies = await deputiesRes.json();
+            const assignments = await assignmentsRes.json();
+            const courtSecurityDeputies = deputies.filter(isCourtSecurity);
+            const unavailableCount = courtSecurityDeputies.filter(dep => isUnavailableStatus(dep.current_status)).length;
+            const availableCount = courtSecurityDeputies.length - unavailableCount;
+            const borrowedCount = countBorrowedDeputies(assignments, deputies);
+
+            return {
+                label: dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }),
+                needed: PERSONNEL_NEEDED_FIXED,
+                available: availableCount,
+                unavailable: unavailableCount,
+                borrowed: borrowedCount
+            };
+        }));
+
+        renderSummary(dayResults);
+        summaryStatus.textContent = 'Summary refreshed successfully.';
+    } catch (error) {
+        summaryContent.innerHTML = `<div class="error-text">Unable to load executive summary.</div>`;
+        summaryStatus.textContent = error.message;
+    }
+}
+
+function renderSummary(dayResults) {
+    const headers = dayResults.map(day => `<th>${day.label}</th>`).join('');
+    const neededCells = dayResults.map(day => `<td>${day.needed}</td>`).join('');
+    const availableCells = dayResults.map(day => `<td>${day.available}</td>`).join('');
+    const unavailableCells = dayResults.map(day => `<td>${day.unavailable}</td>`).join('');
+    const borrowedCells = dayResults.map(day => `<td>${day.borrowed}</td>`).join('');
+
+    summaryContent.innerHTML = `
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    ${headers}
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="metric-label">Personnel Needed</td>
+                    ${neededCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">Available in Division (Court Security)</td>
+                    ${availableCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">Number Unavailable (Sick + Unavailable + Leave + Callout)</td>
+                    ${unavailableCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">Borrowed Deputies</td>
+                    ${borrowedCells}
+                </tr>
+            </tbody>
+        </table>
+    `;
+}
+
+function initializeDate() {
+    const now = new Date();
+    summaryDateInput.value = formatDateISO(now);
+    loadSummary();
+}
+
+refreshSummaryBtn.addEventListener('click', loadSummary);
+summaryDateInput.addEventListener('change', loadSummary);
+
+initializeDate();
+</script>
+</body>
+</html>

@@ -12,12 +12,17 @@
         .toolbar { display: flex; gap: 16px; align-items: center; margin-bottom: 10px; }
         .status-counts { font-size: 0.95em; }
         .status-red { color: #b42318; font-weight: 700; }
+        .status-orange { color: #b54708; font-weight: 700; }
         .status-group label { margin-right: 8px; display: inline-block; }
         .action-row { display: flex; gap: 6px; margin-top: 6px; }
         .small { font-size: 12px; color: #344054; }
         .add-form { margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
         .status-green {
             color: #067647;
+            font-weight: 700;
+        }
+        .status-blue {
+            color: #175cd3;
             font-weight: 700;
         }
     </style>
@@ -111,13 +116,44 @@ function parseDateOnly(value) {
     return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function parseStatusPayload(dep) {
+    try {
+        const raw = dep.status_raw;
+        const parsed = raw ? JSON.parse(raw) : null;
+        return parsed && typeof parsed === "object"
+            ? {
+                legacy: parsed.legacy || null,
+                ranges: Array.isArray(parsed.ranges) ? parsed.ranges : [],
+                weekly_unavailable: Array.isArray(parsed.weekly_unavailable) ? parsed.weekly_unavailable : []
+            }
+            : { legacy: null, ranges: [], weekly_unavailable: [] };
+    } catch (_) {
+        return { legacy: null, ranges: [], weekly_unavailable: [] };
+    }
+}
+
+function hasUnavailableForSelectedDate(dep) {
+    const selectedDate = parseDateOnly(document.getElementById("rosterDate").value);
+    if (!selectedDate) return false;
+
+    const payload = parseStatusPayload(dep);
+    const weekday = selectedDate.toLocaleDateString("en-US", { weekday: "long" });
+
+    return payload.weekly_unavailable.some(rule => {
+        const ruleDay = (rule.day || "").trim();
+        const endDate = parseDateOnly(rule.end_date);
+        if (!ruleDay || !endDate) return false;
+        if (selectedDate > endDate) return false;
+        return ruleDay === "Any Day" || ruleDay === weekday;
+    });
+}
+
 function effectiveStatusForSelectedDate(dep) {
     const selectedDate = parseDateOnly(document.getElementById("rosterDate").value);
 
     try {
-        const raw = dep.status_raw;
-        const parsed = raw ? JSON.parse(raw) : null;
-        const ranges = parsed && Array.isArray(parsed.ranges) ? parsed.ranges : [];
+        const payload = parseStatusPayload(dep);
+        const ranges = payload.ranges;
 
         if (selectedDate) {
             let active = [];
@@ -134,12 +170,16 @@ function effectiveStatusForSelectedDate(dep) {
                 }
             }
 
+            if (hasUnavailableForSelectedDate(dep) && !active.includes("Unavailable")) {
+                active.push("Unavailable");
+            }
+
             if (active.length > 0) {
                 return active.join(" / ");
             }
         }
 
-        if (parsed && parsed.legacy) return parsed.legacy;
+        if (payload.legacy) return payload.legacy;
     } catch (_) {
         // fallback to effective status from API
     }
@@ -158,6 +198,8 @@ function renderStatusControls(dep, hostTr) {
         <label><input type="checkbox" value="Sick" ${statusIncludes(dep, "Sick") ? "checked" : ""}> Sick</label>
         <label><input type="checkbox" value="Leave" ${statusIncludes(dep, "Leave") ? "checked" : ""}> Leave</label>
         <label><input type="checkbox" value="Light Duty" ${statusIncludes(dep, "Light Duty") ? "checked" : ""}> Light Duty</label>
+        <label><input type="checkbox" value="Unscheduled" ${statusIncludes(dep, "Unscheduled") ? "checked" : ""}> Unscheduled Leave or Callout Sick</label>
+        <label><input type="checkbox" value="Unavailable" ${hasUnavailableForSelectedDate(dep) ? "checked" : ""}> Unavailable</label>
         
         <div class="small">Click a status checkbox to set date range.</div>
     `;
@@ -166,6 +208,67 @@ function renderStatusControls(dep, hostTr) {
         box.addEventListener("change", function() {
 
             const selectedDate = document.getElementById("rosterDate").value;
+
+            if (box.value === "Unavailable") {
+                if (!box.checked) {
+                    fetch("/api/update-unavailability", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            full_name: dep.full_name,
+                            remove_all: true
+                        })
+                    }).then(() => loadRoster());
+                    return;
+                }
+
+                const unavailableRow = document.createElement("div");
+                unavailableRow.className = "action-row";
+                unavailableRow.innerHTML = `
+                    <select class="unavailable-day">
+                        <option>Any Day</option>
+                        <option>Monday</option>
+                        <option>Tuesday</option>
+                        <option>Wednesday</option>
+                        <option>Thursday</option>
+                        <option>Friday</option>
+                        <option>Saturday</option>
+                        <option>Sunday</option>
+                    </select>
+                    <input type="date" class="unavailable-end-date">
+                    <button type="button" class="apply-unavailable">Apply</button>
+                    <button type="button" class="cancel-unavailable">Cancel</button>
+                `;
+
+                unavailableRow.querySelector(".unavailable-end-date").value = selectedDate;
+
+                unavailableRow.querySelector(".apply-unavailable").addEventListener("click", () => {
+                    const day = unavailableRow.querySelector(".unavailable-day").value;
+                    const endDate = unavailableRow.querySelector(".unavailable-end-date").value;
+                    if (!endDate) {
+                        alert("Please select an expiration date.");
+                        return;
+                    }
+
+                    fetch("/api/update-unavailability", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            full_name: dep.full_name,
+                            day,
+                            end_date: endDate
+                        })
+                    }).then(() => loadRoster());
+                });
+
+                unavailableRow.querySelector(".cancel-unavailable").addEventListener("click", () => {
+                    unavailableRow.remove();
+                    box.checked = false;
+                });
+
+                wrapper.appendChild(unavailableRow);
+                return;
+            }
 
             // 🔴 If UNCHECKED → remove just this status for this date
             if (!box.checked) {
@@ -352,25 +455,30 @@ function createDeputyRow(dep, includeDivision) {
     return tr;
 }
 
+const TOTAL_NEEDED = 56;
+
 function updateCourtSecurityStatusCounts(deputies) {
     const cs = deputies.filter(isCourtSecurityDeputy);
+    const totalNeeded = TOTAL_NEEDED;
     const sick = cs.filter(dep => statusIncludes(dep, "Sick")).length;
     const leave = cs.filter(dep => statusIncludes(dep, "Leave")).length;
-    const lightDuty = cs.filter(dep => statusIncludes(dep, "Light Duty")).length;
-    const total = cs.length;
+
     const out = cs.filter(dep =>
         statusIncludes(dep, "Sick") ||
         statusIncludes(dep, "Leave") ||
-        statusIncludes(dep, "Light Duty")
+        statusIncludes(dep, "Light Duty") ||
+        statusIncludes(dep, "Unscheduled") ||
+        statusIncludes(dep, "Unavailable")
     ).length;
 
-    const available = total - out;
+    const available = Math.max(cs.length - out, 0);
 
-    document.getElementById("courtSecurityStatusCounts").innerHTML =
-        `<span class="status-red">Sick ${sick}</span> /
-        <span class="status-red">Leave ${leave}</span> /
-        <span class="status-red">Light Duty ${lightDuty}</span> /
-        <span class="status-green">Available ${available}</span>`;
+    document.getElementById("courtSecurityStatusCounts").innerHTML = [
+        `<span class="status-blue">Total Needed ${totalNeeded}</span>`,
+        `<span class="status-green">Available ${available}</span>`,
+        `<span class="status-red">Sick ${sick}</span>`,
+        `<span class="status-red">Leave ${leave}</span>`
+    ].join(' / ');
 }
 
 function loadRoster() {

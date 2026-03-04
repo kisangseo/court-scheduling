@@ -10,12 +10,34 @@ from datetime import datetime, timedelta
 app = Flask(__name__)
 
 
+def _ensure_courtroom_meta_table(cursor):
+    cursor.execute("""
+        IF OBJECT_ID('dbo.courtroom_meta', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.courtroom_meta (
+                assignment_date DATE NOT NULL,
+                courthouse NVARCHAR(100) NOT NULL,
+                location_detail NVARCHAR(100) NOT NULL,
+                part NVARCHAR(100) NOT NULL DEFAULT '',
+                start_time NVARCHAR(16) NULL,
+                restart_time NVARCHAR(16) NULL,
+                adjourned_time NVARCHAR(16) NULL,
+                is_down BIT NOT NULL DEFAULT 0,
+                updated_at DATETIME NOT NULL DEFAULT GETDATE(),
+                CONSTRAINT PK_courtroom_meta PRIMARY KEY (assignment_date, courthouse, location_detail, part)
+            )
+        END
+    """)
+
+
 def _normalize_status_type(status_type):
     if not status_type:
         return None
     normalized = status_type.strip().lower()
     if normalized in ["sick", "leave", "light duty"]:
         return normalized.title() if normalized != "light duty" else "Light Duty"
+    if normalized in ["unscheduled", "unscheduled leave", "callout sick", "unscheduled leave or callout sick"]:
+        return "Unscheduled"
     return status_type
 
 
@@ -30,19 +52,20 @@ def _parse_date_value(value):
 
 def _parse_status_payload(status_text):
     if not status_text:
-        return {"legacy": None, "ranges": []}
+        return {"legacy": None, "ranges": [], "weekly_unavailable": []}
 
     try:
         parsed = json.loads(status_text)
         if isinstance(parsed, dict) and "ranges" in parsed:
             return {
                 "legacy": parsed.get("legacy"),
-                "ranges": parsed.get("ranges") or []
+                "ranges": parsed.get("ranges") or [],
+                "weekly_unavailable": parsed.get("weekly_unavailable") or []
             }
     except (json.JSONDecodeError, TypeError):
         pass
 
-    return {"legacy": status_text, "ranges": []}
+    return {"legacy": status_text, "ranges": [], "weekly_unavailable": []}
 
 
 def _effective_status_for_date(status_text, target_date):
@@ -63,6 +86,16 @@ def _effective_status_for_date(status_text, target_date):
             if start <= target <= end and status_value not in active_statuses:
                 active_statuses.append(status_value)
 
+        weekday_name = target.strftime("%A") if target else None
+        for rule in payload.get("weekly_unavailable", []):
+            rule_day = (rule.get("day") or "").strip()
+            rule_end = _parse_date_value(rule.get("end_date"))
+            if not rule_day or not rule_end or not weekday_name:
+                continue
+            if target <= rule_end and (rule_day == "Any Day" or rule_day == weekday_name):
+                if "Unavailable" not in active_statuses:
+                    active_statuses.append("Unavailable")
+
         if active_statuses:
             return " / ".join(active_statuses)
 
@@ -70,10 +103,92 @@ def _effective_status_for_date(status_text, target_date):
 
 
 def _serialize_status_payload(payload):
-    if not payload.get("ranges") and not payload.get("legacy"):
+    if not payload.get("ranges") and not payload.get("legacy") and not payload.get("weekly_unavailable"):
         return None
     return json.dumps(payload)
+@app.route("/api/transfers")
+def get_transfers():
+    assignment_date = request.args.get("date")
+    if not assignment_date:
+        return jsonify([])
 
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT full_name, transfer_out_time, transfer_in_time
+        FROM dbo.deputy_transfers
+        WHERE assignment_date = ?
+    """, (assignment_date,))
+    rows = cursor.fetchall()
+    conn.close()
+
+    def fmt(dt):
+        if not dt:
+            return None
+        # "9:05 AM" formatting
+        return dt.strftime("%I:%M %p").lstrip("0")
+
+    return jsonify([
+        {
+            "full_name": r[0],
+            "out_time": fmt(r[1]),
+            "in_time": fmt(r[2]),
+        }
+        for r in rows
+    ])
+
+
+@app.route("/api/transfer-out", methods=["POST"])
+def transfer_out():
+    data = request.json or {}
+    assignment_date = data.get("assignment_date")
+    full_name = data.get("full_name")
+    if not assignment_date or not full_name:
+        return jsonify({"status": "error", "message": "missing assignment_date/full_name"}), 400
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    # Upsert: set OUT if not set (or overwrite if you want; I’m doing "set/overwrite" for simplicity)
+    cursor.execute("""
+        MERGE dbo.deputy_transfers AS t
+        USING (SELECT ? AS assignment_date, ? AS full_name) AS s
+        ON t.assignment_date = s.assignment_date AND t.full_name = s.full_name
+        WHEN MATCHED THEN
+            UPDATE SET transfer_out_time = GETDATE()
+        WHEN NOT MATCHED THEN
+            INSERT (assignment_date, full_name, transfer_out_time, transfer_in_time)
+            VALUES (?, ?, GETDATE(), NULL);
+    """, (assignment_date, full_name, assignment_date, full_name))
+
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success"})
+
+
+@app.route("/api/transfer-in", methods=["POST"])
+def transfer_in():
+    data = request.json or {}
+    assignment_date = data.get("assignment_date")
+    full_name = data.get("full_name")
+    if not assignment_date or not full_name:
+        return jsonify({"status": "error", "message": "missing assignment_date/full_name"}), 400
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    # Only set IN if the row exists + has an OUT time (so “in” only happens after a real transfer-out)
+    cursor.execute("""
+        UPDATE dbo.deputy_transfers
+        SET transfer_in_time = GETDATE()
+        WHERE assignment_date = ?
+          AND full_name = ?
+          AND transfer_out_time IS NOT NULL
+    """, (assignment_date, full_name))
+
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success"})
 @app.route("/")
 def index():
     return render_template("search.html")
@@ -182,7 +297,7 @@ def update_status_range():
     ))
     removed_count = 0
 
-    if status in ["Sick", "Leave", "Light Duty"] and start_date and end_date:
+    if status in ["Sick", "Leave", "Light Duty", "Unscheduled"] and start_date and end_date:
 
         cursor.execute("""
             SELECT assignment_date, courthouse, assignment_type,
@@ -240,6 +355,49 @@ def update_status_range():
         "status": "success",
         "removed_assignments": removed_count
     })
+
+@app.route("/api/update-unavailability", methods=["POST"])
+def update_unavailability():
+    data = request.json
+    full_name = data.get("full_name")
+    day = data.get("day")
+    end_date = data.get("end_date")
+    remove_all = bool(data.get("remove_all"))
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT current_status
+        FROM dbo.deputies
+        WHERE full_name = ?
+    """, (full_name,))
+    row = cursor.fetchone()
+    current_status = row[0] if row else None
+    payload = _parse_status_payload(current_status)
+
+    rules = payload.get("weekly_unavailable", [])
+
+    if remove_all:
+        payload["weekly_unavailable"] = []
+    else:
+        rules = [r for r in rules if not (r.get("day") == day)]
+        rules.append({"day": day, "end_date": end_date})
+        payload["weekly_unavailable"] = rules
+
+    cursor.execute("""
+        UPDATE dbo.deputies
+        SET current_status = ?
+        WHERE full_name = ?
+    """, (
+        _serialize_status_payload(payload),
+        full_name
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "success"})
 
 @app.route("/api/upsert-deputy", methods=["POST"])
 def upsert_deputy():
@@ -329,6 +487,13 @@ def delete_deputy():
 @app.route("/staffing")
 def staffing():
     return render_template("staffing.html")
+
+
+@app.route("/executive-summary")
+def executive_summary():
+    return render_template("executive_summary.html")
+
+
 @app.route("/api/import-previous-column", methods=["POST"])
 def import_previous_column():
     data = request.json
@@ -529,6 +694,36 @@ def update_assignment_notes():
     conn.close()
 
     return {"status": "success"}
+
+@app.route("/api/update-judge-name", methods=["POST"])
+def update_judge_name():
+    data = request.json
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE dbo.court_assignments
+        SET judge_name = ?
+        WHERE assignment_date = ?
+          AND courthouse = ?
+          AND assignment_type = ?
+          AND location_detail = ?
+          AND part = ?
+    """, (
+        data["judge_name"],
+        data["assignment_date"],
+        data["courthouse"],
+        data["assignment_type"],
+        data["location_detail"],
+        data["part"]
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "success"}
+
 @app.route("/api/deputies")
 def get_deputies():
     target_date = request.args.get("date")
@@ -605,28 +800,92 @@ def update_deputy():
     conn = get_conn()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        UPDATE dbo.court_assignments
-        SET assigned_member = ?
-        WHERE assignment_date = ?
-          AND courthouse = ?
-          AND assignment_type = ?
-          AND (
-                ISNULL(location_group, '') = ISNULL(?, '')
-                OR ISNULL(location_detail, '') = ISNULL(?, '')
-              )
-          AND ISNULL(part, '') = ISNULL(?, '')
-    """, (
-        data["assigned_member"],
-        data["assignment_date"],
-        data["courthouse"],
-        data["assignment_type"],
-        data["location_detail"],
-        data["location_detail"],
-        data["part"]
-    ))
+    is_fixed_post = data.get("assignment_type") == "Fixed Post"
+    is_courtroom = data.get("assignment_type") == "Courtroom"
 
-    if cursor.rowcount == 0:
+    if is_fixed_post:
+        cursor.execute("""
+            UPDATE dbo.court_assignments
+            SET assigned_member = ?
+            WHERE assignment_date = ?
+              AND courthouse = ?
+              AND assignment_type = ?
+              AND ISNULL(location_group, '') = ISNULL(?, '')
+              AND ISNULL(part, '') = ISNULL(?, '')
+        """, (
+            data["assigned_member"],
+            data["assignment_date"],
+            data["courthouse"],
+            data["assignment_type"],
+            data["location_detail"],
+            data.get("part")
+        ))
+
+        if cursor.rowcount == 0:
+            cursor.execute("""
+                INSERT INTO dbo.court_assignments (
+                    assignment_date,
+                    courthouse,
+                    assignment_type,
+                    location_group,
+                    location_detail,
+                    part,
+                    judge_name,
+                    shift_time,
+                    assigned_member,
+                    assignment_notes,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, ?, NULL, GETDATE())
+            """, (
+                data["assignment_date"],
+                data["courthouse"],
+                data["assignment_type"],
+                data["location_detail"],
+                data.get("part"),
+                data["assigned_member"]
+            ))
+    elif is_courtroom:
+        cursor.execute("""
+            UPDATE dbo.court_assignments
+            SET assigned_member = ?
+            WHERE assignment_date = ?
+              AND courthouse = ?
+              AND assignment_type = ?
+              AND ISNULL(location_detail, '') = ISNULL(?, '')
+        """, (
+            data["assigned_member"],
+            data["assignment_date"],
+            data["courthouse"],
+            data["assignment_type"],
+            data["location_detail"]
+        ))
+
+        if cursor.rowcount == 0:
+            cursor.execute("""
+                INSERT INTO dbo.court_assignments (
+                    assignment_date,
+                    courthouse,
+                    assignment_type,
+                    location_group,
+                    location_detail,
+                    part,
+                    judge_name,
+                    shift_time,
+                    assigned_member,
+                    assignment_notes,
+                    created_at
+                )
+                VALUES (?, ?, ?, NULL, ?, ?, NULL, NULL, ?, NULL, GETDATE())
+            """, (
+                data["assignment_date"],
+                data["courthouse"],
+                data["assignment_type"],
+                data["location_detail"],
+                data.get("part"),
+                data["assigned_member"]
+            ))
+    else:
         cursor.execute("""
             UPDATE dbo.court_assignments
             SET assigned_member = ?
@@ -637,19 +896,147 @@ def update_deputy():
                     ISNULL(location_group, '') = ISNULL(?, '')
                     OR ISNULL(location_detail, '') = ISNULL(?, '')
                   )
+              AND ISNULL(part, '') = ISNULL(?, '')
         """, (
             data["assigned_member"],
             data["assignment_date"],
             data["courthouse"],
             data["assignment_type"],
             data["location_detail"],
-            data["location_detail"]
+            data["location_detail"],
+            data.get("part")
         ))
+
+        if cursor.rowcount == 0:
+            cursor.execute("""
+                UPDATE dbo.court_assignments
+                SET assigned_member = ?
+                WHERE assignment_date = ?
+                  AND courthouse = ?
+                  AND assignment_type = ?
+                  AND (
+                        ISNULL(location_group, '') = ISNULL(?, '')
+                        OR ISNULL(location_detail, '') = ISNULL(?, '')
+                      )
+            """, (
+                data["assigned_member"],
+                data["assignment_date"],
+                data["courthouse"],
+                data["assignment_type"],
+                data["location_detail"],
+                data["location_detail"]
+            ))
+
+        if cursor.rowcount == 0:
+            cursor.execute("""
+                INSERT INTO dbo.court_assignments (
+                    assignment_date,
+                    courthouse,
+                    assignment_type,
+                    location_group,
+                    location_detail,
+                    part,
+                    judge_name,
+                    shift_time,
+                    assigned_member,
+                    assignment_notes,
+                    created_at
+                )
+                VALUES (?, ?, ?, NULL, ?, ?, NULL, NULL, ?, NULL, GETDATE())
+            """, (
+                data["assignment_date"],
+                data["courthouse"],
+                data["assignment_type"],
+                data["location_detail"],
+                data.get("part"),
+                data["assigned_member"]
+            ))
 
     conn.commit()
     conn.close()
 
     return {"status": "success", "updated": cursor.rowcount}
+
+
+@app.route("/api/get-courtroom-meta")
+def get_courtroom_meta():
+    date = request.args.get("date")
+    conn = get_conn()
+    cursor = conn.cursor()
+    _ensure_courtroom_meta_table(cursor)
+
+    cursor.execute("""
+        SELECT assignment_date, courthouse, location_detail, part, start_time, restart_time, adjourned_time, is_down
+        FROM dbo.courtroom_meta
+        WHERE assignment_date = ?
+    """, (date,))
+
+    rows = [
+        {
+            "assignment_date": str(row[0]),
+            "courthouse": row[1],
+            "location_detail": row[2],
+            "part": row[3] or "",
+            "start_time": row[4] or "",
+            "restart_time": row[5] or "",
+            "adjourned_time": row[6] or "",
+            "is_down": bool(row[7])
+        }
+        for row in cursor.fetchall()
+    ]
+
+    conn.close()
+    return jsonify(rows)
+
+
+@app.route("/api/update-courtroom-meta", methods=["POST"])
+def update_courtroom_meta():
+    data = request.json
+    conn = get_conn()
+    cursor = conn.cursor()
+    _ensure_courtroom_meta_table(cursor)
+
+    cursor.execute("""
+        MERGE dbo.courtroom_meta AS target
+        USING (
+            SELECT ? AS assignment_date, ? AS courthouse, ? AS location_detail, ? AS part
+        ) AS source
+        ON target.assignment_date = source.assignment_date
+           AND target.courthouse = source.courthouse
+           AND target.location_detail = source.location_detail
+           AND ISNULL(target.part, '') = ISNULL(source.part, '')
+        WHEN MATCHED THEN
+            UPDATE SET
+                start_time = ?,
+                restart_time = ?,
+                adjourned_time = ?,
+                is_down = ?,
+                updated_at = GETDATE()
+        WHEN NOT MATCHED THEN
+            INSERT (assignment_date, courthouse, location_detail, part, start_time, restart_time, adjourned_time, is_down, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, GETDATE());
+    """, (
+        data["assignment_date"],
+        data["courthouse"],
+        data["location_detail"],
+        data.get("part") or "",
+        data.get("start_time") or None,
+        data.get("restart_time") or None,
+        data.get("adjourned_time") or None,
+        1 if data.get("is_down") else 0,
+        data["assignment_date"],
+        data["courthouse"],
+        data["location_detail"],
+        data.get("part") or "",
+        data.get("start_time") or None,
+        data.get("restart_time") or None,
+        data.get("adjourned_time") or None,
+        1 if data.get("is_down") else 0,
+    ))
+
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
 
 
 @app.route("/api/search")
@@ -691,7 +1078,8 @@ def search():
                 WHERE a.assignment_date = ?
                 AND a.courthouse = t.courthouse
                 AND a.assignment_type = t.assignment_type
-                AND a.location_detail = t.location_detail
+                AND ISNULL(a.location_group,'') = ISNULL(t.location_group,'')
+                AND ISNULL(a.location_detail,'') = ISNULL(t.location_detail,'')
                 AND ISNULL(a.part,'') = ISNULL(t.part,'')
             )
         """, (date, date))
