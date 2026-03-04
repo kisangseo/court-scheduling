@@ -98,9 +98,36 @@ th, td {
     border-radius: 4px;
 }
 
+
+#rosterList {
+    padding: 0;
+}
+
+.roster-section-title {
+    padding: 2px 4px;
+}
+
 .roster-item {
-    padding: 4px 0;
-    cursor: pointer;
+    margin-bottom: 2px;
+    padding: 2px 4px;
+}
+
+.roster-column-court .roster-section-title,
+.roster-section-title-court {
+    background: #fff2b8;
+}
+
+.roster-column-court .roster-item {
+    background: #fffdf0;
+}
+
+.roster-column-full .roster-section-title,
+.roster-section-title-full {
+    background: #e8f7e8;
+}
+
+.roster-column-full .roster-item {
+    background: #f4fbf4;
 }
 
 .roster-item.selected {
@@ -114,7 +141,7 @@ th, td {
 
 #rosterList.roster-two-column {
     display: flex;
-    gap: 16px;
+    gap: 4px;
     align-items: flex-start;
 }
 
