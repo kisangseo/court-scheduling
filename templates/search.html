@@ -61,6 +61,21 @@ let rawDeputies = [];
 let selectedDeputy = null;
 let globalAssignmentTotals = { total: 0, filled: 0 };
 let globalPostedNames = new Set();
+let hidePosted = false;
+
+function buildHidePostedToggle() {
+    const label = document.createElement("label");
+    label.className = "hide-posted-toggle";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "hide-posted-checkbox";
+    checkbox.checked = hidePosted;
+
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(" Hide Posted"));
+    return label;
+}
 
 function getPostedCacheKey(date) {
     return `postedNames:${date || ''}`;
@@ -482,7 +497,9 @@ function refreshRosterAssignedState() {
     const assignedNames = getAssignedNamesAcrossGrid();
     document.querySelectorAll('#rosterList .roster-item').forEach(item => {
         const name = (item.dataset.name || '').trim();
-        item.classList.toggle('assigned', !!name && assignedNames.has(name));
+        const isAssigned = !!name && assignedNames.has(name);
+        item.classList.toggle('assigned', isAssigned);
+        item.classList.toggle('hide-posted', hidePosted && isAssigned);
     });
 
     updateAssignmentCountBadges();
@@ -562,6 +579,7 @@ function renderRoster() {
     courtHeading.className = "roster-section-title";
     courtHeading.innerHTML = `Court Security <span id="courtSecurityCounts" class="counts-inline"></span>`;
     courtColumn.appendChild(courtHeading);
+    courtColumn.appendChild(buildHidePostedToggle());
 
     const courtList = document.createElement("div");
     courtList.id = "courtSecurityRosterList";
@@ -581,6 +599,7 @@ function renderRoster() {
         fullHeading.className = "roster-section-title";
         fullHeading.textContent = "Full Roster";
         fullColumn.appendChild(fullHeading);
+        fullColumn.appendChild(buildHidePostedToggle());
 
         const fullList = document.createElement("div");
         fullList.id = "fullRosterList";
@@ -1469,6 +1488,16 @@ window.onload = function() {
     document.getElementById("date").value = savedDate || today;
 
     document.getElementById("showFullRoster").addEventListener("change", renderRoster);
+    document.addEventListener('change', function(e) {
+        if (!e.target.classList.contains('hide-posted-checkbox')) return;
+        hidePosted = e.target.checked;
+        document.querySelectorAll('.hide-posted-checkbox').forEach(toggle => {
+            if (toggle !== e.target) {
+                toggle.checked = hidePosted;
+            }
+        });
+        refreshRosterAssignedState();
+    });
     document.getElementById("courthouse").addEventListener("change", search);
     document.getElementById("date").addEventListener("change", function() {
         localStorage.setItem('searchPageDate', document.getElementById("date").value || '');
