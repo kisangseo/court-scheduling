@@ -321,6 +321,11 @@ h4 {
 
 
 
+.courtroom-table th:nth-child(3),
+.courtroom-table td:nth-child(3) {
+    width: 12%;
+}
+
 .courtroom-table th:nth-child(4),
 .courtroom-table td:nth-child(4) {
     width: 28%;

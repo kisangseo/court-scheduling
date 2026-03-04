@@ -580,7 +580,7 @@ function applyDeputyToCell(dropCell, assignedName, role) {
 
    
 
-    const item = buildAssignmentChip(assignedName, role);
+    const item = buildAssignmentChip(assignedName, role, dropCell);
     assignmentList.appendChild(item);
 
     
@@ -759,6 +759,14 @@ function isPrimarySecurityRole(role) {
     return role === 'SPO' || role === 'F';
 }
 
+function isNoGunFixedPost(courthouse, post) {
+    const normalizedCourthouse = (courthouse || '').trim().toLowerCase();
+    const normalizedPost = (post || '').trim().toLowerCase();
+
+    return (normalizedCourthouse === 'mitchell' && normalizedPost === 'fayette h/c console room')
+        || (normalizedCourthouse === 'cummings' && normalizedPost === 'fayette st. h/c');
+}
+
 function isArmedByName(name) {
     const deputy = getDeputyRecordByName(name);
     const role = getDeputyRole(deputy || {});
@@ -769,7 +777,8 @@ function updateFixedPostArmedWarnings() {
     const slotsByPost = new Map();
     document.querySelectorAll('.editable[data-type="Fixed Post"][data-courthouse="Mitchell"]').forEach(cell => {
         const post = (cell.dataset.room || '').trim();
-        if (!post) return;
+        const courthouse = (cell.dataset.courthouse || '').trim();
+        if (!post || isNoGunFixedPost(courthouse, post)) return;
         if (!slotsByPost.has(post)) slotsByPost.set(post, []);
         slotsByPost.get(post).push(cell);
     });
@@ -817,6 +826,11 @@ function isEligibleForCell(cell, role) {
 
     if (category === 'security') {
         const post = (cell.dataset.room || '').trim();
+        const courthouse = (cell.dataset.courthouse || '').trim();
+        if (isNoGunFixedPost(courthouse, post)) {
+            return true;
+        }
+
         const shift = (cell.dataset.shift || '').trim();
         const matchingSecurityCells = Array.from(
             document.querySelectorAll('.editable[data-type="Fixed Post"]')
@@ -851,13 +865,18 @@ function showCellWarning(cell, message) {
     setTimeout(() => warning.remove(), 2000);
 }
 
-function buildAssignmentChip(name, role) {
+function buildAssignmentChip(name, role, owningCell = null) {
   const chip = document.createElement('span');
   chip.className = 'assignment-chip';
   chip.dataset.name = (name || '').trim();
   chip.dataset.role = (role || '').trim();
   chip.dataset.transferredOut = 'false';
   chip.textContent = (name || '').trim();
+
+  if (owningCell && transferredOutChipKeys.has(getTransferredChipKey(owningCell, name))) {
+    chip.dataset.transferredOut = 'true';
+    chip.classList.add('transferred-out');
+  }
 
   chip.addEventListener('click', function (e) {
     e.stopPropagation();
@@ -907,6 +926,7 @@ function buildAssignmentChip(name, role) {
     const closePop = () => pop.remove();
 
     const removeChip = () => {
+      forgetTransferredChip(cell, deputyName);
       chip.remove();
       setPendingAssignmentFromCell(cell);
       refreshRosterAssignedState();
@@ -925,6 +945,7 @@ function buildAssignmentChip(name, role) {
       })
       .then(() => fetchTransfersForDate())
       .then(() => {
+        rememberTransferredChip(cell, deputyName);
         chip.dataset.transferredOut = 'true';
         chip.classList.add('transferred-out');
         applyTransferCaptionToRosterAndGrid();
@@ -959,6 +980,7 @@ function clearExistingAssignmentForName(name, excludeCell) {
             const chipName = chip.dataset.name?.trim();
             if (chipName === name) {
                 if (isChipMarkedTransferredOut(chip)) return;
+                forgetTransferredChip(cell, chipName);
                 chip.remove();
                 removed = true;
             }
@@ -1021,7 +1043,7 @@ function initAssignmentDropzones() {
         // Recreate chips from raw DB string
         if (rawAssigned) {
             parseAssignedMemberValue(rawAssigned).forEach(name => {
-                list.appendChild(buildAssignmentChip(name, ''));
+                list.appendChild(buildAssignmentChip(name, '', cell));
             });
         }
 
@@ -1283,6 +1305,38 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
     return sections;
 }
 let transferMap = {}; // { "Name": { out: "9:05 AM", in: "11:02 AM" } }
+let transferredOutChipKeys = new Set();
+
+function isCurrentlyTransferredOut(name) {
+  const t = transferMap[(name || '').trim()];
+  return !!(t && t.out && !t.in);
+}
+
+function isChipMarkedTransferredOut(chip) {
+  return (chip?.dataset?.transferredOut || '').trim() === 'true';
+}
+
+function getTransferredChipKey(cell, name) {
+  if (!cell) return '';
+  return [
+    (cell.dataset.date || '').trim(),
+    (cell.dataset.courthouse || '').trim(),
+    (cell.dataset.type || '').trim(),
+    (cell.dataset.room || '').trim(),
+    (cell.dataset.part || '').trim(),
+    (name || '').trim().toLowerCase()
+  ].join('|');
+}
+
+function rememberTransferredChip(cell, name) {
+  const key = getTransferredChipKey(cell, name);
+  if (key) transferredOutChipKeys.add(key);
+}
+
+function forgetTransferredChip(cell, name) {
+  const key = getTransferredChipKey(cell, name);
+  if (key) transferredOutChipKeys.delete(key);
+}
 
 function isCurrentlyTransferredOut(name) {
   const t = transferMap[(name || '').trim()];
