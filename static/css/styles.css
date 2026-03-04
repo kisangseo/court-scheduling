@@ -135,6 +135,40 @@ th, td {
     background: #f4fbf4;
 }
 
+.roster-column-full .roster-item {
+    background: #f4fbf4;
+}
+
+.roster-column-full .roster-section-title,
+.roster-section-title-full {
+    background: #e8f7e8;
+}
+
+.roster-column-full .roster-item {
+    background: #f4fbf4;
+}
+
+.roster-column-court .roster-item {
+    background: #fffdf0;
+}
+
+.roster-column-full {
+    background: #f0faf0;
+    border: 1px solid #d1e9d1;
+    border-radius: 8px;
+    padding: 8px;
+}
+
+.roster-column-full .roster-section-title,
+.roster-section-title-full {
+    background: #e8f7e8;
+}
+
+.roster-column-full .roster-item {
+    background: #f4fbf4;
+}
+
+
 .roster-item.selected {
     outline: 2px solid #528bff;
     border-radius: 4px;
