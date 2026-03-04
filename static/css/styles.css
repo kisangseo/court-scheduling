@@ -135,6 +135,10 @@ th, td {
     background: #f4fbf4;
 }
 
+.roster-column-full .roster-item {
+    background: #f4fbf4;
+}
+
 .roster-column-full .roster-section-title,
 .roster-section-title-full {
     background: #e8f7e8;
@@ -183,6 +187,17 @@ th, td {
 .roster-column {
     flex: 1;
     min-width: 0;
+}
+
+
+/* Align top headers between Court Security and Full Roster */
+#rosterList .roster-column > .roster-section-title {
+    margin-top: 0;
+}
+
+/* Keep Full Roster title plain (no surrounding box), while division headers stay highlighted */
+.roster-column-full > .roster-section-title-full {
+    background: transparent;
 }
 
 .roster-item.assigned {
