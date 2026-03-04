@@ -2,6 +2,9 @@
 <html>
 <head>
     <title>Court Assignment Search</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 
 </head>
@@ -1756,6 +1759,11 @@ window.onload = function() {
         });
         refreshRosterAssignedState();
     });
+    document.addEventListener('change', function(e) {
+        if (!e.target.classList.contains('courtroom-high-profile-checkbox')) return;
+        const row = e.target.closest('.courtroom-meta-row');
+        if (row) setPendingCourtroomMetaFromRow(row);
+    });
     document.getElementById("courthouse").addEventListener("change", search);
     document.getElementById("date").addEventListener("change", function() {
         localStorage.setItem('searchPageDate', document.getElementById("date").value || '');
@@ -1842,6 +1850,8 @@ document.addEventListener("click", function(e) {
 });
 
 document.getElementById("saveAssignments").addEventListener("click", function() {
+
+    document.querySelectorAll('.courtroom-meta-row').forEach(rowEl => setPendingCourtroomMetaFromRow(rowEl));
 
     const saveStatus = document.getElementById("saveStatus");
     if (saveStatus) {
