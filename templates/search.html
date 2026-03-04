@@ -205,6 +205,24 @@ function renderBorrowedDeputiesTable() {
     const borrowedRows = [];
 
     document.querySelectorAll('.editable').forEach(cell => {
+        const chips = Array.from(cell.querySelectorAll('.assignment-chip'));
+        if (chips.length > 0) {
+            chips.forEach(chip => {
+                const name = (chip.dataset.name || chip.textContent || '').trim();
+                if (!name || isChipMarkedTransferredOut(chip)) return;
+                const deputy = getDeputyRecordByName(name);
+                if (!deputy || isCourtSecurityDeputy(deputy)) return;
+
+                borrowedRows.push({
+                    deputyName: name,
+                    division: (deputy.division || 'Unassigned Division').trim() || 'Unassigned Division',
+                    courthouse: formatBorrowedCourthouse(cell.dataset.courthouse),
+                    roomPartTime: formatRoomPartTime(cell)
+                });
+            });
+            return;
+        }
+
         const assignedNames = getAssignedNamesFromCell(cell);
         if (assignedNames.length === 0) return;
 
@@ -257,11 +275,13 @@ function getAssignedNamesAcrossGrid() {
     const names = new Set();
 
     document.querySelectorAll('.editable').forEach(cell => {
-        const assignedNames = getAssignedNamesFromCell(cell);
+        const chips = Array.from(cell.querySelectorAll('.assignment-chip'));
 
-        if (assignedNames.length > 0) {
-            assignedNames.forEach(name => {
-                if (!isCurrentlyTransferredOut(name)) names.add(name);
+        if (chips.length > 0) {
+            chips.forEach(chip => {
+                const name = (chip.dataset.name || chip.textContent || '').trim();
+                if (!name || isChipMarkedTransferredOut(chip)) return;
+                names.add(name);
             });
             return;
         }
@@ -282,11 +302,13 @@ function getPostedNameSetForPostsAndCourtrooms() {
     const names = new Set();
 
     document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"], .editable[data-type="Transport"], .editable[data-type="Overtime"]').forEach(cell => {
-        const assignedNames = getAssignedNamesFromCell(cell);
+        const chips = Array.from(cell.querySelectorAll('.assignment-chip'));
 
-        if (assignedNames.length > 0) {
-            assignedNames.forEach(name => {
-                if (!isCurrentlyTransferredOut(name)) names.add(name);
+        if (chips.length > 0) {
+            chips.forEach(chip => {
+                const name = (chip.dataset.name || chip.textContent || '').trim();
+                if (!name || isChipMarkedTransferredOut(chip)) return;
+                names.add(name);
             });
             return;
         }
@@ -834,6 +856,7 @@ function buildAssignmentChip(name, role) {
   chip.className = 'assignment-chip';
   chip.dataset.name = (name || '').trim();
   chip.dataset.role = (role || '').trim();
+  chip.dataset.transferredOut = 'false';
   chip.textContent = (name || '').trim();
 
   chip.addEventListener('click', function (e) {
@@ -901,7 +924,12 @@ function buildAssignmentChip(name, role) {
         body: JSON.stringify({ assignment_date: date, full_name: deputyName })
       })
       .then(() => fetchTransfersForDate())
-      .then(() => { applyTransferCaptionToRosterAndGrid(); closePop(); })
+      .then(() => {
+        chip.dataset.transferredOut = 'true';
+        chip.classList.add('transferred-out');
+        applyTransferCaptionToRosterAndGrid();
+        closePop();
+      })
       .catch(() => { closePop(); });
     });
 
@@ -930,6 +958,7 @@ function clearExistingAssignmentForName(name, excludeCell) {
         chips.forEach(chip => {
             const chipName = chip.dataset.name?.trim();
             if (chipName === name) {
+                if (isChipMarkedTransferredOut(chip)) return;
                 chip.remove();
                 removed = true;
             }
@@ -1260,6 +1289,10 @@ function isCurrentlyTransferredOut(name) {
   return !!(t && t.out && !t.in);
 }
 
+function isChipMarkedTransferredOut(chip) {
+  return (chip?.dataset?.transferredOut || '').trim() === 'true';
+}
+
 function fetchTransfersForDate() {
   const date = document.getElementById("date")?.value;
   if (!date) { transferMap = {}; return Promise.resolve(); }
@@ -1307,7 +1340,7 @@ function applyTransferCaptionToRosterAndGrid() {
   document.querySelectorAll('.assignment-chip').forEach(chip => {
     const name = (chip.dataset.name || chip.textContent || '').trim();
     const text = format(name);
-    const isTransferredOut = isCurrentlyTransferredOut(name);
+    const isTransferredOut = isChipMarkedTransferredOut(chip) || isCurrentlyTransferredOut(name);
 
     chip.classList.toggle('transferred-out', isTransferredOut);
 
