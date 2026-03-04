@@ -38,7 +38,7 @@ th, td {
 
 #assignmentRosterLayout {
     display: flex;
-    gap: 24px;
+    gap: 10px;
     align-items: flex-start;
 }
 
@@ -81,8 +81,8 @@ th, td {
 }
 
 #rosterPanel {
-    flex: 0 0 280px;
-    width: 280px;
+    flex: 0 0 320px;
+    width: 320px;
     max-height: 80vh;
     overflow-y: auto;
     position: sticky;
@@ -108,8 +108,13 @@ th, td {
 }
 
 .roster-item {
-    margin-bottom: 2px;
-    padding: 2px 4px;
+    margin-bottom: 1px;
+    padding: 1px 4px;
+    font-size: 0.9rem;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .roster-column-court .roster-section-title,
@@ -119,6 +124,15 @@ th, td {
 
 .roster-column-court .roster-item {
     background: #fffdf0;
+}
+
+.roster-column-full .roster-section-title,
+.roster-section-title-full {
+    background: #e8f7e8;
+}
+
+.roster-column-full .roster-item {
+    background: #f4fbf4;
 }
 
 .roster-column-full .roster-section-title,
