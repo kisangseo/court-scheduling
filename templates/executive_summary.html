@@ -100,13 +100,14 @@ function isCourtSecurity(deputy) {
     return division === 'court security' || division === 'court security division';
 }
 
-function isUnavailableStatus(status) {
-    if (!status) return false;
-    const normalized = status.toLowerCase();
-    return normalized.includes('sick')
-        || normalized.includes('unavailable')
-        || normalized.includes('leave')
-        || normalized.includes('callout');
+function getUnavailableBreakdown(status) {
+    const normalized = (status || '').toLowerCase();
+    return {
+        sick: normalized.includes('sick') ? 1 : 0,
+        unavailable: normalized.includes('unavailable') ? 1 : 0,
+        leave: normalized.includes('leave') ? 1 : 0,
+        callout: normalized.includes('callout') ? 1 : 0
+    };
 }
 
 function parseAssignedMemberValue(value) {
@@ -181,15 +182,26 @@ async function loadSummary() {
             const deputies = await deputiesRes.json();
             const assignments = await assignmentsRes.json();
             const courtSecurityDeputies = deputies.filter(isCourtSecurity);
-            const unavailableCount = courtSecurityDeputies.filter(dep => isUnavailableStatus(dep.current_status)).length;
-            const availableCount = courtSecurityDeputies.length - unavailableCount;
+            const unavailableBreakdown = courtSecurityDeputies.reduce((totals, dep) => {
+                const breakdown = getUnavailableBreakdown(dep.current_status);
+                totals.sick += breakdown.sick;
+                totals.unavailable += breakdown.unavailable;
+                totals.leave += breakdown.leave;
+                totals.callout += breakdown.callout;
+                return totals;
+            }, { sick: 0, unavailable: 0, leave: 0, callout: 0 });
+            const unavailableAnyCount = courtSecurityDeputies.filter(dep => {
+                const breakdown = getUnavailableBreakdown(dep.current_status);
+                return breakdown.sick || breakdown.unavailable || breakdown.leave || breakdown.callout;
+            }).length;
+            const availableCount = courtSecurityDeputies.length - unavailableAnyCount;
             const borrowedCount = countBorrowedDeputies(assignments, deputies);
 
             return {
                 label: dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }),
                 needed: PERSONNEL_NEEDED_FIXED,
                 available: availableCount,
-                unavailable: unavailableCount,
+                unavailableBreakdown,
                 borrowed: borrowedCount
             };
         }));
@@ -206,7 +218,10 @@ function renderSummary(dayResults) {
     const headers = dayResults.map(day => `<th>${day.label}</th>`).join('');
     const neededCells = dayResults.map(day => `<td>${day.needed}</td>`).join('');
     const availableCells = dayResults.map(day => `<td>${day.available}</td>`).join('');
-    const unavailableCells = dayResults.map(day => `<td>${day.unavailable}</td>`).join('');
+    const sickCells = dayResults.map(day => `<td>Sick: ${day.unavailableBreakdown.sick}</td>`).join('');
+    const unavailableCells = dayResults.map(day => `<td>Unavailable: ${day.unavailableBreakdown.unavailable}</td>`).join('');
+    const leaveCells = dayResults.map(day => `<td>Leave: ${day.unavailableBreakdown.leave}</td>`).join('');
+    const calloutCells = dayResults.map(day => `<td>Callout: ${day.unavailableBreakdown.callout}</td>`).join('');
     const borrowedCells = dayResults.map(day => `<td>${day.borrowed}</td>`).join('');
 
     summaryContent.innerHTML = `
@@ -227,8 +242,20 @@ function renderSummary(dayResults) {
                     ${availableCells}
                 </tr>
                 <tr>
-                    <td class="metric-label">Number Unavailable (Sick + Unavailable + Leave + Callout)</td>
+                    <td class="metric-label">Number Unavailable Breakdown</td>
+                    ${sickCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">&nbsp;</td>
                     ${unavailableCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">&nbsp;</td>
+                    ${leaveCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">&nbsp;</td>
+                    ${calloutCells}
                 </tr>
                 <tr>
                     <td class="metric-label">Borrowed Deputies</td>
