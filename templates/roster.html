@@ -491,11 +491,24 @@ function createDeputyRow(dep, includeDivision) {
 
 
 function getTotalNeededFromAssignments(assignments) {
-    const requiredRows = (assignments || []).filter(row =>
-        row.assignment_type === 'Courtroom' || row.assignment_type === 'Fixed Post'
-    );
+    const FIXED_REQUIRED_SLOTS = {
+        mitchell: { courtroom: 16, fixedPost: 15 },
+        cummings: { courtroom: 11, fixedPost: 12 }
+    };
 
-    return requiredRows.length;
+    // Mirror main-page counting behavior: each rendered slot row counts, including repeated time slots.
+    const juvenileCourtroomCount = (assignments || []).filter(row =>
+        row.assignment_type === 'Courtroom' &&
+        (row.courthouse || '').trim().toLowerCase() === 'juvenile'
+    ).length;
+
+    return (
+        FIXED_REQUIRED_SLOTS.mitchell.courtroom +
+        FIXED_REQUIRED_SLOTS.mitchell.fixedPost +
+        FIXED_REQUIRED_SLOTS.cummings.courtroom +
+        FIXED_REQUIRED_SLOTS.cummings.fixedPost +
+        juvenileCourtroomCount
+    );
 }
 
 function updateCourtSecurityStatusCounts(deputies, totalNeeded) {
