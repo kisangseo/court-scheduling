@@ -155,10 +155,10 @@ def transfer_out():
         USING (SELECT ? AS assignment_date, ? AS full_name) AS s
         ON t.assignment_date = s.assignment_date AND t.full_name = s.full_name
         WHEN MATCHED THEN
-            UPDATE SET transfer_out_time = GETDATE()
+            UPDATE SET transfer_out_time = CAST(SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time' AS datetime)
         WHEN NOT MATCHED THEN
             INSERT (assignment_date, full_name, transfer_out_time, transfer_in_time)
-            VALUES (?, ?, GETDATE(), NULL);
+            VALUES (?, ?, CAST(SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time' AS datetime), NULL);
     """, (assignment_date, full_name, assignment_date, full_name))
 
     conn.commit()
@@ -180,7 +180,7 @@ def transfer_in():
     # Only set IN if the row exists + has an OUT time (so “in” only happens after a real transfer-out)
     cursor.execute("""
         UPDATE dbo.deputy_transfers
-        SET transfer_in_time = GETDATE()
+        SET transfer_in_time = CAST(SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time' AS datetime)
         WHERE assignment_date = ?
           AND full_name = ?
           AND transfer_out_time IS NOT NULL

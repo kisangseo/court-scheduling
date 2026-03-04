@@ -209,6 +209,12 @@ th, td {
     margin: 2px 4px 2px 0;
 }
 
+.assignment-chip.transferred-out {
+    opacity: 0.55;
+    background: #f2f4f7;
+    border-color: #d0d5dd;
+}
+
 
 .cell-warning {
     color: #b42318;
@@ -314,6 +320,11 @@ h4 {
 }
 
 
+
+.courtroom-table th:nth-child(3),
+.courtroom-table td:nth-child(3) {
+    width: 12%;
+}
 
 .courtroom-table th:nth-child(4),
 .courtroom-table td:nth-child(4) {
