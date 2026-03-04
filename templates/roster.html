@@ -39,7 +39,7 @@
 </div>
 
 <div class="add-form">
-    <input type="text" id="newFullName" placeholder="Full Name">
+    <input type="text" id="newFullName" placeholder="Last name, First name">
     <select id="newDivision">
         <option value="Court Security">Court Security</option>
         <option value="Domestic Violence">Domestic Violence</option>
@@ -99,6 +99,35 @@ function buildOptions(selectEl, values, selectedValue = "") {
         if ((selectedValue || "") === value) opt.selected = true;
         selectEl.appendChild(opt);
     });
+}
+
+function parseRosterName(fullName) {
+    const pieces = (fullName || "").split(",");
+    if (pieces.length !== 2) return null;
+
+    const lastName = pieces[0].trim();
+    const firstName = pieces[1].trim();
+    if (!lastName || !firstName) return null;
+
+    return { lastName, firstName };
+}
+
+function formatEmailNamePart(value) {
+    return (value || "")
+        .toLowerCase()
+        .replace(/\s+/g, "")
+        .replace(/[^a-z0-9-]/g, "");
+}
+
+function buildBaltimoreEmail(fullName) {
+    const parsed = parseRosterName(fullName);
+    if (!parsed) return "";
+
+    const firstName = formatEmailNamePart(parsed.firstName.split(" ")[0]);
+    const lastName = formatEmailNamePart(parsed.lastName.split(" ")[0]);
+    if (!firstName || !lastName) return "";
+
+    return `${firstName}.${lastName}@baltimorecity.gov`;
 }
 
 buildOptions(document.getElementById("newRank"), rankOptions, "Court Security Officer");
@@ -507,8 +536,15 @@ function loadRoster() {
 
 document.getElementById("addDeputyBtn").addEventListener("click", () => {
     const fullName = document.getElementById("newFullName").value.trim();
-    if (!fullName) {
-        alert("Enter full name");
+    const parsedName = parseRosterName(fullName);
+    if (!parsedName) {
+        alert("Enter name as 'Last name, First name'");
+        return;
+    }
+
+    const email = buildBaltimoreEmail(fullName);
+    if (!email) {
+        alert("Could not generate an email from that name.");
         return;
     }
 
@@ -517,6 +553,7 @@ document.getElementById("addDeputyBtn").addEventListener("click", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             full_name: fullName,
+            email,
             division: document.getElementById("newDivision").value,
             rank: document.getElementById("newRank").value,
             capacity_tag: document.getElementById("newCapability").value

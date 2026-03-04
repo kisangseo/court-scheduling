@@ -106,6 +106,38 @@ def _serialize_status_payload(payload):
     if not payload.get("ranges") and not payload.get("legacy") and not payload.get("weekly_unavailable"):
         return None
     return json.dumps(payload)
+
+
+def _parse_roster_name(full_name):
+    if not full_name or "," not in full_name:
+        return None
+
+    parts = [p.strip() for p in full_name.split(",", 1)]
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        return None
+
+    return {"last_name": parts[0], "first_name": parts[1]}
+
+
+def _normalize_email_name_part(value):
+    lowered = (value or "").lower()
+    no_spaces = "".join(lowered.split())
+    return "".join(ch for ch in no_spaces if ch.isalnum() or ch == "-")
+
+
+def _build_baltimore_email(full_name):
+    parsed = _parse_roster_name(full_name)
+    if not parsed:
+        return None
+
+    first_name = _normalize_email_name_part(parsed["first_name"].split(" ")[0])
+    last_name = _normalize_email_name_part(parsed["last_name"].split(" ")[0])
+    if not first_name or not last_name:
+        return None
+
+    return f"{first_name}.{last_name}@baltimorecity.gov"
+
+
 @app.route("/api/transfers")
 def get_transfers():
     assignment_date = request.args.get("date")
@@ -403,6 +435,11 @@ def update_unavailability():
 def upsert_deputy():
     data = request.json
     original_full_name = data.get("original_full_name")
+    full_name = data.get("full_name")
+
+    email = data.get("email") or _build_baltimore_email(full_name)
+    if not email:
+        return jsonify({"status": "error", "message": "full_name must be in 'Last name, First name' format"}), 400
 
     conn = get_conn()
     cursor = conn.cursor()
@@ -411,64 +448,99 @@ def upsert_deputy():
         update_queries = [
             ("""
                 UPDATE dbo.deputies
+                SET full_name = ?, email = ?, division = ?, rank = ?, capacity_tag = ?
+                WHERE full_name = ?
+            """, (full_name, email, data.get("division"), data.get("rank"), data.get("capacity_tag"), original_full_name)),
+            ("""
+                UPDATE dbo.deputies
+                SET full_name = ?, email = ?, division = ?, capacity_tag = ?
+                WHERE full_name = ?
+            """, (full_name, email, data.get("division"), data.get("capacity_tag"), original_full_name)),
+            ("""
+                UPDATE dbo.deputies
                 SET full_name = ?, division = ?, rank = ?, capacity_tag = ?
                 WHERE full_name = ?
-            """, (data.get("full_name"), data.get("division"), data.get("rank"), data.get("capacity_tag"), original_full_name)),
+            """, (full_name, data.get("division"), data.get("rank"), data.get("capacity_tag"), original_full_name)),
             ("""
                 UPDATE dbo.deputies
                 SET full_name = ?, division = ?, capacity_tag = ?
                 WHERE full_name = ?
-            """, (data.get("full_name"), data.get("division"), data.get("capacity_tag"), original_full_name)),
+            """, (full_name, data.get("division"), data.get("capacity_tag"), original_full_name)),
+            ("""
+                UPDATE dbo.deputies
+                SET full_name = ?, email = ?, rank = ?, capacity_tag = ?
+                WHERE full_name = ?
+            """, (full_name, email, data.get("rank"), data.get("capacity_tag"), original_full_name)),
             ("""
                 UPDATE dbo.deputies
                 SET full_name = ?, rank = ?, capacity_tag = ?
                 WHERE full_name = ?
-            """, (data.get("full_name"), data.get("rank"), data.get("capacity_tag"), original_full_name)),
+            """, (full_name, data.get("rank"), data.get("capacity_tag"), original_full_name)),
+            ("""
+                UPDATE dbo.deputies
+                SET full_name = ?, email = ?, capacity_tag = ?
+                WHERE full_name = ?
+            """, (full_name, email, data.get("capacity_tag"), original_full_name)),
             ("""
                 UPDATE dbo.deputies
                 SET full_name = ?, capacity_tag = ?
                 WHERE full_name = ?
-            """, (data.get("full_name"), data.get("capacity_tag"), original_full_name)),
+            """, (full_name, data.get("capacity_tag"), original_full_name)),
         ]
 
         for query, params in update_queries:
             try:
                 cursor.execute(query, params)
                 break
-            except pyodbc.ProgrammingError:
+            except (pyodbc.ProgrammingError, pyodbc.IntegrityError):
                 continue
     else:
         insert_queries = [
             ("""
+                INSERT INTO dbo.deputies (full_name, email, division, rank, capacity_tag, current_status)
+                VALUES (?, ?, ?, ?, ?, NULL)
+            """, (full_name, email, data.get("division"), data.get("rank"), data.get("capacity_tag"))),
+            ("""
+                INSERT INTO dbo.deputies (full_name, email, division, capacity_tag, current_status)
+                VALUES (?, ?, ?, ?, NULL)
+            """, (full_name, email, data.get("division"), data.get("capacity_tag"))),
+            ("""
+                INSERT INTO dbo.deputies (full_name, email, rank, capacity_tag, current_status)
+                VALUES (?, ?, ?, ?, NULL)
+            """, (full_name, email, data.get("rank"), data.get("capacity_tag"))),
+            ("""
+                INSERT INTO dbo.deputies (full_name, email, capacity_tag, current_status)
+                VALUES (?, ?, ?, NULL)
+            """, (full_name, email, data.get("capacity_tag"))),
+            ("""
                 INSERT INTO dbo.deputies (full_name, division, rank, capacity_tag, current_status)
                 VALUES (?, ?, ?, ?, NULL)
-            """, (data.get("full_name"), data.get("division"), data.get("rank"), data.get("capacity_tag"))),
+            """, (full_name, data.get("division"), data.get("rank"), data.get("capacity_tag"))),
             ("""
                 INSERT INTO dbo.deputies (full_name, division, capacity_tag, current_status)
                 VALUES (?, ?, ?, NULL)
-            """, (data.get("full_name"), data.get("division"), data.get("capacity_tag"))),
+            """, (full_name, data.get("division"), data.get("capacity_tag"))),
             ("""
                 INSERT INTO dbo.deputies (full_name, rank, capacity_tag, current_status)
                 VALUES (?, ?, ?, NULL)
-            """, (data.get("full_name"), data.get("rank"), data.get("capacity_tag"))),
+            """, (full_name, data.get("rank"), data.get("capacity_tag"))),
             ("""
                 INSERT INTO dbo.deputies (full_name, capacity_tag, current_status)
                 VALUES (?, ?, NULL)
-            """, (data.get("full_name"), data.get("capacity_tag"))),
+            """, (full_name, data.get("capacity_tag"))),
         ]
 
         for query, params in insert_queries:
             try:
                 cursor.execute(query, params)
                 break
-            except pyodbc.ProgrammingError:
+            except (pyodbc.ProgrammingError, pyodbc.IntegrityError):
                 continue
 
     conn.commit()
     conn.close()
 
     return {"status": "success"}
-
 
 @app.route("/api/delete-deputy", methods=["POST"])
 def delete_deputy():
