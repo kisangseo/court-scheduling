@@ -66,11 +66,19 @@
 </div>
 
 <script>
-const PERSONNEL_NEEDED_FIXED = 56;
 const summaryDateInput = document.getElementById('summaryDate');
 const refreshSummaryBtn = document.getElementById('refreshSummaryBtn');
 const summaryContent = document.getElementById('summaryContent');
 const summaryStatus = document.getElementById('summaryStatus');
+
+function getTotalNeededFromAssignments(assignments) {
+    const requiredRows = (assignments || []).filter(row =>
+        row.assignment_type === 'Courtroom' || row.assignment_type === 'Fixed Post'
+    );
+
+    const filledCount = requiredRows.filter(row => (row.assigned_member || '').trim().length > 0).length;
+    return Math.max(requiredRows.length - filledCount, 0);
+}
 
 function formatDateISO(dateObj) {
     const y = dateObj.getFullYear();
@@ -197,10 +205,11 @@ async function loadSummary() {
             }).length;
             const availableCount = courtSecurityDeputies.length - unavailableAnyCount;
             const borrowedCount = countBorrowedDeputies(assignments, deputies);
+            const neededCount = getTotalNeededFromAssignments(assignments);
 
             return {
                 label: dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }),
-                needed: PERSONNEL_NEEDED_FIXED,
+                needed: neededCount,
                 available: availableCount,
                 unavailableBreakdown,
                 borrowed: borrowedCount
