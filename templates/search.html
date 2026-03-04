@@ -209,6 +209,7 @@ function renderBorrowedDeputiesTable() {
         if (assignedNames.length === 0) return;
 
         assignedNames.forEach(name => {
+            if (isCurrentlyTransferredOut(name)) return;
             const deputy = getDeputyRecordByName(name);
             if (!deputy || isCourtSecurityDeputy(deputy)) return;
 
@@ -259,11 +260,15 @@ function getAssignedNamesAcrossGrid() {
         const assignedNames = getAssignedNamesFromCell(cell);
 
         if (assignedNames.length > 0) {
-            assignedNames.forEach(name => names.add(name));
+            assignedNames.forEach(name => {
+                if (!isCurrentlyTransferredOut(name)) names.add(name);
+            });
             return;
         }
 
-        parseAssignedMemberValue(cell.textContent).forEach(name => names.add(name));
+        parseAssignedMemberValue(cell.textContent).forEach(name => {
+            if (!isCurrentlyTransferredOut(name)) names.add(name);
+        });
     });
 
     return names;
@@ -280,11 +285,15 @@ function getPostedNameSetForPostsAndCourtrooms() {
         const assignedNames = getAssignedNamesFromCell(cell);
 
         if (assignedNames.length > 0) {
-            assignedNames.forEach(name => names.add(name));
+            assignedNames.forEach(name => {
+                if (!isCurrentlyTransferredOut(name)) names.add(name);
+            });
             return;
         }
 
-        parseAssignedMemberValue(cell.textContent).forEach(name => names.add(name));
+        parseAssignedMemberValue(cell.textContent).forEach(name => {
+            if (!isCurrentlyTransferredOut(name)) names.add(name);
+        });
     });
 
     if (names.size > 0 || document.querySelectorAll('.editable').length > 0) {
@@ -497,7 +506,8 @@ function refreshRosterAssignedState() {
     const assignedNames = getAssignedNamesAcrossGrid();
     document.querySelectorAll('#rosterList .roster-item').forEach(item => {
         const name = (item.dataset.name || '').trim();
-        const isAssigned = !!name && assignedNames.has(name);
+        const isTransferredOut = isCurrentlyTransferredOut(name);
+        const isAssigned = !!name && assignedNames.has(name) && !isTransferredOut;
         item.classList.toggle('assigned', isAssigned);
         item.classList.toggle('hide-posted', hidePosted && isAssigned);
     });
@@ -537,7 +547,7 @@ function setSelectedDeputyFromRosterItem(item) {
 
 function applyDeputyToCell(dropCell, assignedName, role) {
     if (!isEligibleForCell(dropCell, role)) {
-        showCellWarning(dropCell, 'Select eligible personnel');
+        showCellWarning(dropCell, 'Select an Armed Personnel First');
         return false;
     }
 
@@ -723,6 +733,10 @@ function isArmedRole(role) {
     return role === 'DEP' || role === 'SPO' || role === 'F';
 }
 
+function isPrimarySecurityRole(role) {
+    return role === 'SPO' || role === 'F';
+}
+
 function isArmedByName(name) {
     const deputy = getDeputyRecordByName(name);
     const role = getDeputyRole(deputy || {});
@@ -778,6 +792,30 @@ function isEligibleForCell(cell, role) {
     if (category === 'courtroom') {
         return isArmedRole(role);
     }
+
+    if (category === 'security') {
+        const post = (cell.dataset.room || '').trim();
+        const shift = (cell.dataset.shift || '').trim();
+        const matchingSecurityCells = Array.from(
+            document.querySelectorAll('.editable[data-type="Fixed Post"]')
+        ).filter(candidate => {
+            if ((candidate.dataset.room || '').trim() !== post) return false;
+            return (candidate.dataset.shift || '').trim() === shift;
+        });
+
+        const hasPrimaryAssigned = matchingSecurityCells.some(candidate =>
+            getAssignedNamesFromCell(candidate).some(name => {
+                const deputy = getDeputyRecordByName(name);
+                const assignedRole = getDeputyRole(deputy || {});
+                return isPrimarySecurityRole(assignedRole);
+            })
+        );
+
+        if (!hasPrimaryAssigned && !isPrimarySecurityRole(role)) {
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -863,8 +901,8 @@ function buildAssignmentChip(name, role) {
         body: JSON.stringify({ assignment_date: date, full_name: deputyName })
       })
       .then(() => fetchTransfersForDate())
-      .then(() => { removeChip(); applyTransferCaptionToRosterAndGrid(); })
-      .catch(() => { removeChip(); });
+      .then(() => { applyTransferCaptionToRosterAndGrid(); closePop(); })
+      .catch(() => { closePop(); });
     });
 
     setTimeout(() => {
@@ -1116,6 +1154,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                     data-assigned="${assigned ? (assigned.assigned_member || "") : ""}"
                     data-type="Fixed Post"
                     data-room="${slot.post}"
+                    data-shift="${slot.detail || "General"}"
                     data-slot-index="${index}"
                     data-part="${slot.part || ""}">
                     ${assigned ? (assigned.assigned_member || "") : ""}
@@ -1216,6 +1255,11 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
 }
 let transferMap = {}; // { "Name": { out: "9:05 AM", in: "11:02 AM" } }
 
+function isCurrentlyTransferredOut(name) {
+  const t = transferMap[(name || '').trim()];
+  return !!(t && t.out && !t.in);
+}
+
 function fetchTransfersForDate() {
   const date = document.getElementById("date")?.value;
   if (!date) { transferMap = {}; return Promise.resolve(); }
@@ -1263,6 +1307,9 @@ function applyTransferCaptionToRosterAndGrid() {
   document.querySelectorAll('.assignment-chip').forEach(chip => {
     const name = (chip.dataset.name || chip.textContent || '').trim();
     const text = format(name);
+    const isTransferredOut = isCurrentlyTransferredOut(name);
+
+    chip.classList.toggle('transferred-out', isTransferredOut);
 
     let cap = chip.querySelector('.transfer-caption');
     if (!text) { if (cap) cap.remove(); return; }
@@ -1277,6 +1324,8 @@ function applyTransferCaptionToRosterAndGrid() {
     }
     cap.textContent = `(${text})`;
   });
+
+  refreshRosterAssignedState();
 }
 function search() {
     const name = document.getElementById("name").value;
