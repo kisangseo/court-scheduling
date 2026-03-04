@@ -87,26 +87,28 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     function buildDynamicTable(deputies) {
-        const assignedCourtSecurity = sortByName(
-            deputies.filter(dep => normalize(dep.division) === "court security")
-        ).map(dep => dep.full_name);
+        const courtSecurityDeputies = deputies.filter(
+            dep => normalize(dep.division) === "court security"
+        );
+
+        const assignedCourtSecurity = sortByName(courtSecurityDeputies).map(dep => dep.full_name);
 
         const certifiedCourtRoom = sortCourtSecurityFirst(
-            deputies.filter(dep => {
+            courtSecurityDeputies.filter(dep => {
                 const capacityTag = normalize(dep.capacity_tag);
                 return capacityTag === "f" || capacityTag === "spo";
             })
         ).map(dep => dep.full_name);
 
         const certifiedDoor = sortCourtSecurityFirst(
-            deputies.filter(dep => {
+            courtSecurityDeputies.filter(dep => {
                 const capacityTag = normalize(dep.capacity_tag);
                 return ["f", "spo", "nospo", "cso"].includes(capacityTag);
             })
         ).map(dep => dep.full_name);
 
         const available = sortByName(
-            deputies.filter(dep => !isOutStatus(dep.current_status))
+            courtSecurityDeputies.filter(dep => !isOutStatus(dep.current_status))
         ).map(dep => dep.full_name);
 
         const unavailable = sortByName(
