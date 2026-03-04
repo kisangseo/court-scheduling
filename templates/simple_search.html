@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Court Assignment Search</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+<div class="top-controls">
+    <h2>Court Assignments <span id="overallAssignmentCounts" class="counts-inline"></span> <label class="simple-view-toggle"><input type="checkbox" id="simpleViewToggle" checked> Simple View</label></h2>
+    <input type="text" id="name" placeholder="Search by Name">
+    <input type="date" id="date">
+    <select id="courthouse">
+        <option value="">All Courthouses</option>
+        <option value="Mitchell">Mitchell</option>
+        <option value="Cummings">Cummings</option>
+    </select>
+    <button onclick="searchSimple()">Search</button>
+    <button onclick="window.location.href='/'">Main View</button>
+</div>
+
+<div class="simple-grid" id="simpleGrid"></div>
+
+<script>
+const MITCHELL_POSTS = [
+    { post: "Calvert", detail: "8:00 AM", part: "0800-1" },
+    { post: "Calvert", detail: "8:00 AM", part: "0800-2" },
+    { post: "Calvert", detail: "8:00 AM", part: "0800-3" },
+    { post: "Lexington", detail: "7:00 AM - 3:00 PM", part: "0700-1500" },
+    { post: "Lexington", detail: "3:00 PM - 11:00 PM", part: "1500-2300" },
+    { post: "Lexington", detail: "11:00 PM - 7:00 AM", part: "2300-0700" },
+    { post: "Fayette H/C Console room", detail: "7:00 AM", part: "0700" },
+    { post: "Fayette H/C Console room", detail: "7:15 AM", part: "0715" },
+    { post: "Lock Up West", detail: "1 of 2", part: "OPEN-1" },
+    { post: "Lock Up West", detail: "2 of 2", part: "OPEN-2" },
+    { post: "Jury Room", detail: "7:30 AM", part: "0730" },
+    { post: "St. Paul", detail: "7:30 AM", part: "0730" },
+    { post: "St. Paul", detail: "8:30 AM", part: "0830" },
+    { post: "Rover", detail: "7:00 AM", part: "0700" },
+    { post: "Judges", detail: "7:00 AM", part: "0700" }
+];
+
+const CUMMINGS_POSTS = [
+    { post: "Cummings", detail: "8:00 AM", part: "0800" },
+    { post: "Cummings", detail: "8:30 AM", part: "0830-1" },
+    { post: "Cummings", detail: "8:30 AM", part: "0830-2" },
+    { post: "Fayette St. H/C", detail: "7:15 AM", part: "0715" },
+    { post: "Fayette St. H/C", detail: "9:00 AM", part: "0900" },
+    { post: "Console Room", detail: "8:30 AM", part: "0830-1" },
+    { post: "Console Room", detail: "8:30 AM", part: "0830-2" },
+    { post: "Lock Up East", detail: "8:00 AM", part: "0800" },
+    { post: "Garage", detail: "6:00 AM", part: "0600" },
+    { post: "Garage", detail: "4:00 PM", part: "1600" },
+    { post: "Family Court", detail: "8:00 AM", part: "0800" },
+    { post: "Transportation", detail: "", part: "" }
+];
+
+const MITCHELL_ROOMS = ["600M","231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"];
+const CUMMINGS_ROOMS = ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C"];
+
+function formatCountMetrics(vacant, filled) {
+    return `<span class="metric-red">Vacant ${vacant}</span> / <span class="metric-green">Filled ${filled}</span>`;
+}
+
+function buildSimpleViewUrl(pathname) {
+    const params = new URLSearchParams();
+    const date = document.getElementById("date")?.value || "";
+    const courthouse = document.getElementById("courthouse")?.value || "";
+    const name = document.getElementById("name")?.value || "";
+    if (date) params.set("date", date);
+    if (courthouse) params.set("courthouse", courthouse);
+    if (name) params.set("name", name);
+    const query = params.toString();
+    return query ? `${pathname}?${query}` : pathname;
+}
+
+function pickPreferredRow(rowList) {
+    return rowList.find(r => (r.assigned_member || "").trim()) || rowList[0] || null;
+}
+
+function countFilled(rows) {
+    const total = rows.length;
+    const filled = rows.filter(r => (r.assigned_member || "").trim()).length;
+    return { total, filled, vacant: Math.max(total - filled, 0) };
+}
+
+function renderPostTable(courthouse, rows) {
+    const postSlots = courthouse === "Mitchell" ? MITCHELL_POSTS : CUMMINGS_POSTS;
+    const postRows = rows.filter(r => r.assignment_type === "Fixed Post");
+    const table = document.createElement("table");
+    table.innerHTML = `<thead><tr><th>Post</th><th>Shift</th><th>Deputy</th></tr></thead><tbody></tbody>`;
+    const tbody = table.querySelector("tbody");
+
+    postSlots.forEach((slot, index) => {
+        const slotMatches = postRows.filter(r =>
+            r.location_group === slot.post && (
+                (slot.part && r.part === slot.part) ||
+                (slot.detail && r.location_detail === slot.detail) ||
+                (!slot.part && !slot.detail)
+            )
+        );
+        const fallbackMatches = postRows.filter(r => r.location_group === slot.post && !r.part && !r.location_detail);
+        const assigned = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
+
+        const tr = document.createElement("tr");
+        const showPost = index === 0 || postSlots[index - 1].post !== slot.post;
+        tr.innerHTML = `<td>${showPost ? slot.post : ""}</td><td>${slot.detail || ""}</td><td>${assigned ? (assigned.assigned_member || "") : ""}</td>`;
+        tbody.appendChild(tr);
+    });
+
+    return { table, stats: countFilled(postSlots.map(slot => {
+        const match = postRows.find(r => r.location_group === slot.post && ((slot.part && r.part === slot.part) || (!slot.part && !r.part && (slot.detail ? r.location_detail === slot.detail : true))));
+        return { assigned_member: match ? match.assigned_member : "" };
+    })) };
+}
+
+function renderCourtroomTable(courthouse, rows) {
+    const rooms = courthouse === "Mitchell" ? MITCHELL_ROOMS : CUMMINGS_ROOMS;
+    const courtRows = rows.filter(r => r.assignment_type === "Courtroom");
+    const table = document.createElement("table");
+    table.innerHTML = `<thead><tr><th>Judge</th><th>Courtroom</th><th>Assignment</th><th>Deputy</th></tr></thead><tbody></tbody>`;
+    const tbody = table.querySelector("tbody");
+
+    rooms.forEach(room => {
+        const row = courtRows.find(r => r.location_detail === room);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${row ? (row.judge_name || "") : ""}</td><td>${room}${row && row.part ? '/' + row.part : ''}</td><td>${row ? (row.assignment_notes || "") : ""}</td><td>${row ? (row.assigned_member || "") : ""}</td>`;
+        tbody.appendChild(tr);
+    });
+
+    return { table, stats: countFilled(rooms.map(room => ({ assigned_member: (courtRows.find(r => r.location_detail === room) || {}).assigned_member || "" }))) };
+}
+
+function renderOvertimeTable(rows) {
+    const overtimeRows = rows.filter(r => r.assignment_type === "Overtime");
+    const table = document.createElement("table");
+    table.innerHTML = `<thead><tr><th>Detail</th><th>Deputy</th><th>Notes</th></tr></thead><tbody></tbody>`;
+    const tbody = table.querySelector("tbody");
+
+    overtimeRows.forEach(row => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${row.location_detail || ""}</td><td>${row.assigned_member || ""}</td><td>${row.assignment_notes || ""}</td>`;
+        tbody.appendChild(tr);
+    });
+
+    return { table, stats: countFilled(overtimeRows) };
+}
+
+function renderCourthouseColumn(courthouse, rows) {
+    const col = document.createElement("div");
+    col.className = "simple-column";
+
+    const postSection = renderPostTable(courthouse, rows);
+    const courtroomSection = renderCourtroomTable(courthouse, rows);
+    const overtimeSection = renderOvertimeTable(rows);
+    const total = postSection.stats.total + courtroomSection.stats.total + overtimeSection.stats.total;
+    const filled = postSection.stats.filled + courtroomSection.stats.filled + overtimeSection.stats.filled;
+
+    const h3 = document.createElement("h3");
+    h3.innerHTML = `${courthouse} <span class="counts-inline">${formatCountMetrics(Math.max(total-filled,0), filled)}</span>`;
+    col.appendChild(h3);
+
+    const postHeader = document.createElement("h4");
+    postHeader.textContent = "Security Post";
+    col.appendChild(postHeader);
+    col.appendChild(postSection.table);
+
+    const courtHeader = document.createElement("h4");
+    courtHeader.textContent = "Courtroom";
+    col.appendChild(courtHeader);
+    col.appendChild(courtroomSection.table);
+
+    const otHeader = document.createElement("h4");
+    otHeader.textContent = "Overtime";
+    col.appendChild(otHeader);
+    col.appendChild(overtimeSection.table);
+
+    return { col, total, filled };
+}
+
+function searchSimple() {
+    const name = document.getElementById("name").value;
+    const date = document.getElementById("date").value;
+    const courthouse = document.getElementById("courthouse").value;
+
+    localStorage.setItem('searchPageDate', date || '');
+
+    fetch(`/api/search?name=${encodeURIComponent(name)}&date=${date}&courthouse=${courthouse}`)
+        .then(res => res.json())
+        .then(data => {
+            const grid = document.getElementById("simpleGrid");
+            grid.innerHTML = "";
+
+            const grouped = {};
+            data.forEach(row => {
+                if (!grouped[row.courthouse]) grouped[row.courthouse] = [];
+                grouped[row.courthouse].push(row);
+            });
+
+            let total = 0;
+            let filled = 0;
+            ["Mitchell", "Cummings"].forEach(site => {
+                if (courthouse && courthouse !== site) return;
+                const section = renderCourthouseColumn(site, grouped[site] || []);
+                grid.appendChild(section.col);
+                total += section.total;
+                filled += section.filled;
+            });
+
+            document.getElementById("overallAssignmentCounts").innerHTML = formatCountMetrics(Math.max(total-filled,0), filled);
+        });
+}
+
+window.onload = function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const today = new Date().toISOString().split('T')[0];
+    const savedDate = localStorage.getItem('searchPageDate');
+
+    document.getElementById("date").value = urlParams.get('date') || savedDate || today;
+    document.getElementById("courthouse").value = urlParams.get('courthouse') || "";
+    document.getElementById("name").value = urlParams.get('name') || "";
+
+    document.getElementById("date").addEventListener("change", searchSimple);
+    document.getElementById("courthouse").addEventListener("change", searchSimple);
+    document.getElementById("simpleViewToggle").addEventListener("change", function() {
+        if (!this.checked) {
+            window.location.href = buildSimpleViewUrl('/');
+        }
+    });
+
+    searchSimple();
+};
+</script>
+</body>
+</html>
