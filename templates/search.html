@@ -64,7 +64,7 @@ let globalPostedNames = new Set();
 let hidePosted = false;
 
 const COURTROOM_ASSIGNMENT_OPTIONS = [
-    "firearm", "DNS", "Open", "Carjacking", "PT46/47", "Robbery", "ATT MUR", "CDS",
+    "Firearm", "DNS", "Open", "Carjacking", "PT46/47", "Robbery", "ATT MUR", "CDS",
     "Child Abuse", "Murder", "F/T", "Civil", "Motions", "MIS", "Juvenile"
 ];
 
@@ -1661,17 +1661,20 @@ function loadCourtroomMeta(date) {
                 const row = document.querySelector(selector);
                 if (!row) return;
 
+                const pendingKey = [meta.assignment_date, meta.courthouse, meta.location_detail, meta.part || ''].join('|');
+                const pendingMeta = pendingCourtroomMeta[pendingKey] || null;
+
                 const startInput = row.querySelector('.courtroom-time-input[data-field="start_time"]');
                 const restartInput = row.querySelector('.courtroom-time-input[data-field="restart_time"]');
                 const adjournedInput = row.querySelector('.courtroom-time-input[data-field="adjourned_time"]');
                 const downInput = row.querySelector('.courtroom-down-checkbox');
                 const highProfileInput = row.querySelector('.courtroom-high-profile-checkbox');
 
-                if (startInput) startInput.value = parseStoredTimeToInputValue(meta.start_time || '');
-                if (restartInput) restartInput.value = parseStoredTimeToInputValue(meta.restart_time || '');
-                if (adjournedInput) adjournedInput.value = parseStoredTimeToInputValue(meta.adjourned_time || '');
-                if (downInput) downInput.checked = !!meta.is_down;
-                if (highProfileInput) highProfileInput.checked = !!meta.is_high_profile;
+                if (startInput) startInput.value = parseStoredTimeToInputValue((pendingMeta && pendingMeta.start_time) || meta.start_time || '');
+                if (restartInput) restartInput.value = parseStoredTimeToInputValue((pendingMeta && pendingMeta.restart_time) || meta.restart_time || '');
+                if (adjournedInput) adjournedInput.value = parseStoredTimeToInputValue((pendingMeta && pendingMeta.adjourned_time) || meta.adjourned_time || '');
+                if (downInput) downInput.checked = pendingMeta ? !!pendingMeta.is_down : !!meta.is_down;
+                if (highProfileInput) highProfileInput.checked = pendingMeta ? !!pendingMeta.is_high_profile : !!meta.is_high_profile;
             });
         });
 }
