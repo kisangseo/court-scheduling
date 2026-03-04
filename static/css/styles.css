@@ -374,3 +374,25 @@ h4 {
         margin-bottom: 12px;
     }
 }
+
+.simple-view-toggle {
+    font-size: 16px;
+    font-weight: 500;
+    margin-left: 8px;
+}
+
+.simple-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.simple-column h4 {
+    margin-bottom: 6px;
+}
+
+@media (max-width: 1000px) {
+    .simple-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

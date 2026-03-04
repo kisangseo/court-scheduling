@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Court Assignment Search</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+<div class="top-controls">
+    <h2>Court Assignments <span id="overallAssignmentCounts" class="counts-inline"></span> <label class="simple-view-toggle"><input type="checkbox" id="simpleViewToggle" checked> Simple View</label></h2>
+
+    <input type="text" id="name" placeholder="Search by Name">
+    <input type="date" id="date">
+
+    <select id="courthouse">
+        <option value="">All Courthouses</option>
+        <option value="Mitchell">Mitchell</option>
+        <option value="Cummings">Cummings</option>
+        <option value="Juvenile">Juvenile</option>
+    </select>
+
+    <button onclick="searchSimple()">Search</button>
+    <button onclick="window.location.href='/'">Main View</button>
+</div>
+
+<br><br>
+
+<div id="assignmentRosterLayout">
+    <div id="assignmentsPanel">
+        <div id="resultsGrid">
+            <div id="postsRow" class="section-row"></div>
+            <div id="courtroomsRow" class="section-row"></div>
+            <div id="overtimeRow" class="section-row"></div>
+            <div id="bottomRow" class="section-row"></div>
+        </div>
+    </div>
+    <div id="rosterPanel">
+        <h3>Court Security Roster</h3>
+        <label>
+            <input type="checkbox" id="showFullRoster">
+            Show Full Roster
+        </label>
+        <div id="rosterList"></div>
+    </div>
+</div>
+
+<script>
+const MITCHELL_POSTS = [
+    { post: "Calvert", detail: "8:00 AM", part: "0800-1" },
+    { post: "Calvert", detail: "8:00 AM", part: "0800-2" },
+    { post: "Calvert", detail: "8:00 AM", part: "0800-3" },
+    { post: "Lexington", detail: "7:00 AM - 3:00 PM", part: "0700-1500" },
+    { post: "Lexington", detail: "3:00 PM - 11:00 PM", part: "1500-2300" },
+    { post: "Lexington", detail: "11:00 PM - 7:00 AM", part: "2300-0700" },
+    { post: "Fayette H/C Console room", detail: "7:00 AM", part: "0700" },
+    { post: "Fayette H/C Console room", detail: "7:15 AM", part: "0715" },
+    { post: "Lock Up West", detail: "1 of 2", part: "OPEN-1" },
+    { post: "Lock Up West", detail: "2 of 2", part: "OPEN-2" },
+    { post: "Jury Room", detail: "7:30 AM", part: "0730" },
+    { post: "St. Paul", detail: "7:30 AM", part: "0730" },
+    { post: "St. Paul", detail: "8:30 AM", part: "0830" },
+    { post: "Rover", detail: "7:00 AM", part: "0700" },
+    { post: "Judges", detail: "7:00 AM", part: "0700" }
+];
+
+const CUMMINGS_POSTS = [
+    { post: "Cummings", detail: "8:00 AM", part: "0800" },
+    { post: "Cummings", detail: "8:30 AM", part: "0830-1" },
+    { post: "Cummings", detail: "8:30 AM", part: "0830-2" },
+    { post: "Fayette St. H/C", detail: "7:15 AM", part: "0715" },
+    { post: "Fayette St. H/C", detail: "9:00 AM", part: "0900" },
+    { post: "Console Room", detail: "8:30 AM", part: "0830-1" },
+    { post: "Console Room", detail: "8:30 AM", part: "0830-2" },
+    { post: "Lock Up East", detail: "8:00 AM", part: "0800" },
+    { post: "Garage", detail: "6:00 AM", part: "0600" },
+    { post: "Garage", detail: "4:00 PM", part: "1600" },
+    { post: "Family Court", detail: "8:00 AM", part: "0800" },
+    { post: "Transportation", detail: "", part: "" }
+];
+
+const MITCHELL_ROOMS = ["600M","231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"];
+const CUMMINGS_ROOMS = ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C"];
+const JUVENILE_ROOMS = ["329C","428M","406M"];
+const TRANSPORT_COUNTIES = ['Baltimore County', 'Anne Arundel County', 'Howard County', 'Carroll County'];
+
+let allDeputies = [];
+let latestRows = [];
+
+function formatCountMetrics(vacant, filled) {
+    return `<span class="metric-red">Vacant ${vacant}</span> / <span class="metric-green">Filled ${filled}</span>`;
+}
+
+function buildSimpleViewUrl(pathname) {
+    const params = new URLSearchParams();
+    const date = document.getElementById("date")?.value || "";
+    const courthouse = document.getElementById("courthouse")?.value || "";
+    const name = document.getElementById("name")?.value || "";
+    if (date) params.set("date", date);
+    if (courthouse) params.set("courthouse", courthouse);
+    if (name) params.set("name", name);
+    const query = params.toString();
+    return query ? `${pathname}?${query}` : pathname;
+}
+
+function pickPreferredRow(rows) {
+    return rows.find(r => (r.assigned_member || '').trim()) || rows[0] || null;
+}
+
+function parseAssignedNames(value) {
+    const text = (value || '').trim();
+    if (!text) return [];
+    if (text.includes('||')) return text.split(/\s*\|\|\s*/).filter(Boolean);
+    if (text.includes('\n')) return text.split(/\n+/).map(v => v.trim()).filter(Boolean);
+    return [text];
+}
+
+function countFilled(rows) {
+    const total = rows.length;
+    const filled = rows.filter(r => (r.assigned_member || '').trim()).length;
+    return { total, filled, vacant: Math.max(total - filled, 0) };
+}
+
+function renderPostTable(courthouse, rows) {
+    const postSlots = courthouse === 'Mitchell' ? MITCHELL_POSTS : CUMMINGS_POSTS;
+    const postRows = rows.filter(r => r.assignment_type === 'Fixed Post');
+
+    const table = document.createElement('table');
+    table.innerHTML = `<thead><tr><th>Post</th><th>Shift</th><th>Deputy</th></tr></thead><tbody></tbody>`;
+    const tbody = table.querySelector('tbody');
+
+    const countRows = [];
+    postSlots.forEach((slot, index) => {
+        const slotMatches = postRows.filter(r =>
+            r.location_group === slot.post && (
+                (slot.part && r.part === slot.part) ||
+                (slot.detail && r.location_detail === slot.detail) ||
+                (!slot.part && !slot.detail)
+            )
+        );
+        const fallbackMatches = postRows.filter(r => r.location_group === slot.post && !r.part && !r.location_detail);
+        const assigned = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
+        countRows.push({ assigned_member: assigned ? (assigned.assigned_member || '') : '' });
+
+        const tr = document.createElement('tr');
+        const showPost = index === 0 || postSlots[index - 1].post !== slot.post;
+        tr.innerHTML = `<td>${showPost ? slot.post : ''}</td><td>${slot.detail || ''}</td><td>${assigned ? (assigned.assigned_member || '') : ''}</td>`;
+        tbody.appendChild(tr);
+    });
+
+    return { table, stats: countFilled(countRows) };
+}
+
+function renderCourtroomTable(courthouse, rows) {
+    const rooms = courthouse === 'Mitchell' ? MITCHELL_ROOMS : courthouse === 'Cummings' ? CUMMINGS_ROOMS : JUVENILE_ROOMS;
+    const courtRows = rows.filter(r => r.assignment_type === 'Courtroom');
+
+    const table = document.createElement('table');
+    table.innerHTML = `<thead><tr><th>Judge</th><th>Courtroom</th><th>Assignment</th><th>Deputy</th></tr></thead><tbody></tbody>`;
+    const tbody = table.querySelector('tbody');
+
+    const countRows = [];
+    rooms.forEach(room => {
+        const row = courtRows.find(r => r.location_detail === room);
+        countRows.push({ assigned_member: row ? (row.assigned_member || '') : '' });
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${row ? (row.judge_name || '') : ''}</td><td>${room}${row && row.part ? '/' + row.part : ''}</td><td>${row ? (row.assignment_notes || '') : ''}</td><td>${row ? (row.assigned_member || '') : ''}</td>`;
+        tbody.appendChild(tr);
+    });
+
+    return { table, stats: countFilled(countRows) };
+}
+
+function renderOvertimeTable(rows) {
+    const overtimeRows = rows.filter(r => r.assignment_type === 'Overtime');
+    const table = document.createElement('table');
+    table.innerHTML = `<thead><tr><th>Detail</th><th>Deputy</th><th>Notes</th></tr></thead><tbody></tbody>`;
+    const tbody = table.querySelector('tbody');
+
+    overtimeRows.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${row.location_detail || ''}</td><td>${row.assigned_member || ''}</td><td>${row.assignment_notes || ''}</td>`;
+        tbody.appendChild(tr);
+    });
+
+    if (overtimeRows.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="3">No overtime details.</td>`;
+        tbody.appendChild(tr);
+    }
+
+    return { table, stats: countFilled(overtimeRows) };
+}
+
+function createSectionCell(title, contentEl, countHtml = '') {
+    const cell = document.createElement('div');
+    cell.className = 'section-cell';
+    const h3 = document.createElement('h3');
+    h3.innerHTML = countHtml ? `${title} <span class="counts-inline">${countHtml}</span>` : title;
+    cell.appendChild(h3);
+    if (contentEl) cell.appendChild(contentEl);
+    return cell;
+}
+
+function createEmptySectionCell() {
+    const cell = document.createElement('div');
+    cell.className = 'section-cell';
+    return cell;
+}
+
+function renderTransportPanel(grouped) {
+    const panel = document.createElement('div');
+    panel.id = 'transportPanel';
+    panel.className = 'section-cell';
+
+    const h = document.createElement('h3');
+    h.textContent = 'Transport Detail';
+    panel.appendChild(h);
+
+    const table = document.createElement('table');
+    table.innerHTML = `<thead><tr><th>Deputy</th><th>County</th></tr></thead><tbody></tbody>`;
+    const tbody = table.querySelector('tbody');
+
+    const transportRows = grouped['Transport'] || [];
+    const mapped = transportRows.length > 0
+        ? transportRows.filter(r => r.assignment_type === 'Transport').map(r => ({ county: r.location_detail || '', deputy: r.assigned_member || '' }))
+        : TRANSPORT_COUNTIES.map(c => ({ county: c, deputy: '' }));
+
+    mapped.forEach(entry => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${entry.deputy || ''}</td><td>${entry.county}</td>`;
+        tbody.appendChild(tr);
+    });
+
+    panel.appendChild(table);
+    return panel;
+}
+
+function formatBorrowedCourthouse(courthouse) {
+    const normalized = (courthouse || '').trim().toLowerCase();
+    if (normalized === 'juvenile') return 'Juv';
+    if (normalized === 'mitchell') return 'Mitchell';
+    if (normalized === 'cummings') return 'Cummings';
+    if (normalized === 'transport') return 'Transport';
+    return courthouse || '';
+}
+
+function isCourtSecurityDeputy(deputy) {
+    const division = (deputy.division || '').trim().toLowerCase();
+    const capacityTag = (deputy.capacity_tag || '').trim().toLowerCase();
+    return division === 'court security' || division === 'court security division' || capacityTag.includes('court security') || capacityTag.includes('cso');
+}
+
+function getDeputyByName(name) {
+    const n = (name || '').trim().toLowerCase();
+    return allDeputies.find(d => (d.full_name || '').trim().toLowerCase() === n) || null;
+}
+
+function renderBorrowedPanel(allRows) {
+    const panel = document.createElement('div');
+    panel.id = 'borrowedDeputiesPanel';
+    panel.className = 'section-cell';
+
+    const h = document.createElement('h3');
+    h.textContent = 'Borrowed Deputies';
+    panel.appendChild(h);
+
+    const table = document.createElement('table');
+    table.innerHTML = `<thead><tr><th>Deputy</th><th>Division</th><th>Courthouse</th><th>Location</th></tr></thead><tbody></tbody>`;
+    const tbody = table.querySelector('tbody');
+
+    const rows = [];
+    allRows.filter(r => ['Courtroom', 'Fixed Post', 'Overtime', 'Transport'].includes(r.assignment_type)).forEach(r => {
+        parseAssignedNames(r.assigned_member).forEach(name => {
+            const deputy = getDeputyByName(name);
+            if (!deputy || isCourtSecurityDeputy(deputy)) return;
+            const location = r.assignment_type === 'Courtroom'
+                ? `${r.location_detail || '-'}${r.part ? '/' + r.part : ''}`
+                : r.assignment_type === 'Overtime'
+                    ? `${r.location_detail || '-'} / ${r.shift_time || 'Time TBD'}`
+                    : (r.location_group || r.location_detail || '-');
+
+            rows.push({
+                deputy: name,
+                division: (deputy.division || 'Unassigned Division').trim() || 'Unassigned Division',
+                courthouse: formatBorrowedCourthouse(r.courthouse),
+                location
+            });
+        });
+    });
+
+    rows.sort((a, b) => a.deputy.localeCompare(b.deputy));
+    if (rows.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="4">No borrowed deputies assigned.</td>';
+        tbody.appendChild(tr);
+    } else {
+        rows.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${item.deputy}</td><td>${item.division}</td><td>${item.courthouse}</td><td>${item.location}</td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    panel.appendChild(table);
+    return panel;
+}
+
+function renderRoster() {
+    const rosterList = document.getElementById('rosterList');
+    const showFull = document.getElementById('showFullRoster').checked;
+
+    let roster = allDeputies.slice();
+    if (!showFull) roster = roster.filter(isCourtSecurityDeputy);
+
+    roster.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+
+    rosterList.innerHTML = '';
+    if (roster.length === 0) {
+        rosterList.textContent = 'No roster records.';
+        return;
+    }
+
+    roster.forEach(dep => {
+        const item = document.createElement('div');
+        item.className = 'roster-item';
+        item.textContent = `${dep.full_name} (${dep.capacity_tag || ''})`;
+        rosterList.appendChild(item);
+    });
+}
+
+function searchSimple() {
+    const name = document.getElementById('name').value;
+    const date = document.getElementById('date').value;
+    const courthouse = document.getElementById('courthouse').value;
+    localStorage.setItem('searchPageDate', date || '');
+
+    Promise.all([
+        fetch(`/api/search?name=${encodeURIComponent(name)}&date=${date}&courthouse=${courthouse}`).then(res => res.json()),
+        fetch(`/api/deputies?date=${date}`).then(res => res.json())
+    ]).then(([rows, deputies]) => {
+        latestRows = rows || [];
+        allDeputies = deputies || [];
+
+        const grouped = {};
+        latestRows.forEach(row => {
+            if (!grouped[row.courthouse]) grouped[row.courthouse] = [];
+            grouped[row.courthouse].push(row);
+        });
+
+        const postsRow = document.getElementById('postsRow');
+        const courtroomsRow = document.getElementById('courtroomsRow');
+        const overtimeRow = document.getElementById('overtimeRow');
+        const bottomRow = document.getElementById('bottomRow');
+        postsRow.innerHTML = '';
+        courtroomsRow.innerHTML = '';
+        overtimeRow.innerHTML = '';
+        bottomRow.innerHTML = '';
+
+        const mitchellPosts = renderPostTable('Mitchell', grouped['Mitchell'] || []);
+        const cummingsPosts = renderPostTable('Cummings', grouped['Cummings'] || []);
+        const mitchellCourt = renderCourtroomTable('Mitchell', grouped['Mitchell'] || []);
+        const cummingsCourt = renderCourtroomTable('Cummings', grouped['Cummings'] || []);
+        const mitchellOt = renderOvertimeTable(grouped['Mitchell'] || []);
+        const cummingsOt = renderOvertimeTable(grouped['Cummings'] || []);
+        const juvCourt = renderCourtroomTable('Juvenile', grouped['Juvenile'] || []);
+        const juvOt = renderOvertimeTable(grouped['Juvenile'] || []);
+
+        const mitchellTotal = {
+            total: mitchellPosts.stats.total + mitchellCourt.stats.total + mitchellOt.stats.total,
+            filled: mitchellPosts.stats.filled + mitchellCourt.stats.filled + mitchellOt.stats.filled
+        };
+        const cummingsTotal = {
+            total: cummingsPosts.stats.total + cummingsCourt.stats.total + cummingsOt.stats.total,
+            filled: cummingsPosts.stats.filled + cummingsCourt.stats.filled + cummingsOt.stats.filled
+        };
+        const juvenileTotal = {
+            total: juvCourt.stats.total + juvOt.stats.total,
+            filled: juvCourt.stats.filled + juvOt.stats.filled
+        };
+
+        const mitchellPostCell = createSectionCell('Mitchell', mitchellPosts.table, formatCountMetrics(Math.max(mitchellTotal.total - mitchellTotal.filled, 0), mitchellTotal.filled));
+        const mitchellPostHeader = document.createElement('h4');
+        mitchellPostHeader.textContent = 'Security Post';
+        mitchellPostCell.insertBefore(mitchellPostHeader, mitchellPosts.table);
+
+        const cummingsPostCell = createSectionCell('Cummings', cummingsPosts.table, formatCountMetrics(Math.max(cummingsTotal.total - cummingsTotal.filled, 0), cummingsTotal.filled));
+        const cummingsPostHeader = document.createElement('h4');
+        cummingsPostHeader.textContent = 'Security Post';
+        cummingsPostCell.insertBefore(cummingsPostHeader, cummingsPosts.table);
+
+        postsRow.appendChild(mitchellPostCell);
+        postsRow.appendChild(cummingsPostCell);
+
+        courtroomsRow.appendChild(createSectionCell('Courtroom', mitchellCourt.table));
+        courtroomsRow.appendChild(createSectionCell('Courtroom', cummingsCourt.table));
+
+        overtimeRow.appendChild(createSectionCell('Overtime', mitchellOt.table));
+        overtimeRow.appendChild(createSectionCell('Overtime', cummingsOt.table));
+
+        const juvWrap = document.createElement('div');
+        const juvCourtHeader = document.createElement('h4');
+        juvCourtHeader.textContent = 'Courtroom';
+        juvWrap.appendChild(juvCourtHeader);
+        juvWrap.appendChild(juvCourt.table);
+        const juvOtHeader = document.createElement('h4');
+        juvOtHeader.textContent = 'Overtime';
+        juvWrap.appendChild(juvOtHeader);
+        juvWrap.appendChild(juvOt.table);
+
+        const rightWrap = document.createElement('div');
+        rightWrap.style.display = 'flex';
+        rightWrap.style.flexDirection = 'column';
+        rightWrap.style.gap = '12px';
+        rightWrap.appendChild(renderTransportPanel(grouped));
+        rightWrap.appendChild(renderBorrowedPanel(latestRows));
+
+        bottomRow.appendChild(createSectionCell('Juvenile', juvWrap, formatCountMetrics(Math.max(juvenileTotal.total - juvenileTotal.filled, 0), juvenileTotal.filled)));
+        bottomRow.appendChild(createSectionCell('Details', rightWrap));
+
+        const overallTotal = mitchellTotal.total + cummingsTotal.total + juvenileTotal.total;
+        const overallFilled = mitchellTotal.filled + cummingsTotal.filled + juvenileTotal.filled;
+        document.getElementById('overallAssignmentCounts').innerHTML = formatCountMetrics(Math.max(overallTotal - overallFilled, 0), overallFilled);
+
+        renderRoster();
+    });
+}
+
+window.onload = function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const today = new Date().toISOString().split('T')[0];
+    const savedDate = localStorage.getItem('searchPageDate');
+
+    document.getElementById('date').value = urlParams.get('date') || savedDate || today;
+    document.getElementById('courthouse').value = urlParams.get('courthouse') || '';
+    document.getElementById('name').value = urlParams.get('name') || '';
+
+    document.getElementById('date').addEventListener('change', searchSimple);
+    document.getElementById('courthouse').addEventListener('change', searchSimple);
+    document.getElementById('showFullRoster').addEventListener('change', renderRoster);
+    document.getElementById('simpleViewToggle').addEventListener('change', function() {
+        if (!this.checked) window.location.href = buildSimpleViewUrl('/');
+    });
+
+    searchSimple();
+};
+</script>
+</body>
+</html>
