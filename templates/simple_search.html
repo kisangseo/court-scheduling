@@ -30,7 +30,8 @@
             <div id="postsRow" class="section-row"></div>
             <div id="courtroomsRow" class="section-row"></div>
             <div id="overtimeRow" class="section-row"></div>
-            <div id="bottomRow" class="section-row"></div>
+            <div id="juvTopRow" class="section-row"></div>
+            <div id="juvBottomRow" class="section-row"></div>
         </div>
     </div>
     <div id="rosterPanel">
@@ -305,28 +306,148 @@ function renderBorrowedPanel(allRows) {
     return panel;
 }
 
+function getPostedNameSetForSimpleView() {
+    const names = new Set();
+    latestRows
+        .filter(r => ['Courtroom', 'Fixed Post', 'Overtime', 'Transport'].includes(r.assignment_type))
+        .forEach(r => parseAssignedNames(r.assigned_member).forEach(name => names.add(name.trim())));
+    return names;
+}
+
+function parseDateOnly(value) {
+    if (!value) return null;
+    const d = new Date(`${value}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function effectiveStatusForSearchDate(deputy) {
+    const selectedDate = parseDateOnly(document.getElementById('date').value);
+
+    try {
+        const raw = deputy.status_raw;
+        const parsed = raw ? JSON.parse(raw) : null;
+        const ranges = parsed && Array.isArray(parsed.ranges) ? parsed.ranges : [];
+        const weeklyUnavailable = parsed && Array.isArray(parsed.weekly_unavailable) ? parsed.weekly_unavailable : [];
+        const active = [];
+
+        if (selectedDate) {
+            ranges.forEach(entry => {
+                const start = parseDateOnly(entry.start_date);
+                const end = parseDateOnly(entry.end_date);
+                if (start && end && selectedDate >= start && selectedDate <= end) {
+                    const status = (entry.status || '').toLowerCase();
+                    if (status && !active.includes(status)) active.push(status);
+                }
+            });
+
+            const weekday = selectedDate.toLocaleDateString('en-US', { weekday: 'long' });
+            weeklyUnavailable.forEach(rule => {
+                const day = (rule?.day || '').trim();
+                const ruleEnd = parseDateOnly(rule?.end_date);
+                if (!day || !ruleEnd) return;
+                if (selectedDate <= ruleEnd && (day === 'Any Day' || day === weekday)) {
+                    if (!active.includes('unavailable')) active.push('unavailable');
+                }
+            });
+
+            if (active.length > 0) return active.join(' / ');
+        }
+
+        if (parsed && parsed.legacy) return parsed.legacy.toLowerCase();
+    } catch (_) {}
+
+    return (deputy.current_status || '').trim().toLowerCase();
+}
+
+function isDeputyAvailable(deputy) {
+    const status = effectiveStatusForSearchDate(deputy);
+    if (!status) return true;
+    return !status.includes('leave')
+        && !status.includes('sick')
+        && !status.includes('light duty')
+        && !status.includes('unscheduled')
+        && !status.includes('unavailable');
+}
+
 function renderRoster() {
     const rosterList = document.getElementById('rosterList');
-    const showFull = document.getElementById('showFullRoster').checked;
-
-    let roster = allDeputies.slice();
-    if (!showFull) roster = roster.filter(isCourtSecurityDeputy);
-
-    roster.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+    const showFullRoster = document.getElementById('showFullRoster').checked;
+    const postedNames = getPostedNameSetForSimpleView();
 
     rosterList.innerHTML = '';
-    if (roster.length === 0) {
-        rosterList.textContent = 'No roster records.';
-        return;
-    }
+    rosterList.classList.toggle('roster-two-column', showFullRoster);
 
-    roster.forEach(dep => {
+    const courtColumn = document.createElement('div');
+    courtColumn.className = 'roster-column';
+
+    const courtHeading = document.createElement('h4');
+    courtHeading.className = 'roster-section-title';
+
+    const courtSecurityAll = allDeputies.filter(isCourtSecurityDeputy);
+    const outCount = courtSecurityAll.filter(dep => !isDeputyAvailable(dep)).length;
+    const postedCount = courtSecurityAll.filter(dep => postedNames.has((dep.full_name || '').trim())).length;
+    const availableCount = Math.max(courtSecurityAll.filter(dep => isDeputyAvailable(dep)).length - postedCount, 0);
+
+    courtHeading.innerHTML = `Court Security <span class="counts-inline"><span class="metric-red">Out ${outCount}</span> / <span class="metric-green">Available ${availableCount}</span> / <span class="metric-blue">Posted ${postedCount}</span></span>`;
+    courtColumn.appendChild(courtHeading);
+
+    const courtList = document.createElement('div');
+    const courtSecurityAvailable = courtSecurityAll.filter(isDeputyAvailable).sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+    courtSecurityAvailable.forEach(dep => {
         const item = document.createElement('div');
         item.className = 'roster-item';
-        item.textContent = `${dep.full_name} (${dep.capacity_tag || ''})`;
-        rosterList.appendChild(item);
+        const name = (dep.full_name || '').trim();
+        item.textContent = `${name} (${dep.capacity_tag || ''})`;
+        if (postedNames.has(name)) item.classList.add('assigned');
+        courtList.appendChild(item);
     });
+    courtColumn.appendChild(courtList);
+    rosterList.appendChild(courtColumn);
+
+    if (showFullRoster) {
+        const fullColumn = document.createElement('div');
+        fullColumn.className = 'roster-column';
+
+        const fullHeading = document.createElement('h4');
+        fullHeading.className = 'roster-section-title';
+        fullHeading.textContent = 'Full Roster';
+        fullColumn.appendChild(fullHeading);
+
+        const fullList = document.createElement('div');
+        const nonCourt = allDeputies
+            .filter(dep => !isCourtSecurityDeputy(dep))
+            .sort((a, b) => {
+                const da = (a.division || 'Unassigned Division').trim().toLowerCase();
+                const db = (b.division || 'Unassigned Division').trim().toLowerCase();
+                if (da !== db) return da.localeCompare(db);
+                return (a.full_name || '').localeCompare(b.full_name || '');
+            });
+
+        let currentDivision = null;
+        nonCourt.forEach(dep => {
+            const division = (dep.division || 'Unassigned Division').trim() || 'Unassigned Division';
+            if (division !== currentDivision) {
+                const h = document.createElement('h5');
+                h.className = 'roster-section-title';
+                const divisionPosted = nonCourt.filter(d => ((d.division || 'Unassigned Division').trim() || 'Unassigned Division') === division && postedNames.has((d.full_name || '').trim())).length;
+                h.innerHTML = `${division} <span class="counts-inline metric-blue">Posted ${divisionPosted}</span>`;
+                fullList.appendChild(h);
+                currentDivision = division;
+            }
+
+            const item = document.createElement('div');
+            item.className = 'roster-item';
+            const name = (dep.full_name || '').trim();
+            item.textContent = `${name} (${dep.capacity_tag || ''})`;
+            if (postedNames.has(name)) item.classList.add('assigned');
+            fullList.appendChild(item);
+        });
+
+        fullColumn.appendChild(fullList);
+        rosterList.appendChild(fullColumn);
+    }
 }
+
 
 function searchSimple() {
     const name = document.getElementById('name').value;
@@ -350,11 +471,13 @@ function searchSimple() {
         const postsRow = document.getElementById('postsRow');
         const courtroomsRow = document.getElementById('courtroomsRow');
         const overtimeRow = document.getElementById('overtimeRow');
-        const bottomRow = document.getElementById('bottomRow');
+        const juvTopRow = document.getElementById('juvTopRow');
+        const juvBottomRow = document.getElementById('juvBottomRow');
         postsRow.innerHTML = '';
         courtroomsRow.innerHTML = '';
         overtimeRow.innerHTML = '';
-        bottomRow.innerHTML = '';
+        juvTopRow.innerHTML = '';
+        juvBottomRow.innerHTML = '';
 
         const mitchellPosts = renderPostTable('Mitchell', grouped['Mitchell'] || []);
         const cummingsPosts = renderPostTable('Cummings', grouped['Cummings'] || []);
@@ -397,25 +520,11 @@ function searchSimple() {
         overtimeRow.appendChild(createSectionCell('Overtime', mitchellOt.table));
         overtimeRow.appendChild(createSectionCell('Overtime', cummingsOt.table));
 
-        const juvWrap = document.createElement('div');
-        const juvCourtHeader = document.createElement('h4');
-        juvCourtHeader.textContent = 'Courtroom';
-        juvWrap.appendChild(juvCourtHeader);
-        juvWrap.appendChild(juvCourt.table);
-        const juvOtHeader = document.createElement('h4');
-        juvOtHeader.textContent = 'Overtime';
-        juvWrap.appendChild(juvOtHeader);
-        juvWrap.appendChild(juvOt.table);
+        juvTopRow.appendChild(createSectionCell('Juvenile', juvCourt.table, formatCountMetrics(Math.max(juvenileTotal.total - juvenileTotal.filled, 0), juvenileTotal.filled)));
+        juvTopRow.appendChild(createSectionCell('Transport Detail', renderTransportPanel(grouped).querySelector('table')));
 
-        const rightWrap = document.createElement('div');
-        rightWrap.style.display = 'flex';
-        rightWrap.style.flexDirection = 'column';
-        rightWrap.style.gap = '12px';
-        rightWrap.appendChild(renderTransportPanel(grouped));
-        rightWrap.appendChild(renderBorrowedPanel(latestRows));
-
-        bottomRow.appendChild(createSectionCell('Juvenile', juvWrap, formatCountMetrics(Math.max(juvenileTotal.total - juvenileTotal.filled, 0), juvenileTotal.filled)));
-        bottomRow.appendChild(createSectionCell('Details', rightWrap));
+        juvBottomRow.appendChild(createSectionCell('Juvenile Overtime', juvOt.table));
+        juvBottomRow.appendChild(createSectionCell('Borrowed Deputies', renderBorrowedPanel(latestRows).querySelector('table')));
 
         const overallTotal = mitchellTotal.total + cummingsTotal.total + juvenileTotal.total;
         const overallFilled = mitchellTotal.filled + cummingsTotal.filled + juvenileTotal.filled;
