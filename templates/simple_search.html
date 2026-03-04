@@ -158,9 +158,17 @@ function renderCourtroomTable(courthouse, rows) {
     table.innerHTML = `<thead><tr><th>Judge</th><th>Courtroom</th><th>Assignment</th><th>Deputy</th></tr></thead><tbody></tbody>`;
     const tbody = table.querySelector('tbody');
 
+    const rowsToRender = courthouse === 'Juvenile'
+        ? [...courtRows].sort((a, b) => {
+            const roomA = (a.location_detail || '').localeCompare(b.location_detail || '');
+            if (roomA !== 0) return roomA;
+            return (a.part || '').localeCompare(b.part || '');
+        })
+        : rooms.map(room => courtRows.find(r => r.location_detail === room) || { location_detail: room });
+
     const countRows = [];
-    rooms.forEach(room => {
-        const row = courtRows.find(r => r.location_detail === room);
+    rowsToRender.forEach(row => {
+        const room = row.location_detail || '';
         countRows.push({ assigned_member: row ? (row.assigned_member || '') : '' });
 
         const tr = document.createElement('tr');
@@ -456,8 +464,8 @@ function searchSimple() {
     localStorage.setItem('searchPageDate', date || '');
 
     Promise.all([
-        fetch(`/api/search?name=${encodeURIComponent(name)}&date=${date}&courthouse=${courthouse}`).then(res => res.json()),
-        fetch(`/api/deputies?date=${date}`).then(res => res.json())
+        fetch(`/api/search?name=${encodeURIComponent(name)}&date=${date}&courthouse=${courthouse}`, { cache: 'no-store' }).then(res => res.json()),
+        fetch(`/api/deputies?date=${date}`, { cache: 'no-store' }).then(res => res.json())
     ]).then(([rows, deputies]) => {
         latestRows = rows || [];
         allDeputies = deputies || [];
