@@ -537,7 +537,7 @@ function setSelectedDeputyFromRosterItem(item) {
 
 function applyDeputyToCell(dropCell, assignedName, role) {
     if (!isEligibleForCell(dropCell, role)) {
-        showCellWarning(dropCell, 'Select eligible personnel');
+        showCellWarning(dropCell, 'Select an Armed Personnel First');
         return false;
     }
 
@@ -891,8 +891,8 @@ function buildAssignmentChip(name, role) {
         body: JSON.stringify({ assignment_date: date, full_name: deputyName })
       })
       .then(() => fetchTransfersForDate())
-      .then(() => { removeChip(); applyTransferCaptionToRosterAndGrid(); })
-      .catch(() => { removeChip(); });
+      .then(() => { applyTransferCaptionToRosterAndGrid(); closePop(); })
+      .catch(() => { closePop(); });
     });
 
     setTimeout(() => {
