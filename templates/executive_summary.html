@@ -109,6 +109,48 @@ function isUnavailableStatus(status) {
         || normalized.includes('callout');
 }
 
+function parseAssignedMemberValue(value) {
+    const text = (value || '').trim();
+    if (!text) return [];
+
+    if (text.includes('||')) {
+        return text.split(/\s*\|\|\s*/).map(name => name.trim()).filter(Boolean);
+    }
+
+    if (text.includes('\n')) {
+        return text.split(/\n+/).map(name => name.trim()).filter(Boolean);
+    }
+
+    return [text];
+}
+
+function normalizeDeputyName(value) {
+    return (value || '').trim().toLowerCase();
+}
+
+function countBorrowedDeputies(assignments, deputies) {
+    const deputyByName = new Map(
+        deputies.map(dep => [normalizeDeputyName(dep.full_name), dep])
+    );
+
+    const borrowed = new Set();
+
+    assignments.forEach(assignment => {
+        parseAssignedMemberValue(assignment.assigned_member).forEach(name => {
+            const normalizedName = normalizeDeputyName(name);
+            if (!normalizedName) return;
+
+            const deputy = deputyByName.get(normalizedName);
+            if (!deputy) return;
+            if (isCourtSecurity(deputy)) return;
+
+            borrowed.add(normalizedName);
+        });
+    });
+
+    return borrowed.size;
+}
+
 async function loadSummary() {
     const selectedValue = summaryDateInput.value;
     if (!selectedValue) return;
@@ -122,21 +164,33 @@ async function loadSummary() {
 
         const dayResults = await Promise.all(weekDates.map(async (dateObj) => {
             const dayIso = formatDateISO(dateObj);
-            const res = await fetch(`/api/deputies?date=${encodeURIComponent(dayIso)}`);
-            if (!res.ok) {
+
+            const [deputiesRes, assignmentsRes] = await Promise.all([
+                fetch(`/api/deputies?date=${encodeURIComponent(dayIso)}`),
+                fetch(`/api/search?date=${encodeURIComponent(dayIso)}`)
+            ]);
+
+            if (!deputiesRes.ok) {
                 throw new Error(`Failed to load deputies for ${dayIso}`);
             }
 
-            const deputies = await res.json();
+            if (!assignmentsRes.ok) {
+                throw new Error(`Failed to load assignments for ${dayIso}`);
+            }
+
+            const deputies = await deputiesRes.json();
+            const assignments = await assignmentsRes.json();
             const courtSecurityDeputies = deputies.filter(isCourtSecurity);
             const unavailableCount = courtSecurityDeputies.filter(dep => isUnavailableStatus(dep.current_status)).length;
             const availableCount = courtSecurityDeputies.length - unavailableCount;
+            const borrowedCount = countBorrowedDeputies(assignments, deputies);
 
             return {
                 label: dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }),
                 needed: PERSONNEL_NEEDED_FIXED,
                 available: availableCount,
-                unavailable: unavailableCount
+                unavailable: unavailableCount,
+                borrowed: borrowedCount
             };
         }));
 
@@ -153,6 +207,7 @@ function renderSummary(dayResults) {
     const neededCells = dayResults.map(day => `<td>${day.needed}</td>`).join('');
     const availableCells = dayResults.map(day => `<td>${day.available}</td>`).join('');
     const unavailableCells = dayResults.map(day => `<td>${day.unavailable}</td>`).join('');
+    const borrowedCells = dayResults.map(day => `<td>${day.borrowed}</td>`).join('');
 
     summaryContent.innerHTML = `
         <table class="summary-table">
@@ -174,6 +229,10 @@ function renderSummary(dayResults) {
                 <tr>
                     <td class="metric-label">Number Unavailable (Sick + Unavailable + Leave + Callout)</td>
                     ${unavailableCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">Borrowed Deputies</td>
+                    ${borrowedCells}
                 </tr>
             </tbody>
         </table>
