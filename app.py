@@ -224,6 +224,10 @@ def transfer_in():
 @app.route("/")
 def index():
     return render_template("search.html")
+
+@app.route("/simple-search")
+def simple_search_page():
+    return render_template("simple_search.html")
 @app.route("/api/update-status", methods=["POST"])
 def update_status():
     data = request.json

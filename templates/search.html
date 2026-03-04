@@ -8,7 +8,7 @@
 <body>
 
 <div class="top-controls">
-    <h2>Court Assignments <span id="overallAssignmentCounts" class="counts-inline"></span></h2>
+    <h2>Court Assignments <span id="overallAssignmentCounts" class="counts-inline"></span> <label class="simple-view-toggle"><input type="checkbox" id="simpleViewToggle"> Simple View</label></h2>
 
     <input type="text" id="name" placeholder="Search by Name">
     <input type="date" id="date">
@@ -1635,10 +1635,33 @@ function renderTransportTable(date) {
         });
 }
 
+function buildSimpleViewUrl(pathname) {
+    const params = new URLSearchParams();
+    const date = document.getElementById("date")?.value || "";
+    const courthouse = document.getElementById("courthouse")?.value || "";
+    const name = document.getElementById("name")?.value || "";
+
+    if (date) params.set("date", date);
+    if (courthouse) params.set("courthouse", courthouse);
+    if (name) params.set("name", name);
+
+    const query = params.toString();
+    return query ? `${pathname}?${query}` : pathname;
+}
+
 window.onload = function() {
     const today = new Date().toISOString().split('T')[0];
     const savedDate = localStorage.getItem('searchPageDate');
     document.getElementById("date").value = savedDate || today;
+    const simpleViewToggle = document.getElementById("simpleViewToggle");
+    if (simpleViewToggle) {
+        simpleViewToggle.checked = false;
+        simpleViewToggle.addEventListener("change", function() {
+            if (this.checked) {
+                window.location.href = buildSimpleViewUrl("/simple-search");
+            }
+        });
+    }
 
     document.getElementById("showFullRoster").addEventListener("change", renderRoster);
     document.addEventListener('change', function(e) {
