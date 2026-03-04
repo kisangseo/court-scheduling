@@ -1199,7 +1199,34 @@ def search():
     cursor.execute(query, params)
 
     columns = [column[0] for column in cursor.description]
-    results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    raw_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    # Some historical data contains duplicate assignment rows for the same slot.
+    # Collapse those rows at read time so the UI shows each assignment once.
+    deduped_results = {}
+    for row in raw_results:
+        dedupe_key = (
+            row.get("assignment_date"),
+            (row.get("courthouse") or "").strip(),
+            (row.get("assignment_type") or "").strip(),
+            (row.get("location_group") or "").strip(),
+            (row.get("location_detail") or "").strip(),
+            (row.get("part") or "").strip(),
+        )
+
+        existing = deduped_results.get(dedupe_key)
+        if not existing:
+            deduped_results[dedupe_key] = row
+            continue
+
+        existing_assigned = (existing.get("assigned_member") or "").strip()
+        incoming_assigned = (row.get("assigned_member") or "").strip()
+
+        # Prefer the row that has an assigned member populated.
+        if not existing_assigned and incoming_assigned:
+            deduped_results[dedupe_key] = row
+
+    results = list(deduped_results.values())
 
     conn.close()
 
