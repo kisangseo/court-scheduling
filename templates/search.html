@@ -1269,8 +1269,12 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
     `;
     const courtroomBody = courtroomTable.querySelector("tbody");
 
-    rooms.forEach(room => {
-        const row = courtroomRows.find(r => r.location_detail === room);
+    const rowsToRender = courthouse === "Juvenile"
+        ? courtroomRows
+        : rooms.map(room => courtroomRows.find(r => r.location_detail === room) || { location_detail: room });
+
+    rowsToRender.forEach(row => {
+        const room = row.location_detail;
         const tr = document.createElement("tr");
         tr.classList.add("courtroom-meta-row");
         tr.dataset.date = selectedDate;
