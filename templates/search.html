@@ -528,7 +528,8 @@ function refreshRosterAssignedState() {
     const assignedNames = getAssignedNamesAcrossGrid();
     document.querySelectorAll('#rosterList .roster-item').forEach(item => {
         const name = (item.dataset.name || '').trim();
-        const isAssigned = !!name && assignedNames.has(name);
+        const isTransferredOut = isCurrentlyTransferredOut(name);
+        const isAssigned = !!name && assignedNames.has(name) && !isTransferredOut;
         item.classList.toggle('assigned', isAssigned);
         item.classList.toggle('hide-posted', hidePosted && isAssigned);
     });
