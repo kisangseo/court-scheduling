@@ -98,10 +98,27 @@ th, td {
     border-radius: 4px;
 }
 
-.roster-item {
-    padding: 4px 0;
-    cursor: pointer;
+
+#rosterList {
+    background: #f0faf0;
+    border: 1px solid #d1e9d1;
+    border-radius: 8px;
+    padding: 8px;
 }
+
+.roster-section-title {
+    background: #e8f7e8;
+    border-radius: 4px;
+    padding: 4px 6px;
+}
+
+.roster-item {
+    background: #f4fbf4;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    padding: 4px 6px;
+}
+
 
 .roster-item.selected {
     outline: 2px solid #528bff;
