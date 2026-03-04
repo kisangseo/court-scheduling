@@ -129,6 +129,19 @@ function getDeputyRole(deputy) {
     return (deputy.role || deputy.capacity_tag || "").trim().toUpperCase();
 }
 
+function normalizeRoleValue(role) {
+    return (role || "").toUpperCase().replace(/\s+/g, "").replace(/_/g, "-");
+}
+
+function getCourtSecuritySortRank(deputy) {
+    const normalizedRole = normalizeRoleValue(getDeputyRole(deputy));
+    if (normalizedRole === "F") return 0;
+    if (normalizedRole === "SPO") return 1;
+    if (normalizedRole === "SPO-UA" || normalizedRole === "SPOUA") return 2;
+    if (normalizedRole === "NOSPO" || normalizedRole === "NO-SPO") return 3;
+    return 4;
+}
+
 function createRosterItem(deputy, options = {}) {
     const deputyRow = document.createElement("div");
     deputyRow.className = "roster-item";
@@ -616,7 +629,11 @@ function renderRoster() {
     const courtList = document.createElement("div");
     courtList.id = "courtSecurityRosterList";
     courtList.className = "draggable-roster-list";
-    const courtSecurityDeputies = allDeputies.filter(isCourtSecurityDeputy);
+    const courtSecurityDeputies = allDeputies
+        .filter(isCourtSecurityDeputy)
+        .sort((a, b) => getCourtSecuritySortRank(a) - getCourtSecuritySortRank(b)
+            || getDeputyRole(a).localeCompare(getDeputyRole(b))
+            || (a.full_name || "").localeCompare(b.full_name || ""));
     courtSecurityDeputies.forEach(deputy => {
         courtList.appendChild(createRosterItem(deputy, { showDivision: false }));
     });

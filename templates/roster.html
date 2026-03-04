@@ -25,6 +25,9 @@
             color: #175cd3;
             font-weight: 700;
         }
+        .add-message { font-size: 0.95em; margin-top: 6px; min-height: 1.2em; }
+        .add-message-success { color: #067647; font-weight: 700; }
+        .add-message-error { color: #b42318; font-weight: 700; }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
@@ -39,7 +42,7 @@
 </div>
 
 <div class="add-form">
-    <input type="text" id="newFullName" placeholder="Full Name">
+    <input type="text" id="newFullName" placeholder="Last name, First name">
     <select id="newDivision">
         <option value="Court Security">Court Security</option>
         <option value="Domestic Violence">Domestic Violence</option>
@@ -50,6 +53,7 @@
     <select id="newCapability"></select>
     <button id="addDeputyBtn" type="button">Add Person</button>
 </div>
+<div id="addDeputyMessage" class="add-message" aria-live="polite"></div>
 
 <div class="container">
     <div class="panel">
@@ -99,6 +103,35 @@ function buildOptions(selectEl, values, selectedValue = "") {
         if ((selectedValue || "") === value) opt.selected = true;
         selectEl.appendChild(opt);
     });
+}
+
+function parseRosterName(fullName) {
+    const pieces = (fullName || "").split(",");
+    if (pieces.length !== 2) return null;
+
+    const lastName = pieces[0].trim();
+    const firstName = pieces[1].trim();
+    if (!lastName || !firstName) return null;
+
+    return { lastName, firstName };
+}
+
+function formatEmailNamePart(value) {
+    return (value || "")
+        .toLowerCase()
+        .replace(/\s+/g, "")
+        .replace(/[^a-z0-9-]/g, "");
+}
+
+function buildBaltimoreEmail(fullName) {
+    const parsed = parseRosterName(fullName);
+    if (!parsed) return "";
+
+    const firstName = formatEmailNamePart(parsed.firstName.split(" ")[0]);
+    const lastName = formatEmailNamePart(parsed.lastName.split(" ")[0]);
+    if (!firstName || !lastName) return "";
+
+    return `${firstName}.${lastName}@baltimorecity.gov`;
 }
 
 buildOptions(document.getElementById("newRank"), rankOptions, "Court Security Officer");
@@ -507,8 +540,19 @@ function loadRoster() {
 
 document.getElementById("addDeputyBtn").addEventListener("click", () => {
     const fullName = document.getElementById("newFullName").value.trim();
-    if (!fullName) {
-        alert("Enter full name");
+    const messageEl = document.getElementById("addDeputyMessage");
+    messageEl.textContent = "";
+    messageEl.className = "add-message";
+
+    const parsedName = parseRosterName(fullName);
+    if (!parsedName) {
+        alert("Enter name as 'Last name, First name'");
+        return;
+    }
+
+    const email = buildBaltimoreEmail(fullName);
+    if (!email) {
+        alert("Could not generate an email from that name.");
         return;
     }
 
@@ -517,13 +561,24 @@ document.getElementById("addDeputyBtn").addEventListener("click", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             full_name: fullName,
+            email,
             division: document.getElementById("newDivision").value,
             rank: document.getElementById("newRank").value,
             capacity_tag: document.getElementById("newCapability").value
         })
-    }).then(() => {
+    }).then(async (res) => {
+        if (!res.ok) {
+            const payload = await res.json().catch(() => ({}));
+            throw new Error(payload.message || "Could not add person.");
+        }
+
         document.getElementById("newFullName").value = "";
+        messageEl.textContent = `${fullName} was added succesfully`;
+        messageEl.className = "add-message add-message-success";
         loadRoster();
+    }).catch((err) => {
+        messageEl.textContent = err.message || "Could not add person.";
+        messageEl.className = "add-message add-message-error";
     });
 });
 
