@@ -148,6 +148,7 @@ th, td {
     background: #f4fbf4;
 }
 
+
 .roster-item.selected {
     outline: 2px solid #528bff;
     border-radius: 4px;
