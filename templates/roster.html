@@ -25,6 +25,9 @@
             color: #175cd3;
             font-weight: 700;
         }
+        .add-message { font-size: 0.95em; margin-top: 6px; min-height: 1.2em; }
+        .add-message-success { color: #067647; font-weight: 700; }
+        .add-message-error { color: #b42318; font-weight: 700; }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
@@ -50,6 +53,7 @@
     <select id="newCapability"></select>
     <button id="addDeputyBtn" type="button">Add Person</button>
 </div>
+<div id="addDeputyMessage" class="add-message" aria-live="polite"></div>
 
 <div class="container">
     <div class="panel">
@@ -536,6 +540,10 @@ function loadRoster() {
 
 document.getElementById("addDeputyBtn").addEventListener("click", () => {
     const fullName = document.getElementById("newFullName").value.trim();
+    const messageEl = document.getElementById("addDeputyMessage");
+    messageEl.textContent = "";
+    messageEl.className = "add-message";
+
     const parsedName = parseRosterName(fullName);
     if (!parsedName) {
         alert("Enter name as 'Last name, First name'");
@@ -558,9 +566,19 @@ document.getElementById("addDeputyBtn").addEventListener("click", () => {
             rank: document.getElementById("newRank").value,
             capacity_tag: document.getElementById("newCapability").value
         })
-    }).then(() => {
+    }).then(async (res) => {
+        if (!res.ok) {
+            const payload = await res.json().catch(() => ({}));
+            throw new Error(payload.message || "Could not add person.");
+        }
+
         document.getElementById("newFullName").value = "";
+        messageEl.textContent = `${fullName} was added succesfully`;
+        messageEl.className = "add-message add-message-success";
         loadRoster();
+    }).catch((err) => {
+        messageEl.textContent = err.message || "Could not add person.";
+        messageEl.className = "add-message add-message-error";
     });
 });
 
