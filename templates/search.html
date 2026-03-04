@@ -2,6 +2,9 @@
 <html>
 <head>
     <title>Court Assignment Search</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 
 </head>
@@ -62,6 +65,46 @@ let selectedDeputy = null;
 let globalAssignmentTotals = { total: 0, filled: 0 };
 let globalPostedNames = new Set();
 let hidePosted = false;
+
+const COURTROOM_ASSIGNMENT_OPTIONS = [
+    "Firearm", "DNS", "Open", "Carjacking", "PT46/47", "Robbery", "ATT MUR", "CDS",
+    "Child Abuse", "Murder", "F/T", "Civil", "Motions", "MIS", "Juvenile"
+];
+
+function escapeHtml(value) {
+    return (value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function getCourtroomAssignmentOptionsHtml(selectedValue) {
+    const currentValue = (selectedValue || '').trim();
+    const values = COURTROOM_ASSIGNMENT_OPTIONS.slice();
+    if (currentValue && !values.includes(currentValue)) {
+        values.unshift(currentValue);
+    }
+
+    return values.map(value => {
+        const selectedAttr = value === currentValue ? ' selected' : '';
+        return `<option value="${escapeHtml(value)}"${selectedAttr}>${escapeHtml(value)}</option>`;
+    }).join('');
+}
+
+function queueAssignmentNoteUpdate(payload) {
+    const key = [
+        payload.assignment_date,
+        payload.courthouse,
+        payload.assignment_type,
+        payload.location_detail,
+        payload.part
+    ].join("|");
+
+    pendingNotes[key] = payload;
+    updateSaveStatusBadge();
+}
 
 function buildHidePostedToggle() {
     const label = document.createElement("label");
@@ -399,7 +442,8 @@ function setPendingCourtroomMetaFromRow(rowEl) {
         start_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="start_time"]')?.value || ""),
         restart_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="restart_time"]')?.value || ""),
         adjourned_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="adjourned_time"]')?.value || ""),
-        is_down: !!rowEl.querySelector('.courtroom-down-checkbox')?.checked
+        is_down: !!rowEl.querySelector('.courtroom-down-checkbox')?.checked,
+        is_high_profile: !!rowEl.querySelector('.courtroom-high-profile-checkbox')?.checked
     };
 
     const key = [payload.assignment_date, payload.courthouse, payload.location_detail, payload.part].join('|');
@@ -1284,7 +1328,15 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
         tr.innerHTML = `
             <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.judge_name || "") : ""}</td>
             <td>${room}${row && row.part ? "/" + row.part : ""}</td>
-            <td class="editable-assignment" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.assignment_notes || "") : ""}</td>
+            <td class="courtroom-assignment-cell">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                    <select class="courtroom-assignment-select" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}" style="width:50%; min-width:120px;">
+                        <option value=""></option>
+                        ${getCourtroomAssignmentOptionsHtml(row ? (row.assignment_notes || "") : "")}
+                    </select>
+                    <label style="display:flex; align-items:center; gap:4px; width:50%; justify-content:flex-end;"><input type="checkbox" class="courtroom-high-profile-checkbox" aria-label="${courthouse} ${room} high profile"> High Profile</label>
+                </div>
+            </td>
             <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}" data-assigned="${row ? (row.assigned_member || "") : ""}">${row ? (row.assigned_member || "") : ""}</td>
             <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="start_time" aria-label="${courthouse} ${room} start time"></td>
             <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="restart_time" aria-label="${courthouse} ${room} restart time"></td>
@@ -1292,9 +1344,22 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
             <td class="courtroom-down-cell"><input type="checkbox" class="courtroom-down-checkbox" aria-label="${courthouse} ${room} down"></td>
         `;
 
-        tr.querySelectorAll('.courtroom-time-input, .courtroom-down-checkbox').forEach(inputEl => {
+        tr.querySelectorAll('.courtroom-time-input, .courtroom-down-checkbox, .courtroom-high-profile-checkbox').forEach(inputEl => {
             inputEl.addEventListener('change', () => setPendingCourtroomMetaFromRow(tr));
         });
+        const assignmentSelect = tr.querySelector('.courtroom-assignment-select');
+        if (assignmentSelect) {
+            assignmentSelect.addEventListener('change', () => {
+                queueAssignmentNoteUpdate({
+                    assignment_date: selectedDate,
+                    courthouse,
+                    assignment_type: 'Courtroom',
+                    location_detail: room,
+                    part: row && row.part ? row.part : "",
+                    assignment_notes: assignmentSelect.value
+                });
+            });
+        }
         tr.querySelectorAll('.courtroom-time-input').forEach(inputEl => {
             inputEl.addEventListener('blur', () => {
                 const normalized = normalizeUserTimeValue(inputEl.value);
@@ -1597,15 +1662,20 @@ function loadCourtroomMeta(date) {
                 const row = document.querySelector(selector);
                 if (!row) return;
 
+                const pendingKey = [meta.assignment_date, meta.courthouse, meta.location_detail, meta.part || ''].join('|');
+                const pendingMeta = pendingCourtroomMeta[pendingKey] || null;
+
                 const startInput = row.querySelector('.courtroom-time-input[data-field="start_time"]');
                 const restartInput = row.querySelector('.courtroom-time-input[data-field="restart_time"]');
                 const adjournedInput = row.querySelector('.courtroom-time-input[data-field="adjourned_time"]');
                 const downInput = row.querySelector('.courtroom-down-checkbox');
+                const highProfileInput = row.querySelector('.courtroom-high-profile-checkbox');
 
-                if (startInput) startInput.value = parseStoredTimeToInputValue(meta.start_time || '');
-                if (restartInput) restartInput.value = parseStoredTimeToInputValue(meta.restart_time || '');
-                if (adjournedInput) adjournedInput.value = parseStoredTimeToInputValue(meta.adjourned_time || '');
-                if (downInput) downInput.checked = !!meta.is_down;
+                if (startInput) startInput.value = parseStoredTimeToInputValue((pendingMeta && pendingMeta.start_time) || meta.start_time || '');
+                if (restartInput) restartInput.value = parseStoredTimeToInputValue((pendingMeta && pendingMeta.restart_time) || meta.restart_time || '');
+                if (adjournedInput) adjournedInput.value = parseStoredTimeToInputValue((pendingMeta && pendingMeta.adjourned_time) || meta.adjourned_time || '');
+                if (downInput) downInput.checked = pendingMeta ? !!pendingMeta.is_down : !!meta.is_down;
+                if (highProfileInput) highProfileInput.checked = pendingMeta ? !!pendingMeta.is_high_profile : !!meta.is_high_profile;
             });
         });
 }
@@ -1687,6 +1757,11 @@ window.onload = function() {
         });
         refreshRosterAssignedState();
     });
+    document.addEventListener('change', function(e) {
+        if (!e.target.classList.contains('courtroom-high-profile-checkbox')) return;
+        const row = e.target.closest('.courtroom-meta-row');
+        if (row) setPendingCourtroomMetaFromRow(row);
+    });
     document.getElementById("courthouse").addEventListener("change", search);
     document.getElementById("date").addEventListener("change", function() {
         localStorage.setItem('searchPageDate', document.getElementById("date").value || '');
@@ -1701,7 +1776,7 @@ document.addEventListener("click", function(e) {
     const cell = e.target.closest(".editable-judge");
     if (!cell) return;
 
-    if (cell.querySelector("input")) return;
+    if (cell.querySelector("input") || cell.querySelector("select")) return;
 
     const input = document.createElement("input");
     input.type = "text";
@@ -1765,23 +1840,16 @@ document.addEventListener("click", function(e) {
             assignment_notes: input.value
         };
 
-        const key = [
-            payload.assignment_date,
-            payload.courthouse,
-            payload.assignment_type,
-            payload.location_detail,
-            payload.part
-        ].join("|");
-
-        pendingNotes[key] = payload;
+        queueAssignmentNoteUpdate(payload);
         cell.textContent = input.value;
-        updateSaveStatusBadge();
 
     });
 
 });
 
 document.getElementById("saveAssignments").addEventListener("click", function() {
+
+    document.querySelectorAll('.courtroom-meta-row').forEach(rowEl => setPendingCourtroomMetaFromRow(rowEl));
 
     const saveStatus = document.getElementById("saveStatus");
     if (saveStatus) {
