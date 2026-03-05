@@ -494,26 +494,6 @@ function normalizeAssignmentLabel(value) {
     return (value || '').trim().toUpperCase();
 }
 
-function getSlotState(assignmentType, assignmentLabel, hasAssignedMember) {
-    const type = (assignmentType || '').trim();
-
-    if (type === 'Fixed Post') {
-        return hasAssignedMember ? 'filled' : 'vacant';
-    }
-
-    if (type === 'Courtroom') {
-        const normalized = normalizeAssignmentLabel(assignmentLabel);
-        if (!normalized || normalized === 'DNS') return 'inactive';
-        if (normalized === 'OPEN') return 'open';
-        return hasAssignedMember ? 'filled' : 'vacant';
-    }
-
-    return 'inactive';
-}
-
-function pickPreferredRow(rows) {
-    return (rows || []).find(r => (r.assigned_member || '').trim()) || (rows || [])[0] || null;
-}
 
 function getTotalNeededFromAssignments(assignments) {
     const rows = assignments || [];
@@ -551,54 +531,14 @@ function getTotalNeededFromAssignments(assignments) {
         { post: "Transportation", detail: "", part: "" }
     ];
 
-    const MITCHELL_ROOMS = ["600M","636M","231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"];
-    const CUMMINGS_ROOMS = ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C"];
+    const totalPosts = MITCHELL_POSTS.length + CUMMINGS_POSTS.length;
+    const totalCourts = rows.filter(row => {
+        if ((row.assignment_type || '').trim() !== 'Courtroom') return false;
+        const assignmentLabel = normalizeAssignmentLabel(row.assignment_notes || '');
+        return !!assignmentLabel && assignmentLabel !== 'DNS';
+    }).length;
 
-    let needed = 0;
-
-    function countPostSlots(courthouseName, slots) {
-        const postRows = rows.filter(r => (r.assignment_type || '').trim() === 'Fixed Post' && (r.courthouse || '').trim() === courthouseName);
-
-        slots.forEach(slot => {
-            const slotMatches = postRows.filter(r =>
-                r.location_group === slot.post && (
-                    (slot.part && r.part === slot.part) ||
-                    (slot.detail && r.location_detail === slot.detail) ||
-                    (!slot.part && !slot.detail)
-                )
-            );
-            const fallbackMatches = postRows.filter(r => r.location_group === slot.post && !r.part && !r.location_detail);
-            const row = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
-            const state = getSlotState('Fixed Post', '', !!(row && (row.assigned_member || '').trim()));
-            if (state === 'vacant' || state === 'open') needed += 1;
-        });
-    }
-
-    function countCourtroomSlots(courthouseName, roomList) {
-        const courtRows = rows.filter(r => (r.assignment_type || '').trim() === 'Courtroom' && (r.courthouse || '').trim() === courthouseName);
-        roomList.forEach(room => {
-            const row = pickPreferredRow(courtRows.filter(r => r.location_detail === room));
-            const state = getSlotState('Courtroom', row ? (row.assignment_notes || '') : '', !!(row && (row.assigned_member || '').trim()));
-            if (state === 'vacant' || state === 'open') needed += 1;
-        });
-    }
-
-    countPostSlots('Mitchell', MITCHELL_POSTS);
-    countPostSlots('Cummings', CUMMINGS_POSTS);
-    countCourtroomSlots('Mitchell', MITCHELL_ROOMS);
-    countCourtroomSlots('Cummings', CUMMINGS_ROOMS);
-
-    const juvenileCourtRows = rows.filter(r =>
-        (r.assignment_type || '').trim() === 'Courtroom' &&
-        (r.courthouse || '').trim() === 'Juvenile'
-    );
-
-    juvenileCourtRows.forEach(row => {
-        const state = getSlotState('Courtroom', row.assignment_notes || '', (row.assigned_member || '').trim().length > 0);
-        if (state === 'vacant' || state === 'open') needed += 1;
-    });
-
-    return needed;
+    return totalPosts + totalCourts;
 }
 
 
