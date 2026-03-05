@@ -1076,7 +1076,7 @@ def get_courtroom_meta():
 def assignment_totals():
     date = request.args.get("date")
     if not date:
-        return jsonify({"vacant": 0, "filled": 0, "open": 0})
+        return jsonify({"vacant": 0, "filled": 0})
 
     # Reuse the exact same query + dedupe behavior as /api/search
     query = """
@@ -1124,7 +1124,7 @@ def assignment_totals():
     rows = list(deduped.values())
 
     # COUNT using your stated rules
-    vacant = filled = open_slots = 0
+    vacant = filled = 0
 
     for r in rows:
         typ = (r.get("assignment_type") or "").strip()
@@ -1144,16 +1144,12 @@ def assignment_totals():
         # Courtroom:
         if not label or label == "DNS":
             continue
-        if label == "OPEN":
-            open_slots += 1
-            continue
-
         if assigned:
             filled += 1
         else:
             vacant += 1
 
-    return jsonify({"vacant": vacant, "filled": filled, "open": open_slots})
+    return jsonify({"vacant": vacant, "filled": filled})
 
 @app.route("/api/update-courtroom-meta", methods=["POST"])
 def update_courtroom_meta():
