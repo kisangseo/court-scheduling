@@ -26,7 +26,7 @@
     <button onclick="search()">Search</button>
     <button onclick="openRoster()">Roster</button>
     <button onclick="window.open('/staffing', '_blank')">Staffing Resources Daily</button>
-    <button onclick="window.open('/executive-summary', '_blank')">Executive Summary</button>
+    <button onclick="openExecutiveSummary()">Executive Summary</button>
     <button id="saveAssignments">Save Assignments</button>
     <span id="saveStatus" class="counts-inline"></span>
 </div>
@@ -1785,8 +1785,17 @@ function buildSimpleViewUrl(pathname) {
     return query ? `${pathname}?${query}` : pathname;
 }
 
+function openExecutiveSummary() {
+    const date = document.getElementById("date")?.value || "";
+    const params = new URLSearchParams();
+    if (date) params.set("date", date);
+    const query = params.toString();
+    const url = query ? `/executive-summary?${query}` : '/executive-summary';
+    window.open(url, '_blank');
+}
+
 window.onload = function() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = (() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`; })();
     const savedDate = localStorage.getItem('searchPageDate');
     document.getElementById("date").value = savedDate || today;
     const simpleViewToggle = document.getElementById("simpleViewToggle");
