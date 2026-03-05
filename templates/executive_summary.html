@@ -352,15 +352,18 @@ function getAssignmentTotals(assignments) {
         ...getSearchPageCourtroomRowsForCounts(assignments)
     ];
 
-        // DNS or no assignment => ignore completely
-        if (!label || label === 'DNS') return;
+    const totals = { vacant: 0, filled: 0, open: 0 };
+
+    relevantRows.forEach(row => {
+        const hasAssignedMember = (row.assigned_member || '').trim().length > 0;
+        const slotState = getSlotState(row.assignment_type, row.assignment_notes || '', hasAssignedMember);
 
         if (slotState === 'vacant') totals.vacant += 1;
         else if (slotState === 'filled') totals.filled += 1;
         else if (slotState === 'open') totals.open += 1;
+    });
 
-        return totals;
-    }, { vacant: 0, filled: 0, open: 0 });
+    return totals;
 }
 
 function countBorrowedDeputies(assignments, deputies) {
