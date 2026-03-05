@@ -95,10 +95,21 @@ function normalizeAssignmentLabel(value) {
     return (value || '').trim().toUpperCase();
 }
 
-function getSlotState(assignmentType, assignmentLabel, hasAssignedMember) {
+function shouldCountFixedPostSlot(slotMeta = {}) {
+    const courthouse = (slotMeta.courthouse || '').trim().toLowerCase();
+    const post = (slotMeta.post || '').trim().toLowerCase();
+    const part = (slotMeta.part || '').trim().toLowerCase();
+
+    if (courthouse === 'mitchell' && post === 'calvert' && part === '0800-3') return false;
+    if (courthouse === 'cummings' && post === 'cummings' && part === '0830-2') return false;
+    return true;
+}
+
+function getSlotState(assignmentType, assignmentLabel, hasAssignedMember, slotMeta = {}) {
     const type = (assignmentType || '').trim();
 
     if (type === 'Fixed Post') {
+        if (!shouldCountFixedPostSlot(slotMeta)) return 'inactive';
         return hasAssignedMember ? 'filled' : 'vacant';
     }
 
@@ -334,7 +345,14 @@ function getSearchPageFixedPostRowsForCounts(assignments) {
             });
             const fallbackMatches = postsType.filter(row => (row.location_group || '').trim() === slot.post && !(row.part || '').trim() && !(row.location_detail || '').trim());
             const selected = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
-            return selected || { assignment_type: 'Fixed Post', assignment_notes: '', assigned_member: '' };
+            return selected || {
+                assignment_type: 'Fixed Post',
+                assignment_notes: '',
+                assigned_member: '',
+                courthouse,
+                location_group: slot.post,
+                part: slot.part || ''
+            };
         });
     };
 
@@ -354,7 +372,11 @@ function getAssignmentTotals(assignments) {
 
     relevantRows.forEach(row => {
         const hasAssignedMember = (row.assigned_member || '').trim().length > 0;
-        const slotState = getSlotState(row.assignment_type, row.assignment_notes || '', hasAssignedMember);
+        const slotState = getSlotState(row.assignment_type, row.assignment_notes || '', hasAssignedMember, {
+            courthouse: row.courthouse,
+            post: row.location_group,
+            part: row.part
+        });
 
         if (slotState === 'vacant') totals.vacant += 1;
         else if (slotState === 'filled') totals.filled += 1;

@@ -367,6 +367,10 @@ function shouldCountFixedPostSlot(slotMeta = {}) {
         return false;
     }
 
+    if (courthouse === 'cummings' && post === 'cummings' && part === '0830-2') {
+        return false;
+    }
+
     return true;
 }
 
@@ -900,7 +904,31 @@ function isNoGunFixedPost(courthouse, post) {
             || normalizedPost === 'lock up west'
             || normalizedPost === 'jury room'
         ))
-        || (normalizedCourthouse === 'cummings' && normalizedPost === 'fayette st. h/c');
+        || (normalizedCourthouse === 'cummings' && (
+            normalizedPost === 'fayette st. h/c'
+            || normalizedPost === 'console room'
+            || normalizedPost === 'lock up east'
+        ));
+}
+
+function requiresPrimarySecurityRole(courthouse, post, shift) {
+    const normalizedCourthouse = (courthouse || '').trim().toLowerCase();
+    const normalizedPost = (post || '').trim().toLowerCase();
+    const normalizedShift = (shift || '').trim().toLowerCase();
+
+    if (normalizedCourthouse === 'cummings' && normalizedPost === 'family court') {
+        return true;
+    }
+
+    if (normalizedCourthouse === 'cummings' && normalizedPost === 'cummings' && normalizedShift === '8:00 am') {
+        return false;
+    }
+
+    if (normalizedCourthouse === 'cummings' && normalizedPost === 'cummings' && normalizedShift === '8:30 am') {
+        return false;
+    }
+
+    return true;
 }
 
 function isArmedByName(name) {
@@ -963,17 +991,28 @@ function isEligibleForCell(cell, role) {
     if (category === 'security') {
         const post = (cell.dataset.room || '').trim();
         const courthouse = (cell.dataset.courthouse || '').trim();
+        const shift = (cell.dataset.shift || '').trim();
+
+        if ((courthouse || '').trim().toLowerCase() === 'cummings' && post.trim().toLowerCase() === 'family court') {
+            return isPrimarySecurityRole(role);
+        }
+
+        if ((courthouse || '').trim().toLowerCase() === 'cummings' && post.trim().toLowerCase() === 'cummings' && shift.trim().toLowerCase() === '8:00 am') {
+            return isArmedRole(role);
+        }
+
         if (isNoGunFixedPost(courthouse, post)) {
             return true;
         }
 
-        const shift = (cell.dataset.shift || '').trim();
         const matchingSecurityCells = Array.from(
             document.querySelectorAll('.editable[data-type="Fixed Post"]')
         ).filter(candidate => {
             if ((candidate.dataset.room || '').trim() !== post) return false;
             return (candidate.dataset.shift || '').trim() === shift;
         });
+
+        const requirePrimary = requiresPrimarySecurityRole(courthouse, post, shift);
 
         const hasPrimaryAssigned = matchingSecurityCells.some(candidate =>
             getAssignedNamesFromCell(candidate).some(name => {
@@ -983,7 +1022,7 @@ function isEligibleForCell(cell, role) {
             })
         );
 
-        if (!hasPrimaryAssigned && !isPrimarySecurityRole(role)) {
+        if (requirePrimary && !hasPrimaryAssigned && !isPrimarySecurityRole(role)) {
             return false;
         }
     }
