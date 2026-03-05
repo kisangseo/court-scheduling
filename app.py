@@ -1143,6 +1143,10 @@ def assignment_totals():
             if courthouse == "mitchell" and post == "calvert" and part == "0800-3":
                 continue
 
+            # Cummings 8:30 AM has one optional second slot that should not count toward totals.
+            if courthouse == "cummings" and post == "cummings" and part == "0830-2":
+                continue
+
             if assigned:
                 filled += 1
             else:

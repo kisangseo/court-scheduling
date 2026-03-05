@@ -93,10 +93,21 @@ function normalizeCourtroomAssignmentLabel(value) {
     return (value || '').trim().toUpperCase();
 }
 
-function getSlotState(assignmentType, assignmentLabel, hasAssignedMember) {
+function shouldCountFixedPostSlot(slotMeta = {}) {
+    const courthouse = (slotMeta.courthouse || '').trim().toLowerCase();
+    const post = (slotMeta.post || '').trim().toLowerCase();
+    const part = (slotMeta.part || '').trim().toLowerCase();
+
+    if (courthouse === 'mitchell' && post === 'calvert' && part === '0800-3') return false;
+    if (courthouse === 'cummings' && post === 'cummings' && part === '0830-2') return false;
+    return true;
+}
+
+function getSlotState(assignmentType, assignmentLabel, hasAssignedMember, slotMeta = {}) {
     const type = (assignmentType || '').trim();
 
     if (type === 'Fixed Post') {
+        if (!shouldCountFixedPostSlot(slotMeta)) return 'inactive';
         return hasAssignedMember ? 'filled' : 'vacant';
     }
 
@@ -136,7 +147,16 @@ function parseAssignedNames(value) {
 function getStats(rows) {
     const stats = { vacant: 0, filled: 0, total: 0 };
     rows.forEach(row => {
-        const slotState = getSlotState(row.assignment_type, row.assignment_notes || '', !!(row.assigned_member || '').trim());
+        const slotState = getSlotState(
+            row.assignment_type,
+            row.assignment_notes || '',
+            !!(row.assigned_member || '').trim(),
+            {
+                courthouse: row.courthouse,
+                post: row.location_group,
+                part: row.part
+            }
+        );
         if (slotState === 'inactive') return;
         stats.total += 1;
         if (slotState === 'vacant') stats.vacant += 1;
@@ -167,7 +187,10 @@ function renderPostTable(courthouse, rows) {
         countRows.push({
             assignment_type: 'Fixed Post',
             assignment_notes: '',
-            assigned_member: assigned ? (assigned.assigned_member || '') : ''
+            assigned_member: assigned ? (assigned.assigned_member || '') : '',
+            courthouse,
+            location_group: slot.post,
+            part: slot.part || ''
         });
 
         const tr = document.createElement('tr');
