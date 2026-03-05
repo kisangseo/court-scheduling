@@ -465,12 +465,19 @@ function renderSummary(dayResults) {
 
 function initializeDate() {
     const now = new Date();
-    summaryDateInput.value = formatDateISO(now);
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlDate = urlParams.get('date');
+    const savedDate = localStorage.getItem('searchPageDate');
+
+    summaryDateInput.value = urlDate || savedDate || formatDateISO(now);
     loadSummary();
 }
 
 refreshSummaryBtn.addEventListener('click', loadSummary);
 summaryDateInput.addEventListener('change', loadSummary);
+summaryDateInput.addEventListener('change', () => {
+    localStorage.setItem('searchPageDate', summaryDateInput.value || '');
+});
 unavailableDetailToggle.addEventListener('change', () => {
     if (!summaryDateInput.value) return;
     loadSummary();
