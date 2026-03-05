@@ -53,6 +53,16 @@
             color: #8b4513;
             font-weight: 700;
         }
+
+        .metric-green {
+            color: #1b7f3b;
+            font-weight: 700;
+        }
+
+        .metric-blue {
+            color: #1b4fd6;
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
@@ -189,6 +199,33 @@ function getUnavailableBreakdown(status) {
     };
 }
 
+function normalizeStatus(status) {
+    return (status || '').toString().trim().toLowerCase();
+}
+
+function isOutStatus(status) {
+    const normalized = normalizeStatus(status);
+    if (!normalized) return false;
+
+    return normalized.includes('sick')
+        || normalized.includes('leave')
+        || normalized.includes('light duty')
+        || normalized === 'ld'
+        || normalized.includes(' ld')
+        || normalized.includes('unavailable')
+        || normalized.includes('callout')
+        || normalized.includes('out');
+}
+
+function normalizeCapacityTag(deputy) {
+    return (deputy.capacity_tag || deputy.capability_tag || '').toString().trim().toUpperCase();
+}
+
+function isCourtCapable(deputy) {
+    const tag = normalizeCapacityTag(deputy);
+    return tag === 'F' || tag === 'SPO';
+}
+
 function parseAssignedMemberValue(value) {
     const text = (value || '').trim();
     if (!text) return [];
@@ -288,11 +325,11 @@ async function loadSummary() {
                 totals.callout += breakdown.callout;
                 return totals;
             }, { sick: 0, unavailable: 0, leave: 0, callout: 0 });
-            const unavailableAnyCount = courtSecurityDeputies.filter(dep => {
-                const breakdown = getUnavailableBreakdown(dep.current_status);
-                return breakdown.sick || breakdown.unavailable || breakdown.leave || breakdown.callout;
-            }).length;
-            const availableCount = courtSecurityDeputies.length - unavailableAnyCount;
+            const availableCourtSecurity = courtSecurityDeputies.filter(dep => !isOutStatus(dep.current_status));
+            const availableCount = availableCourtSecurity.length;
+            const availableCourtCapableCount = availableCourtSecurity.filter(isCourtCapable).length;
+            const availableArmedCount = availableCourtCapableCount;
+            const availableUnarmedCount = Math.max(availableCount - availableArmedCount, 0);
             const borrowedCount = countBorrowedDeputies(assignments, deputies);
             const neededBreakdown = getNeededBreakdownFromAssignments(assignments);
             const highProfileCaseCount = countHighProfileCases(courtroomMetaRows);
@@ -302,6 +339,9 @@ async function loadSummary() {
                 neededCourts: neededBreakdown.courts,
                 neededPosts: neededBreakdown.posts,
                 available: availableCount,
+                availableCourts: availableCourtCapableCount,
+                availablePostsArmed: availableArmedCount,
+                availablePostsUnarmed: availableUnarmedCount,
                 highProfileCases: highProfileCaseCount,
                 unavailableBreakdown,
                 borrowed: borrowedCount
@@ -318,8 +358,8 @@ async function loadSummary() {
 
 function renderSummary(dayResults) {
     const headers = dayResults.map(day => `<th>${day.label}</th>`).join('');
-    const neededCells = dayResults.map(day => `<td><span class="metric-brown">Court: ${day.neededCourts || 0}</span> / <span class="metric-green">Posts: ${day.neededPosts || 0}</span></td>`).join('');
-    const availableCells = dayResults.map(day => `<td>${day.available}</td>`).join('');
+    const neededCells = dayResults.map(day => `<td><span class="metric-brown">Court: ${day.neededCourts || 0}</span> / <span class="metric-green">Posts: ${day.neededPosts || 0}</span> <span class="metric-blue">Total: ${day.needed || 0}</span></td>`).join('');
+    const availableCells = dayResults.map(day => `<td><span class="metric-brown">Court: ${day.availableCourts || 0}</span> / <span class="metric-green">Posts: Armed ${day.availablePostsArmed || 0}, Unarmed ${day.availablePostsUnarmed || 0}</span> <span class="metric-blue">Total: ${day.available || 0}</span></td>`).join('');
     const highProfileCells = dayResults.map(day => `<td>${day.highProfileCases || 0}</td>`).join('');
     const leaveCells = dayResults.map(day => `<td>Scheduled Leave: ${day.unavailableBreakdown.leave}</td>`).join('');
     const unavailableCells = dayResults.map(day => `<td>Unavailable: ${day.unavailableBreakdown.unavailable}</td>`).join('');
