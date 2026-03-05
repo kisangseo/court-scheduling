@@ -331,7 +331,7 @@ function getSearchPageFixedPostRowsForCounts(assignments) {
                 if ((row.location_group || '').trim() !== slot.post) return false;
                 if (slot.part && (row.part || '').trim() === slot.part) return true;
                 if (slot.detail && (row.location_detail || '').trim() === slot.detail) return true;
-                if (!slot.part && !slot.detail && !(row.part || '').trim() && !(row.location_detail || '').trim()) return true;
+                if (!slot.part && !slot.detail) return true;
                 return false;
             });
             const fallbackMatches = postsType.filter(row => (row.location_group || '').trim() === slot.post && !(row.part || '').trim() && !(row.location_detail || '').trim());
