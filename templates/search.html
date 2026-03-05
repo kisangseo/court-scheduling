@@ -1300,7 +1300,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
         <thead>
             <tr>
                 <th>Judge</th>
-                <th>High Profile</th>
+                
                 <th>Room</th>
                 <th>Assignment</th>
                 <th>Deputy</th>
@@ -1328,7 +1328,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
         tr.dataset.part = row && row.part ? row.part : "";
         tr.innerHTML = `
             <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.judge_name || "") : ""}</td>
-            <td class="courtroom-high-profile-cell"><label><input type="checkbox" class="courtroom-high-profile-checkbox" aria-label="${courthouse} ${room} high profile"> High Profile</label></td>
+           
             <td>${room}${row && row.part ? "/" + row.part : ""}</td>
             <td class="courtroom-assignment-cell">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">

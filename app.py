@@ -23,16 +23,13 @@ def _ensure_courtroom_meta_table(cursor):
                 restart_time NVARCHAR(16) NULL,
                 adjourned_time NVARCHAR(16) NULL,
                 is_down BIT NOT NULL DEFAULT 0,
-                is_high_profile BIT NOT NULL DEFAULT 0,
+                
                 updated_at DATETIME NOT NULL DEFAULT GETDATE(),
                 CONSTRAINT PK_courtroom_meta PRIMARY KEY (assignment_date, courthouse, location_detail, part)
             )
         END
 
-        IF COL_LENGTH('dbo.courtroom_meta', 'is_high_profile') IS NULL
-        BEGIN
-            ALTER TABLE dbo.courtroom_meta ADD is_high_profile BIT NOT NULL CONSTRAINT DF_courtroom_meta_is_high_profile DEFAULT 0;
-        END
+        
     """)
 
 
