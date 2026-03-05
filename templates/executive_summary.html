@@ -484,7 +484,35 @@ function renderSummary(dayResults) {
         const total = (breakdown.sick || 0) + (breakdown.unavailable || 0) + (breakdown.leave || 0) + (breakdown.callout || 0);
         return `<td>${total}</td>`;
     }).join('');
+    const leaveCells = dayResults.map(day => `<td>Scheduled Leave: ${day.unavailableBreakdown?.leave || 0}</td>`).join('');
+    const unavailableCells = dayResults.map(day => `<td>Unavailable: ${day.unavailableBreakdown?.unavailable || 0}</td>`).join('');
+    const sickCells = dayResults.map(day => `<td>Sick: ${day.unavailableBreakdown?.sick || 0}</td>`).join('');
+    const calloutCells = dayResults.map(day => `<td>Callout: ${day.unavailableBreakdown?.callout || 0}</td>`).join('');
     const borrowedCells = dayResults.map(day => `<td>${day.borrowed}</td>`).join('');
+
+    const unavailableRows = showSummaryDetail
+        ? `
+                <tr>
+                    <td class="metric-label">Unavailable</td>
+                    ${leaveCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">&nbsp;</td>
+                    ${unavailableCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">&nbsp;</td>
+                    ${sickCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">&nbsp;</td>
+                    ${calloutCells}
+                </tr>`
+        : `
+                <tr>
+                    <td class="metric-label">Unavailable</td>
+                    ${unavailableTotalCells}
+                </tr>`;
 
     summaryContent.innerHTML = `
         <table class="summary-table">
