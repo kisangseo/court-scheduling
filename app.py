@@ -1072,7 +1072,88 @@ def get_courtroom_meta():
 
     conn.close()
     return jsonify(rows)
+@app.route("/api/assignment-totals")
+def assignment_totals():
+    date = request.args.get("date")
+    if not date:
+        return jsonify({"vacant": 0, "filled": 0, "open": 0})
 
+    # Reuse the exact same query + dedupe behavior as /api/search
+    query = """
+        SELECT TOP 200
+            assignment_date,
+            courthouse,
+            assignment_type,
+            location_group,
+            location_detail,
+            judge_name,
+            part,
+            assigned_member,
+            assignment_notes
+        FROM dbo.court_assignments
+        WHERE assignment_date = ?
+        ORDER BY assignment_date DESC
+    """
+
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute(query, (date,))
+    columns = [c[0] for c in cursor.description]
+    raw_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    conn.close()
+
+    # SAME dedupe as /api/search (prefer row that has assigned_member)
+    deduped = {}
+    for row in raw_results:
+        key = (
+            row.get("assignment_date"),
+            (row.get("courthouse") or "").strip(),
+            (row.get("assignment_type") or "").strip(),
+            (row.get("location_group") or "").strip(),
+            (row.get("location_detail") or "").strip(),
+            (row.get("part") or "").strip(),
+        )
+        existing = deduped.get(key)
+        if not existing:
+            deduped[key] = row
+            continue
+
+        if not (existing.get("assigned_member") or "").strip() and (row.get("assigned_member") or "").strip():
+            deduped[key] = row
+
+    rows = list(deduped.values())
+
+    # COUNT using your stated rules
+    vacant = filled = open_slots = 0
+
+    for r in rows:
+        typ = (r.get("assignment_type") or "").strip()
+        if typ not in ("Courtroom", "Fixed Post"):
+            continue
+
+        assigned = (r.get("assigned_member") or "").strip()
+        label = (r.get("assignment_notes") or "").strip().upper()
+
+        if typ == "Fixed Post":
+            if assigned:
+                filled += 1
+            else:
+                vacant += 1
+            continue
+
+        # Courtroom:
+        if not label or label == "DNS":
+            continue
+        if label == "OPEN":
+            open_slots += 1
+            continue
+
+        if assigned:
+            filled += 1
+        else:
+            vacant += 1
+
+    return jsonify({"vacant": vacant, "filled": filled, "open": open_slots})
 
 @app.route("/api/update-courtroom-meta", methods=["POST"])
 def update_courtroom_meta():
