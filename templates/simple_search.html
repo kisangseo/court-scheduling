@@ -80,9 +80,13 @@ const CUMMINGS_POSTS = [
 ];
 
 const MITCHELL_ROOMS = ["600M", "636M","231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"];
-const CUMMINGS_ROOMS = ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C"];
+const CUMMINGS_ROOMS = ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C","103,105","317,327 & 339, 303"];
 const JUVENILE_ROOMS = ["329C","428M","406M"];
 const FAMILY_ROOMS = ["126", "120", "12", "124"];
+const CUMMINGS_ROOM_DEFAULTS = {
+    "103,105": { part: "1st FL", judge_name: "Magistrates" },
+    "317,327 & 339, 303": { part: "3rd FL", judge_name: "Magistrates" }
+};
 const FAMILY_ROOM_DEFAULTS = {
     "126": { part: "F-1", judge_name: "Zaslow" },
     "120": { part: "F-2", judge_name: "M. Middleton" },
@@ -252,11 +256,16 @@ function renderCourtroomTable(courthouse, rows) {
             if (matches.length) {
                 orderedRows.push(...matches);
             } else {
-                const defaultRow = courthouse === 'Family' && FAMILY_ROOM_DEFAULTS[room]
+                const defaultRoomMeta = courthouse === 'Family'
+                    ? FAMILY_ROOM_DEFAULTS[room]
+                    : courthouse === 'Cummings'
+                        ? CUMMINGS_ROOM_DEFAULTS[room]
+                        : null;
+                const defaultRow = defaultRoomMeta
                     ? {
                         location_detail: room,
-                        part: FAMILY_ROOM_DEFAULTS[room].part,
-                        judge_name: FAMILY_ROOM_DEFAULTS[room].judge_name
+                        part: defaultRoomMeta.part,
+                        judge_name: defaultRoomMeta.judge_name
                     }
                     : { location_detail: room };
                 orderedRows.push(defaultRow);
@@ -272,9 +281,13 @@ function renderCourtroomTable(courthouse, rows) {
     const countRows = [];
     rowsToRender.forEach(row => {
         const room = row.location_detail || '';
-        const familyDefaults = courthouse === 'Family' ? FAMILY_ROOM_DEFAULTS[room] : null;
-        const effectivePart = row && row.part ? row.part : (familyDefaults ? familyDefaults.part : '');
-        const effectiveJudge = row && row.judge_name ? row.judge_name : (familyDefaults ? familyDefaults.judge_name : '');
+        const roomDefaults = courthouse === 'Family'
+            ? FAMILY_ROOM_DEFAULTS[room]
+            : courthouse === 'Cummings'
+                ? CUMMINGS_ROOM_DEFAULTS[room]
+                : null;
+        const effectivePart = row && row.part ? row.part : (roomDefaults ? roomDefaults.part : '');
+        const effectiveJudge = row && row.judge_name ? row.judge_name : (roomDefaults ? roomDefaults.judge_name : '');
 
         countRows.push({
             assignment_type: 'Courtroom',

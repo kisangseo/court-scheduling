@@ -1397,10 +1397,15 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
     const rooms = courthouse === "Mitchell"
         ? ["600M","636M", "231M","417M","556C","215M","441M","309M","226M","420M","400M","236M","203M","451M","438M"]
         : courthouse === "Cummings"
-            ? ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C"]
+            ? ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","103,105","317,327 & 339, 303"]
             : courthouse === "Juvenile"
                 ? ["329C","428M","406M"]
                 : ["126","120","12","124"];
+
+    const cummingsRoomDefaults = {
+        "103,105": { part: "1st FL", judge_name: "Magistrates" },
+        "317,327 & 339, 303": { part: "3rd FL", judge_name: "Magistrates" }
+    };
 
     const familyRoomDefaults = {
         "126": { part: "F-1", judge_name: "Zaslow" },
@@ -1451,11 +1456,17 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
             if (matches.length) {
                 orderedRows.push(...matches);
             } else {
-                const defaultRow = courthouse === "Family" && familyRoomDefaults[room]
+                const defaultRoomMeta = courthouse === "Family"
+                    ? familyRoomDefaults[room]
+                    : courthouse === "Cummings"
+                        ? cummingsRoomDefaults[room]
+                        : null;
+
+                const defaultRow = defaultRoomMeta
                     ? {
                         location_detail: room,
-                        part: familyRoomDefaults[room].part,
-                        judge_name: familyRoomDefaults[room].judge_name
+                        part: defaultRoomMeta.part,
+                        judge_name: defaultRoomMeta.judge_name
                     }
                     : { location_detail: room };
                 orderedRows.push(defaultRow);
@@ -1470,9 +1481,13 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
 
     rowsToRender.forEach(row => {
         const room = row.location_detail;
-        const familyDefaults = courthouse === "Family" ? familyRoomDefaults[room] : null;
-        const effectivePart = row && row.part ? row.part : (familyDefaults ? familyDefaults.part : "");
-        const effectiveJudge = row && row.judge_name ? row.judge_name : (familyDefaults ? familyDefaults.judge_name : "");
+        const roomDefaults = courthouse === "Family"
+            ? familyRoomDefaults[room]
+            : courthouse === "Cummings"
+                ? cummingsRoomDefaults[room]
+                : null;
+        const effectivePart = row && row.part ? row.part : (roomDefaults ? roomDefaults.part : "");
+        const effectiveJudge = row && row.judge_name ? row.judge_name : (roomDefaults ? roomDefaults.judge_name : "");
 
         const tr = document.createElement("tr");
         tr.classList.add("courtroom-meta-row");
