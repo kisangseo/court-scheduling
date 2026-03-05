@@ -16,6 +16,7 @@
         <option value="Mitchell">Mitchell</option>
         <option value="Cummings">Cummings</option>
         <option value="Juvenile">Juvenile</option>
+        <option value="Family">Family</option>
     </select>
 
     <button onclick="searchSimple()">Search</button>
@@ -81,6 +82,13 @@ const CUMMINGS_POSTS = [
 const MITCHELL_ROOMS = ["600M", "636M","231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"];
 const CUMMINGS_ROOMS = ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C"];
 const JUVENILE_ROOMS = ["329C","428M","406M"];
+const FAMILY_ROOMS = ["126", "120", "12", "124"];
+const FAMILY_ROOM_DEFAULTS = {
+    "126": { part: "F-1", judge_name: "Zaslow" },
+    "120": { part: "F-2", judge_name: "M. Middleton" },
+    "12": { part: "F-3", judge_name: "N. Barmore" },
+    "124": { part: "F-4", judge_name: "T-Hill" }
+};
 
 let allDeputies = [];
 let latestRows = [];
@@ -211,7 +219,13 @@ function buildCourtroomAssignmentText(row) {
 }
 
 function renderCourtroomTable(courthouse, rows) {
-    const rooms = courthouse === 'Mitchell' ? MITCHELL_ROOMS : courthouse === 'Cummings' ? CUMMINGS_ROOMS : JUVENILE_ROOMS;
+    const rooms = courthouse === 'Mitchell'
+        ? MITCHELL_ROOMS
+        : courthouse === 'Cummings'
+            ? CUMMINGS_ROOMS
+            : courthouse === 'Juvenile'
+                ? JUVENILE_ROOMS
+                : FAMILY_ROOMS;
     const courtRows = rows.filter(r => r.assignment_type === 'Courtroom');
 
     const table = document.createElement('table');
@@ -238,7 +252,14 @@ function renderCourtroomTable(courthouse, rows) {
             if (matches.length) {
                 orderedRows.push(...matches);
             } else {
-                orderedRows.push({ location_detail: room });
+                const defaultRow = courthouse === 'Family' && FAMILY_ROOM_DEFAULTS[room]
+                    ? {
+                        location_detail: room,
+                        part: FAMILY_ROOM_DEFAULTS[room].part,
+                        judge_name: FAMILY_ROOM_DEFAULTS[room].judge_name
+                    }
+                    : { location_detail: room };
+                orderedRows.push(defaultRow);
             }
             rowsByRoom.delete(room);
         });
@@ -569,6 +590,8 @@ function searchSimple() {
         const cummingsOt = renderOvertimeTable(grouped['Cummings'] || []);
         const juvCourt = renderCourtroomTable('Juvenile', grouped['Juvenile'] || []);
         const juvOt = renderOvertimeTable(grouped['Juvenile'] || []);
+        const familyCourt = renderCourtroomTable('Family', grouped['Family'] || []);
+        const familyOt = renderOvertimeTable(grouped['Family'] || []);
 
         const mitchellTotal = {
             total: mitchellPosts.stats.total + mitchellCourt.stats.total + mitchellOt.stats.total,
@@ -584,6 +607,11 @@ function searchSimple() {
             total: juvCourt.stats.total + juvOt.stats.total,
             vacant: juvCourt.stats.vacant + juvOt.stats.vacant,
             filled: juvCourt.stats.filled + juvOt.stats.filled
+        };
+        const familyTotal = {
+            total: familyCourt.stats.total + familyOt.stats.total,
+            vacant: familyCourt.stats.vacant + familyOt.stats.vacant,
+            filled: familyCourt.stats.filled + familyOt.stats.filled
         };
 
         const mitchellBox = createCourthouseBox('Mitchell', formatCountMetrics(mitchellTotal.vacant, mitchellTotal.filled));
@@ -603,11 +631,17 @@ function searchSimple() {
         juvenileBox.appendChild(createSectionCell('Courtroom', juvCourt.table));
         juvenileBox.appendChild(createSectionCell('Overtime', juvOt.table));
 
-        juvTopRow.appendChild(juvenileBox);
-        juvTopRow.appendChild(createSectionCell('Borrowed Deputies', renderBorrowedPanel(latestRows).querySelector('table')));
+        const familyBox = createCourthouseBox('Family', formatCountMetrics(familyTotal.vacant, familyTotal.filled));
+        familyBox.appendChild(createSectionCell('Courtroom', familyCourt.table));
+        familyBox.appendChild(createSectionCell('Overtime', familyOt.table));
 
-        const overallVacant = mitchellTotal.vacant + cummingsTotal.vacant + juvenileTotal.vacant;
-        const overallFilled = mitchellTotal.filled + cummingsTotal.filled + juvenileTotal.filled;
+        juvTopRow.appendChild(juvenileBox);
+        juvTopRow.appendChild(familyBox);
+        juvBottomRow.style.display = 'grid';
+        juvBottomRow.appendChild(createSectionCell('Borrowed Deputies', renderBorrowedPanel(latestRows).querySelector('table')));
+
+        const overallVacant = mitchellTotal.vacant + cummingsTotal.vacant + juvenileTotal.vacant + familyTotal.vacant;
+        const overallFilled = mitchellTotal.filled + cummingsTotal.filled + juvenileTotal.filled + familyTotal.filled;
         document.getElementById('overallAssignmentCounts').innerHTML = formatCountMetrics(overallVacant, overallFilled);
 
         renderRoster();

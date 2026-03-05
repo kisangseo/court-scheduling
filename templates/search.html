@@ -21,6 +21,7 @@
         <option value="Mitchell">Mitchell</option>
         <option value="Cummings">Cummings</option>
         <option value="Juvenile">Juvenile</option>
+        <option value="Family">Family</option>
     </select>
 
     <button onclick="search()">Search</button>
@@ -1308,7 +1309,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
 
     const sections = { posts: null, courtrooms: null, overtime: null };
 
-    if (courthouse !== "Juvenile") {
+    if (courthouse === "Mitchell" || courthouse === "Cummings") {
         const postsType = typeGroups["Fixed Post"] || [];
         const postsTable = document.createElement("table");
         postsTable.border = "1";
@@ -1396,7 +1397,16 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
         ? ["600M","636M", "231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"]
         : courthouse === "Cummings"
             ? ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C"]
-            : ["329C","428M","406M"];
+            : courthouse === "Juvenile"
+                ? ["329C","428M","406M"]
+                : ["126","120","12","124"];
+
+    const familyRoomDefaults = {
+        "126": { part: "F-1", judge_name: "Zaslow" },
+        "120": { part: "F-2", judge_name: "M. Middleton" },
+        "12": { part: "F-3", judge_name: "N. Barmore" },
+        "124": { part: "F-4", judge_name: "T-Hill" }
+    };
 
     const courtroomRows = typeGroups["Courtroom"] || [];
     const courtroomTable = document.createElement("table");
@@ -1440,7 +1450,14 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
             if (matches.length) {
                 orderedRows.push(...matches);
             } else {
-                orderedRows.push({ location_detail: room });
+                const defaultRow = courthouse === "Family" && familyRoomDefaults[room]
+                    ? {
+                        location_detail: room,
+                        part: familyRoomDefaults[room].part,
+                        judge_name: familyRoomDefaults[room].judge_name
+                    }
+                    : { location_detail: room };
+                orderedRows.push(defaultRow);
             }
             rowsByRoom.delete(room);
         });
@@ -1688,10 +1705,12 @@ function search() {
             const mitchell = buildCourthouseSections("Mitchell", grouped["Mitchell"] || [], date);
             const cummings = buildCourthouseSections("Cummings", grouped["Cummings"] || [], date);
             const juvenile = buildCourthouseSections("Juvenile", grouped["Juvenile"] || [], date);
+            const family = buildCourthouseSections("Family", grouped["Family"] || [], date);
 
             const includeMitchell = !courthouse || courthouse === "Mitchell";
             const includeCummings = !courthouse || courthouse === "Cummings";
             const includeJuvenile = !courthouse || courthouse === "Juvenile";
+            const includeFamily = !courthouse || courthouse === "Family";
 
             // =========================
             // POSTS (top headers KEEP counters)
@@ -1731,6 +1750,12 @@ function search() {
                 courtroomsRow.appendChild(jCell);
             }
 
+            if (includeFamily) {
+                const fCell = createSectionCell("Family", family.courtrooms, "Family", "main", "Courtroom");
+                fCell.style.gridColumn = "1 / span 2";
+                courtroomsRow.appendChild(fCell);
+            }
+
             // Not used anymore for juvenile courtrooms
             juvRow.innerHTML = "";
             juvBottomRow.innerHTML = "";
@@ -1759,6 +1784,13 @@ function search() {
                 h.textContent = "Juvenile Overtime";
                 overtimeLeft.appendChild(h);
                 overtimeLeft.appendChild(juvenile.overtime);
+            }
+
+            if (includeFamily) {
+                const h = document.createElement("h4");
+                h.textContent = "Family Overtime";
+                overtimeLeft.appendChild(h);
+                overtimeLeft.appendChild(family.overtime);
             }
 
             overtimeRow.appendChild(createSectionCell("Overtime", overtimeLeft));
