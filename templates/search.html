@@ -1469,26 +1469,30 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
 
     rowsToRender.forEach(row => {
         const room = row.location_detail;
+        const familyDefaults = courthouse === "Family" ? familyRoomDefaults[room] : null;
+        const effectivePart = row && row.part ? row.part : (familyDefaults ? familyDefaults.part : "");
+        const effectiveJudge = row && row.judge_name ? row.judge_name : (familyDefaults ? familyDefaults.judge_name : "");
+
         const tr = document.createElement("tr");
         tr.classList.add("courtroom-meta-row");
         tr.dataset.date = selectedDate;
         tr.dataset.courthouse = courthouse;
         tr.dataset.room = room;
-        tr.dataset.part = row && row.part ? row.part : "";
+        tr.dataset.part = effectivePart;
         tr.innerHTML = `
-            <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.judge_name || "") : ""}</td>
+            <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}">${effectiveJudge}</td>
            
-            <td>${room}${row && row.part ? "/" + row.part : ""}</td>
+            <td>${room}${effectivePart ? "/" + effectivePart : ""}</td>
             <td class="courtroom-assignment-cell">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                    <select class="courtroom-assignment-select" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}" style="width:50%; min-width:120px;">
+                    <select class="courtroom-assignment-select" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" style="width:50%; min-width:120px;">
                         <option value=""></option>
                         ${getCourtroomAssignmentOptionsHtml(row ? (row.assignment_notes || "") : "")}
                     </select>
                     <label style="display:flex; align-items:center; gap:4px; width:50%; justify-content:flex-end;"><input type="checkbox" class="courtroom-high-profile-checkbox" aria-label="${courthouse} ${room} high profile"> High Profile</label>
                 </div>
             </td>
-            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}" data-assigned="${row ? (row.assigned_member || "") : ""}">${row ? (row.assigned_member || "") : ""}</td>
+            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" data-assigned="${row ? (row.assigned_member || "") : ""}">${row ? (row.assigned_member || "") : ""}</td>
             <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="start_time" aria-label="${courthouse} ${room} start time"></td>
             <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="restart_time" aria-label="${courthouse} ${room} restart time"></td>
             <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="adjourned_time" aria-label="${courthouse} ${room} adjourned time"></td>
@@ -1506,7 +1510,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                     courthouse,
                     assignment_type: 'Courtroom',
                     location_detail: room,
-                    part: row && row.part ? row.part : "",
+                    part: effectivePart,
                     assignment_notes: assignmentSelect.value
                 });
             });

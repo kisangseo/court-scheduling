@@ -272,14 +272,19 @@ function renderCourtroomTable(courthouse, rows) {
     const countRows = [];
     rowsToRender.forEach(row => {
         const room = row.location_detail || '';
+        const familyDefaults = courthouse === 'Family' ? FAMILY_ROOM_DEFAULTS[room] : null;
+        const effectivePart = row && row.part ? row.part : (familyDefaults ? familyDefaults.part : '');
+        const effectiveJudge = row && row.judge_name ? row.judge_name : (familyDefaults ? familyDefaults.judge_name : '');
+
         countRows.push({
             assignment_type: 'Courtroom',
             assignment_notes: row ? (row.assignment_notes || '') : '',
             assigned_member: row ? (row.assigned_member || '') : ''
         });
 
+        const rowForDisplay = { ...(row || {}), part: effectivePart };
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${row ? (row.judge_name || '') : ''}</td><td>${room}${row && row.part ? '/' + row.part : ''}</td><td>${buildCourtroomAssignmentText(row)}</td><td>${row ? (row.assigned_member || '') : ''}</td>`;
+        tr.innerHTML = `<td>${effectiveJudge}</td><td>${room}${effectivePart ? '/' + effectivePart : ''}</td><td>${buildCourtroomAssignmentText(rowForDisplay)}</td><td>${row ? (row.assigned_member || '') : ''}</td>`;
         tbody.appendChild(tr);
     });
 
