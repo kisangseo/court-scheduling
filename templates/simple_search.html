@@ -185,8 +185,8 @@ function renderPostTable(courthouse, rows) {
 function buildCourtroomAssignmentText(row) {
     const assignmentText = (row?.assignment_notes || '').trim();
     const isHighProfile = !!row?.is_high_profile;
-    if (isHighProfile && assignmentText) return `${assignmentText} / High Profile`;
-    if (isHighProfile) return 'High Profile';
+    if (isHighProfile && assignmentText) return `${assignmentText} / <span class="high-profile-flag">High Profile</span>`;
+    if (isHighProfile) return '<span class="high-profile-flag">High Profile</span>';
     return assignmentText;
 }
 
