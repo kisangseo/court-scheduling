@@ -74,6 +74,10 @@
         <label for="summaryDate"><strong>Select a date:</strong></label>
         <input type="date" id="summaryDate">
         <button id="refreshSummaryBtn">Refresh</button>
+        <label>
+            <input type="checkbox" id="unavailableDetailToggle">
+            Unavailable Detail
+        </label>
     </div>
 
     <div id="summaryContent"></div>
@@ -375,6 +379,7 @@ async function loadSummary() {
 }
 
 function renderSummary(dayResults) {
+    const showUnavailableDetail = unavailableDetailToggle.checked;
     const headers = dayResults.map(day => `<th>${day.label}</th>`).join('');
     const neededCells = dayResults.map(day => `<td><span class="metric-brown">Court: ${day.neededCourts || 0}</span> / <span class="metric-green">Posts: ${day.neededPosts || 0}</span> <span class="metric-blue">Total: ${day.needed || 0}</span></td>`).join('');
     const availableCells = dayResults.map(day => `<td><span class="metric-brown">Court: ${day.availableCourts || 0}</span> / <span class="metric-green">Posts: Armed ${day.availablePostsArmed || 0}, Unarmed ${day.availablePostsUnarmed || 0}</span> <span class="metric-blue">Total: ${day.available || 0}</span></td>`).join('');
@@ -466,6 +471,10 @@ function initializeDate() {
 
 refreshSummaryBtn.addEventListener('click', loadSummary);
 summaryDateInput.addEventListener('change', loadSummary);
+unavailableDetailToggle.addEventListener('change', () => {
+    if (!summaryDateInput.value) return;
+    loadSummary();
+});
 
 initializeDate();
 </script>
