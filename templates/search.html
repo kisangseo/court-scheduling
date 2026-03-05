@@ -1581,7 +1581,6 @@ function search() {
             const juvBottomRow = document.getElementById("juvBottomRow");
 
             // Panels that already exist in the DOM (move them into the right column later)
-            const transportPanel = document.getElementById("transportPanel");
             const borrowedPanel = document.getElementById("borrowedDeputiesPanel");
 
             [postsRow, courtroomsRow, overtimeRow, juvRow, juvBottomRow]
@@ -1683,17 +1682,8 @@ function search() {
 
             overtimeRow.appendChild(createSectionCell("Overtime", overtimeLeft));
 
-            // Right side: Transport + Borrowed stacked
-            const rightStack = document.createElement("div");
-            rightStack.style.display = "flex";
-            rightStack.style.flexDirection = "column";
-            rightStack.style.gap = "16px";
-
-            if (transportPanel) rightStack.appendChild(transportPanel);
-            if (borrowedPanel) rightStack.appendChild(borrowedPanel);
-
-            // Put it into a real section cell so it aligns in the grid
-            overtimeRow.appendChild(createSectionCell("Details", rightStack));
+            // Right side: Borrowed Deputies
+            overtimeRow.appendChild(createSectionCell("Details", borrowedPanel));
 
             // =========================
             // Init + repaint
@@ -1701,7 +1691,6 @@ function search() {
             initAssignmentDropzones();
             fetchTransfersForDate().then(() => applyTransferCaptionToRosterAndGrid());
             refreshRosterAssignedState();
-            renderTransportTable(date);
             loadCourtroomMeta(date);
         });
 }
@@ -1730,44 +1719,6 @@ function loadCourtroomMeta(date) {
                 if (downInput) downInput.checked = pendingMeta ? !!pendingMeta.is_down : !!meta.is_down;
                 if (highProfileInput) highProfileInput.checked = pendingMeta ? !!pendingMeta.is_high_profile : !!meta.is_high_profile;
             });
-        });
-}
-
-function renderTransportTable(date) {
-    const tbody = document.getElementById('transportBody');
-    if (!tbody || !date) return;
-
-    const fallbackCounties = ['Baltimore County', 'Anne Arundel County', 'Howard County', 'Carroll County'];
-
-    fetch(`/api/search?date=${date}&courthouse=Transport`)
-        .then(res => res.json())
-        .then(rows => {
-            const transportRows = (rows || []).filter(r => r.assignment_type === 'Transport');
-            const dataRows = transportRows.length > 0
-                ? transportRows.map(r => ({ county: r.location_detail || '', deputy: r.assigned_member || '' }))
-                : fallbackCounties.map(c => ({ county: c, deputy: '' }));
-
-            tbody.innerHTML = '';
-            dataRows.forEach(entry => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td class="editable"
-                        data-date="${date}"
-                        data-courthouse="Transport"
-                        data-type="Transport"
-                        data-room="${entry.county}"
-                        data-part="">${entry.deputy || ''}</td>
-                    <td>${entry.county}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-
-            initAssignmentDropzones();
-            fetchTransfersForDate().then(() => applyTransferCaptionToRosterAndGrid());
-            refreshRosterAssignedState();
-        })
-        .catch(() => {
-            tbody.innerHTML = '';
         });
 }
 
@@ -2047,19 +1998,6 @@ window.addEventListener("beforeunload", function (e) {
     <option value="5:30 PM"></option>
     <option value="6:00 PM"></option>
 </datalist>
-<div id="transportPanel">
-    <h3>Transport</h3>
-    <table border="1" id="transportTable">
-        <thead>
-            <tr>
-                <th>Deputy</th>
-                <th>County</th>
-            </tr>
-        </thead>
-        <tbody id="transportBody"></tbody>
-    </table>
-</div>
-
 <div id="borrowedDeputiesPanel">
     <h3>CSO Detail - Borrowed Deputies</h3>
 
