@@ -137,52 +137,10 @@ function getNeededBreakdownFromAssignments(assignments) {
         { post: "Transportation", detail: "", part: "" }
     ];
 
-    const MITCHELL_ROOMS = ["600M","636M","231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"];
-    const CUMMINGS_ROOMS = ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C"];
-
-    const breakdown = { courts: 0, posts: 0 };
-
-    function countPostSlots(courthouseName, slots) {
-        const postRows = rows.filter(r => (r.assignment_type || '').trim() === 'Fixed Post' && (r.courthouse || '').trim() === courthouseName);
-
-        slots.forEach(slot => {
-            const slotMatches = postRows.filter(r =>
-                r.location_group === slot.post && (
-                    (slot.part && r.part === slot.part) ||
-                    (slot.detail && r.location_detail === slot.detail) ||
-                    (!slot.part && !slot.detail)
-                )
-            );
-            const fallbackMatches = postRows.filter(r => r.location_group === slot.post && !r.part && !r.location_detail);
-            const row = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
-            const state = getSlotState('Fixed Post', '', !!(row && (row.assigned_member || '').trim()));
-            if (state === 'vacant' || state === 'open') breakdown.posts += 1;
-        });
-    }
-
-    function countCourtroomSlots(courthouseName, roomList) {
-        const courtRows = rows.filter(r => (r.assignment_type || '').trim() === 'Courtroom' && (r.courthouse || '').trim() === courthouseName);
-        roomList.forEach(room => {
-            const row = pickPreferredRow(courtRows.filter(r => r.location_detail === room));
-            const state = getSlotState('Courtroom', row ? (row.assignment_notes || '') : '', !!(row && (row.assigned_member || '').trim()));
-            if (state === 'vacant' || state === 'open') breakdown.courts += 1;
-        });
-    }
-
-    countPostSlots('Mitchell', MITCHELL_POSTS);
-    countPostSlots('Cummings', CUMMINGS_POSTS);
-    countCourtroomSlots('Mitchell', MITCHELL_ROOMS);
-    countCourtroomSlots('Cummings', CUMMINGS_ROOMS);
-
-    const juvenileCourtRows = rows.filter(r =>
-        (r.assignment_type || '').trim() === 'Courtroom' &&
-        (r.courthouse || '').trim() === 'Juvenile'
-    );
-
-    juvenileCourtRows.forEach(row => {
-        const state = getSlotState('Courtroom', row.assignment_notes || '', (row.assigned_member || '').trim().length > 0);
-        if (state === 'vacant' || state === 'open') breakdown.courts += 1;
-    });
+    const breakdown = {
+        courts: countAssignedCourts(rows),
+        posts: MITCHELL_POSTS.length + CUMMINGS_POSTS.length
+    };
 
     return {
         courts: breakdown.courts,
@@ -363,7 +321,7 @@ async function loadSummary() {
 
 function renderSummary(dayResults) {
     const headers = dayResults.map(day => `<th>${day.label}</th>`).join('');
-    const neededCells = dayResults.map(day => `<td><span class="metric-brown">Court: ${day.neededCourts || 0}</span> / <span class="metric-brown">Posts: ${day.neededPosts || 0}</span></td>`).join('');
+    const neededCells = dayResults.map(day => `<td><span class="metric-brown">Court: ${day.neededCourts || 0}</span> / <span class="metric-green">Posts: ${day.neededPosts || 0}</span></td>`).join('');
     const availableCells = dayResults.map(day => `<td>${day.available}</td>`).join('');
     const highProfileCells = dayResults.map(day => `<td>${day.highProfileCases || 0}</td>`).join('');
     const assignedCourtsCells = dayResults.map(day => `<td>${day.assignedCourts || 0}</td>`).join('');
