@@ -935,12 +935,14 @@ def update_deputy():
               AND courthouse = ?
               AND assignment_type = ?
               AND ISNULL(location_detail, '') = ISNULL(?, '')
+              AND ISNULL(part, '') = ISNULL(?, '')
         """, (
             data["assigned_member"],
             data["assignment_date"],
             data["courthouse"],
             data["assignment_type"],
-            data["location_detail"]
+            data["location_detail"],
+            data.get("part")
         ))
 
         if cursor.rowcount == 0:
