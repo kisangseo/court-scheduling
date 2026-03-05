@@ -264,10 +264,43 @@ function countAssignedCourts(assignments) {
     }).length;
 }
 
+function getMainSearchCourtroomRows(assignments) {
+    const rows = (assignments || []).filter(row => (row.assignment_type || '').trim() === 'Courtroom');
+    const MITCHELL_ROOMS = ["600M","636M","231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"];
+    const CUMMINGS_ROOMS = ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C"];
+
+    const mapped = [];
+
+    [
+        ['Mitchell', MITCHELL_ROOMS],
+        ['Cummings', CUMMINGS_ROOMS]
+    ].forEach(([courthouse, rooms]) => {
+        const courtRows = rows.filter(row => (row.courthouse || '').trim() === courthouse);
+        rooms.forEach(room => {
+            const match = courtRows.find(row => (row.location_detail || '').trim() === room);
+            if (match) mapped.push(match);
+        });
+    });
+
+    const juvenileRows = rows.filter(row => (row.courthouse || '').trim() === 'Juvenile');
+    mapped.push(...juvenileRows);
+
+    const otherRows = rows.filter(row => {
+        const courthouse = (row.courthouse || '').trim();
+        return courthouse && courthouse !== 'Mitchell' && courthouse !== 'Cummings' && courthouse !== 'Juvenile';
+    });
+    mapped.push(...otherRows);
+
+    return mapped;
+}
+
 function getAssignmentTotals(assignments) {
-    return (assignments || []).reduce((totals, row) => {
-        const assignedNames = parseAssignedMemberValue(row.assigned_member);
-        const hasAssignedMember = assignedNames.length > 0;
+    const fixedPostRows = (assignments || []).filter(row => (row.assignment_type || '').trim() === 'Fixed Post');
+    const courtroomRows = getMainSearchCourtroomRows(assignments);
+    const relevantRows = [...fixedPostRows, ...courtroomRows];
+
+    return relevantRows.reduce((totals, row) => {
+        const hasAssignedMember = (row.assigned_member || '').trim().length > 0;
         const slotState = getSlotState(row.assignment_type, row.assignment_notes || '', hasAssignedMember);
 
         if (slotState === 'vacant') totals.vacant += 1;
