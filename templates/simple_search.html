@@ -544,7 +544,7 @@ function searchSimple() {
 
 window.onload = function() {
     const urlParams = new URLSearchParams(window.location.search);
-    const today = new Date().toISOString().split('T')[0];
+    const today = (() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`; })();
     const savedDate = localStorage.getItem('searchPageDate');
 
     document.getElementById('date').value = urlParams.get('date') || savedDate || today;
