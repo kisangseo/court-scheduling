@@ -1135,6 +1135,14 @@ def assignment_totals():
         label = (r.get("assignment_notes") or "").strip().upper()
 
         if typ == "Fixed Post":
+            courthouse = (r.get("courthouse") or "").strip().lower()
+            post = (r.get("location_group") or "").strip().lower()
+            part = (r.get("part") or "").strip().lower()
+
+            # Mitchell Calvert has a 3rd optional slot that should not count toward totals.
+            if courthouse == "mitchell" and post == "calvert" and part == "0800-3":
+                continue
+
             if assigned:
                 filled += 1
             else:

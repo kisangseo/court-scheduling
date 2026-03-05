@@ -358,10 +358,23 @@ function normalizeCourtroomAssignmentLabel(value) {
     return (value || '').trim().toUpperCase();
 }
 
-function getSlotState(assignmentType, assignmentLabel, hasAssignedMember) {
+function shouldCountFixedPostSlot(slotMeta = {}) {
+    const courthouse = (slotMeta.courthouse || '').trim().toLowerCase();
+    const post = (slotMeta.post || '').trim().toLowerCase();
+    const part = (slotMeta.part || '').trim().toLowerCase();
+
+    if (courthouse === 'mitchell' && post === 'calvert' && part === '0800-3') {
+        return false;
+    }
+
+    return true;
+}
+
+function getSlotState(assignmentType, assignmentLabel, hasAssignedMember, slotMeta = {}) {
     const type = (assignmentType || '').trim();
 
     if (type === 'Fixed Post') {
+        if (!shouldCountFixedPostSlot(slotMeta)) return 'inactive';
         return hasAssignedMember ? 'filled' : 'vacant';
     }
 
@@ -492,7 +505,11 @@ function fetchGlobalAssignmentTotals(dateValue) {
 
             relevantRows.forEach(row => {
                 const hasAssignedMember = (row.assigned_member || '').trim().length > 0;
-                const slotState = getSlotState(row.assignment_type, row.assignment_notes || '', hasAssignedMember);
+                const slotState = getSlotState(row.assignment_type, row.assignment_notes || '', hasAssignedMember, {
+                    courthouse: row.courthouse || '',
+                    post: row.location_group || '',
+                    part: row.part || ''
+                });
                 if (slotState === 'vacant') vacant += 1;
                 else if (slotState === 'filled') filled += 1;
             });
@@ -554,7 +571,11 @@ function updateAssignmentCountBadges() {
             assignmentLabel = rowEl?.querySelector('.courtroom-assignment-select')?.value || '';
         }
 
-        const slotState = getSlotState(sectionType, assignmentLabel, hasAssignedMember);
+        const slotState = getSlotState(sectionType, assignmentLabel, hasAssignedMember, {
+            courthouse: cell.dataset.courthouse || '',
+            post: cell.dataset.room || '',
+            part: cell.dataset.part || ''
+        });
         if (slotState === 'vacant') {
             statsBySection[key].vacant += 1;
             overallVacant += 1;
@@ -874,7 +895,11 @@ function isNoGunFixedPost(courthouse, post) {
     const normalizedCourthouse = (courthouse || '').trim().toLowerCase();
     const normalizedPost = (post || '').trim().toLowerCase();
 
-    return (normalizedCourthouse === 'mitchell' && normalizedPost === 'fayette h/c console room')
+    return (normalizedCourthouse === 'mitchell' && (
+            normalizedPost === 'fayette h/c console room'
+            || normalizedPost === 'lock up west'
+            || normalizedPost === 'jury room'
+        ))
         || (normalizedCourthouse === 'cummings' && normalizedPost === 'fayette st. h/c');
 }
 
@@ -1272,6 +1297,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 { post: "Lock Up West", detail: "1 of 2", part: "OPEN-1" },
                 { post: "Lock Up West", detail: "2 of 2", part: "OPEN-2" },
                 { post: "Jury Room", detail: "7:30 AM", part: "0730" },
+                { post: "Jury Room", detail: "8:00 AM", part: "0800" },
                 { post: "St. Paul", detail: "7:30 AM", part: "0730" },
                 { post: "St. Paul", detail: "8:30 AM", part: "0830" },
                 { post: "Rover", detail: "7:00 AM", part: "0700" },
