@@ -750,7 +750,7 @@ def get_available_deputies():
 
 @app.route("/api/update-assignment-notes", methods=["POST"])
 def update_assignment_notes():
-    data = request.json
+    data = request.json or {}
 
     conn = get_conn()
     cursor = conn.cursor()
@@ -761,16 +761,41 @@ def update_assignment_notes():
         WHERE assignment_date = ?
           AND courthouse = ?
           AND assignment_type = ?
-          AND location_detail = ?
-          AND part = ?
+          AND ISNULL(location_detail, '') = ISNULL(?, '')
+          AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
     """, (
-        data["assignment_notes"],
-        data["assignment_date"],
-        data["courthouse"],
-        data["assignment_type"],
-        data["location_detail"],
-        data["part"]
+        data.get("assignment_notes"),
+        data.get("assignment_date"),
+        data.get("courthouse"),
+        data.get("assignment_type"),
+        data.get("location_detail"),
+        data.get("part")
     ))
+
+    if cursor.rowcount == 0:
+        cursor.execute("""
+            INSERT INTO dbo.court_assignments (
+                assignment_date,
+                courthouse,
+                assignment_type,
+                location_group,
+                location_detail,
+                part,
+                judge_name,
+                shift_time,
+                assigned_member,
+                assignment_notes,
+                created_at
+            )
+            VALUES (?, ?, ?, NULL, ?, ?, NULL, NULL, NULL, ?, GETDATE())
+        """, (
+            data.get("assignment_date"),
+            data.get("courthouse"),
+            data.get("assignment_type"),
+            data.get("location_detail"),
+            data.get("part"),
+            data.get("assignment_notes")
+        ))
 
     conn.commit()
     conn.close()
@@ -779,7 +804,7 @@ def update_assignment_notes():
 
 @app.route("/api/update-judge-name", methods=["POST"])
 def update_judge_name():
-    data = request.json
+    data = request.json or {}
 
     conn = get_conn()
     cursor = conn.cursor()
@@ -790,16 +815,41 @@ def update_judge_name():
         WHERE assignment_date = ?
           AND courthouse = ?
           AND assignment_type = ?
-          AND location_detail = ?
-          AND part = ?
+          AND ISNULL(location_detail, '') = ISNULL(?, '')
+          AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
     """, (
-        data["judge_name"],
-        data["assignment_date"],
-        data["courthouse"],
-        data["assignment_type"],
-        data["location_detail"],
-        data["part"]
+        data.get("judge_name"),
+        data.get("assignment_date"),
+        data.get("courthouse"),
+        data.get("assignment_type"),
+        data.get("location_detail"),
+        data.get("part")
     ))
+
+    if cursor.rowcount == 0:
+        cursor.execute("""
+            INSERT INTO dbo.court_assignments (
+                assignment_date,
+                courthouse,
+                assignment_type,
+                location_group,
+                location_detail,
+                part,
+                judge_name,
+                shift_time,
+                assigned_member,
+                assignment_notes,
+                created_at
+            )
+            VALUES (?, ?, ?, NULL, ?, ?, ?, NULL, NULL, NULL, GETDATE())
+        """, (
+            data.get("assignment_date"),
+            data.get("courthouse"),
+            data.get("assignment_type"),
+            data.get("location_detail"),
+            data.get("part"),
+            data.get("judge_name")
+        ))
 
     conn.commit()
     conn.close()

@@ -21,6 +21,7 @@
         <option value="Mitchell">Mitchell</option>
         <option value="Cummings">Cummings</option>
         <option value="Juvenile">Juvenile</option>
+        <option value="Family">Family</option>
     </select>
 
     <button onclick="search()">Search</button>
@@ -1308,7 +1309,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
 
     const sections = { posts: null, courtrooms: null, overtime: null };
 
-    if (courthouse !== "Juvenile") {
+    if (courthouse === "Mitchell" || courthouse === "Cummings") {
         const postsType = typeGroups["Fixed Post"] || [];
         const postsTable = document.createElement("table");
         postsTable.border = "1";
@@ -1396,7 +1397,16 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
         ? ["600M","636M", "231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"]
         : courthouse === "Cummings"
             ? ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C"]
-            : ["329C","428M","406M"];
+            : courthouse === "Juvenile"
+                ? ["329C","428M","406M"]
+                : ["126","120","12","124"];
+
+    const familyRoomDefaults = {
+        "126": { part: "F-1", judge_name: "Zaslow" },
+        "120": { part: "F-2", judge_name: "M. Middleton" },
+        "12": { part: "F-3", judge_name: "N. Barmore" },
+        "124": { part: "F-4", judge_name: "T-Hill" }
+    };
 
     const courtroomRows = typeGroups["Courtroom"] || [];
     const courtroomTable = document.createElement("table");
@@ -1440,7 +1450,14 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
             if (matches.length) {
                 orderedRows.push(...matches);
             } else {
-                orderedRows.push({ location_detail: room });
+                const defaultRow = courthouse === "Family" && familyRoomDefaults[room]
+                    ? {
+                        location_detail: room,
+                        part: familyRoomDefaults[room].part,
+                        judge_name: familyRoomDefaults[room].judge_name
+                    }
+                    : { location_detail: room };
+                orderedRows.push(defaultRow);
             }
             rowsByRoom.delete(room);
         });
@@ -1452,26 +1469,30 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
 
     rowsToRender.forEach(row => {
         const room = row.location_detail;
+        const familyDefaults = courthouse === "Family" ? familyRoomDefaults[room] : null;
+        const effectivePart = row && row.part ? row.part : (familyDefaults ? familyDefaults.part : "");
+        const effectiveJudge = row && row.judge_name ? row.judge_name : (familyDefaults ? familyDefaults.judge_name : "");
+
         const tr = document.createElement("tr");
         tr.classList.add("courtroom-meta-row");
         tr.dataset.date = selectedDate;
         tr.dataset.courthouse = courthouse;
         tr.dataset.room = room;
-        tr.dataset.part = row && row.part ? row.part : "";
+        tr.dataset.part = effectivePart;
         tr.innerHTML = `
-            <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}">${row ? (row.judge_name || "") : ""}</td>
+            <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}">${effectiveJudge}</td>
            
-            <td>${room}${row && row.part ? "/" + row.part : ""}</td>
+            <td>${room}${effectivePart ? "/" + effectivePart : ""}</td>
             <td class="courtroom-assignment-cell">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                    <select class="courtroom-assignment-select" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}" style="width:50%; min-width:120px;">
+                    <select class="courtroom-assignment-select" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" style="width:50%; min-width:120px;">
                         <option value=""></option>
                         ${getCourtroomAssignmentOptionsHtml(row ? (row.assignment_notes || "") : "")}
                     </select>
                     <label style="display:flex; align-items:center; gap:4px; width:50%; justify-content:flex-end;"><input type="checkbox" class="courtroom-high-profile-checkbox" aria-label="${courthouse} ${room} high profile"> High Profile</label>
                 </div>
             </td>
-            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${row && row.part ? row.part : ""}" data-assigned="${row ? (row.assigned_member || "") : ""}">${row ? (row.assigned_member || "") : ""}</td>
+            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" data-assigned="${row ? (row.assigned_member || "") : ""}">${row ? (row.assigned_member || "") : ""}</td>
             <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="start_time" aria-label="${courthouse} ${room} start time"></td>
             <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="restart_time" aria-label="${courthouse} ${room} restart time"></td>
             <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="adjourned_time" aria-label="${courthouse} ${room} adjourned time"></td>
@@ -1489,7 +1510,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                     courthouse,
                     assignment_type: 'Courtroom',
                     location_detail: room,
-                    part: row && row.part ? row.part : "",
+                    part: effectivePart,
                     assignment_notes: assignmentSelect.value
                 });
             });
@@ -1688,10 +1709,12 @@ function search() {
             const mitchell = buildCourthouseSections("Mitchell", grouped["Mitchell"] || [], date);
             const cummings = buildCourthouseSections("Cummings", grouped["Cummings"] || [], date);
             const juvenile = buildCourthouseSections("Juvenile", grouped["Juvenile"] || [], date);
+            const family = buildCourthouseSections("Family", grouped["Family"] || [], date);
 
             const includeMitchell = !courthouse || courthouse === "Mitchell";
             const includeCummings = !courthouse || courthouse === "Cummings";
             const includeJuvenile = !courthouse || courthouse === "Juvenile";
+            const includeFamily = !courthouse || courthouse === "Family";
 
             // =========================
             // POSTS (top headers KEEP counters)
@@ -1731,6 +1754,12 @@ function search() {
                 courtroomsRow.appendChild(jCell);
             }
 
+            if (includeFamily) {
+                const fCell = createSectionCell("Family", family.courtrooms, "Family", "main", "Courtroom");
+                fCell.style.gridColumn = "1 / span 2";
+                courtroomsRow.appendChild(fCell);
+            }
+
             // Not used anymore for juvenile courtrooms
             juvRow.innerHTML = "";
             juvBottomRow.innerHTML = "";
@@ -1760,6 +1789,7 @@ function search() {
                 overtimeLeft.appendChild(h);
                 overtimeLeft.appendChild(juvenile.overtime);
             }
+
 
             overtimeRow.appendChild(createSectionCell("Overtime", overtimeLeft));
 
