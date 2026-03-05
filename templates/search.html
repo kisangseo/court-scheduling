@@ -435,9 +435,9 @@ function parseStoredTimeToInputValue(value) {
 
 function setPendingCourtroomMetaFromRow(rowEl) {
     const payload = {
-        assignment_date: rowEl.dataset.date,
-        courthouse: rowEl.dataset.courthouse,
-        location_detail: rowEl.dataset.room,
+        assignment_date: (rowEl.dataset.date || '').trim(),
+        courthouse: (rowEl.dataset.courthouse || '').trim(),
+        location_detail: (rowEl.dataset.room || '').trim(),
         part: rowEl.dataset.part || "",
         start_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="start_time"]')?.value || ""),
         restart_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="restart_time"]')?.value || ""),
@@ -445,6 +445,10 @@ function setPendingCourtroomMetaFromRow(rowEl) {
         is_down: !!rowEl.querySelector('.courtroom-down-checkbox')?.checked,
         is_high_profile: !!rowEl.querySelector('.courtroom-high-profile-checkbox')?.checked
     };
+
+    if (!payload.assignment_date || !payload.courthouse || !payload.location_detail) {
+        return;
+    }
 
     const key = [payload.assignment_date, payload.courthouse, payload.location_detail, payload.part].join('|');
     pendingCourtroomMeta[key] = payload;
@@ -1892,7 +1896,9 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         })
     );
 
-    const courtroomMetaRequests = Object.values(pendingCourtroomMeta).map(payload =>
+    const courtroomMetaRequests = Object.values(pendingCourtroomMeta)
+        .filter(payload => payload.assignment_date && payload.courthouse && payload.location_detail)
+        .map(payload =>
         fetch("/api/update-courtroom-meta", {
             method: "POST",
             headers: { "Content-Type": "application/json" },

@@ -23,13 +23,16 @@ def _ensure_courtroom_meta_table(cursor):
                 restart_time NVARCHAR(16) NULL,
                 adjourned_time NVARCHAR(16) NULL,
                 is_down BIT NOT NULL DEFAULT 0,
-                
+                is_high_profile BIT NOT NULL DEFAULT 0,
                 updated_at DATETIME NOT NULL DEFAULT GETDATE(),
                 CONSTRAINT PK_courtroom_meta PRIMARY KEY (assignment_date, courthouse, location_detail, part)
             )
         END
 
-        
+        IF COL_LENGTH('dbo.courtroom_meta', 'is_high_profile') IS NULL
+        BEGIN
+            ALTER TABLE dbo.courtroom_meta ADD is_high_profile BIT NOT NULL CONSTRAINT DF_courtroom_meta_is_high_profile DEFAULT 0;
+        END
     """)
 
 
@@ -1071,7 +1074,15 @@ def get_courtroom_meta():
 
 @app.route("/api/update-courtroom-meta", methods=["POST"])
 def update_courtroom_meta():
-    data = request.json
+    data = request.json or {}
+
+    assignment_date = (data.get("assignment_date") or "").strip()
+    courthouse = (data.get("courthouse") or "").strip()
+    location_detail = (data.get("location_detail") or "").strip()
+
+    if not assignment_date or not courthouse or not location_detail:
+        return jsonify({"status": "error", "message": "assignment_date, courthouse, and location_detail are required"}), 400
+
     conn = get_conn()
     cursor = conn.cursor()
     _ensure_courtroom_meta_table(cursor)
@@ -1097,18 +1108,18 @@ def update_courtroom_meta():
             INSERT (assignment_date, courthouse, location_detail, part, start_time, restart_time, adjourned_time, is_down, is_high_profile, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE());
     """, (
-        data["assignment_date"],
-        data["courthouse"],
-        data["location_detail"],
+        assignment_date,
+        courthouse,
+        location_detail,
         data.get("part") or "",
         data.get("start_time") or None,
         data.get("restart_time") or None,
         data.get("adjourned_time") or None,
         1 if data.get("is_down") else 0,
         1 if data.get("is_high_profile") else 0,
-        data["assignment_date"],
-        data["courthouse"],
-        data["location_detail"],
+        assignment_date,
+        courthouse,
+        location_detail,
         data.get("part") or "",
         data.get("start_time") or None,
         data.get("restart_time") or None,
