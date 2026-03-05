@@ -472,7 +472,10 @@ function renderSummary(dayResults) {
     const headers = dayResults.map(day => `<th>${day.label}</th>`).join('');
     const neededCells = dayResults.map(day => `<td><span class="metric-brown">Court: ${day.neededCourts || 0}</span> / <span class="metric-green">Posts: ${day.neededPosts || 0}</span> <span class="metric-blue">Total: ${day.needed || 0}</span></td>`).join('');
     const availableCells = dayResults.map(day => `<td><span class="metric-brown">Court: ${day.availableCourts || 0}</span> / <span class="metric-green">Posts: Armed ${day.availablePostsArmed || 0}, Unarmed ${day.availablePostsUnarmed || 0}</span> <span class="metric-blue">Total: ${day.available || 0}</span></td>`).join('');
-    const assignmentCounterCells = dayResults.map(day => `<td><span class="metric-red">Vacant ${day.assignmentTotals?.vacant || 0}</span> / <span class="metric-green">Filled ${day.assignmentTotals?.filled || 0}</span></td>`).join('');
+    const assignmentCounterCells = dayResults.map(day =>
+  `<td><span class="metric-red">Vacant ${day.assignmentTotals?.vacant || 0}</span> / ` +
+  `<span class="metric-green">Filled ${day.assignmentTotals?.filled || 0}</span></td>`
+).join('');
     const highProfileCells = dayResults.map(day => `<td>${day.highProfileCases || 0}</td>`).join('');
     const unavailableTotalCells = dayResults.map(day => {
         const breakdown = day.unavailableBreakdown || { sick: 0, unavailable: 0, leave: 0, callout: 0 };
