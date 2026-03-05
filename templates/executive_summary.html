@@ -89,7 +89,8 @@ const summaryDateInput = document.getElementById('summaryDate');
 const refreshSummaryBtn = document.getElementById('refreshSummaryBtn');
 const summaryContent = document.getElementById('summaryContent');
 const summaryStatus = document.getElementById('summaryStatus');
-const unavailableDetailToggle = document.getElementById('unavailableDetailToggle');
+let showUnavailableDetail = false;
+let latestDayResults = [];
 
 function normalizeAssignmentLabel(value) {
     return (value || '').trim().toUpperCase();
@@ -271,10 +272,9 @@ function getAssignmentTotals(assignments) {
 
         if (slotState === 'vacant') totals.vacant += 1;
         else if (slotState === 'filled') totals.filled += 1;
-        else if (slotState === 'open') totals.open += 1;
 
         return totals;
-    }, { vacant: 0, filled: 0, open: 0 });
+    }, { vacant: 0, filled: 0 });
 }
 
 function countBorrowedDeputies(assignments, deputies) {
@@ -369,6 +369,7 @@ async function loadSummary() {
             };
         }));
 
+        latestDayResults = dayResults;
         renderSummary(dayResults);
         summaryStatus.textContent = 'Summary refreshed successfully.';
     } catch (error) {
@@ -382,7 +383,7 @@ function renderSummary(dayResults) {
     const headers = dayResults.map(day => `<th>${day.label}</th>`).join('');
     const neededCells = dayResults.map(day => `<td><span class="metric-brown">Court: ${day.neededCourts || 0}</span> / <span class="metric-green">Posts: ${day.neededPosts || 0}</span> <span class="metric-blue">Total: ${day.needed || 0}</span></td>`).join('');
     const availableCells = dayResults.map(day => `<td><span class="metric-brown">Court: ${day.availableCourts || 0}</span> / <span class="metric-green">Posts: Armed ${day.availablePostsArmed || 0}, Unarmed ${day.availablePostsUnarmed || 0}</span> <span class="metric-blue">Total: ${day.available || 0}</span></td>`).join('');
-    const assignmentCounterCells = dayResults.map(day => `<td><span class="metric-red">Vacant ${day.assignmentTotals?.vacant || 0}</span> / <span class="metric-green">Filled ${day.assignmentTotals?.filled || 0}</span> / <span class="metric-purple">Open ${day.assignmentTotals?.open || 0}</span></td>`).join('');
+    const assignmentCounterCells = dayResults.map(day => `<td><span class="metric-red">Vacant ${day.assignmentTotals?.vacant || 0}</span> / <span class="metric-green">Filled ${day.assignmentTotals?.filled || 0}</span></td>`).join('');
     const highProfileCells = dayResults.map(day => `<td>${day.highProfileCases || 0}</td>`).join('');
     const unavailableTotalCells = dayResults.map(day => {
         const breakdown = day.unavailableBreakdown || { sick: 0, unavailable: 0, leave: 0, callout: 0 };
@@ -398,7 +399,7 @@ function renderSummary(dayResults) {
     const unavailableRows = showUnavailableDetail
         ? `
                 <tr>
-                    <td class="metric-label">Unavailable</td>
+                    <td class="metric-label">Unavailable <label><input type="checkbox" id="unavailableDetailToggle" ${showUnavailableDetail ? 'checked' : ''}> Detail</label></td>
                     ${leaveCells}
                 </tr>
                 <tr>
@@ -415,7 +416,7 @@ function renderSummary(dayResults) {
                 </tr>`
         : `
                 <tr>
-                    <td class="metric-label">Unavailable</td>
+                    <td class="metric-label">Unavailable <label><input type="checkbox" id="unavailableDetailToggle" ${showUnavailableDetail ? 'checked' : ''}> Detail</label></td>
                     ${unavailableTotalCells}
                 </tr>`;
 
@@ -437,7 +438,7 @@ function renderSummary(dayResults) {
                     ${availableCells}
                 </tr>
                 <tr>
-                    <td class="metric-label">Vacant / Filled / Open</td>
+                    <td class="metric-label">Daily Status</td>
                     ${assignmentCounterCells}
                 </tr>
                 <tr>
@@ -452,6 +453,14 @@ function renderSummary(dayResults) {
             </tbody>
         </table>
     `;
+
+    const detailToggle = document.getElementById('unavailableDetailToggle');
+    if (detailToggle) {
+        detailToggle.addEventListener('change', (event) => {
+            showUnavailableDetail = !!event.target.checked;
+            renderSummary(latestDayResults);
+        });
+    }
 }
 
 function initializeDate() {
