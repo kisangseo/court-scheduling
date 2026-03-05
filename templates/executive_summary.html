@@ -262,43 +262,105 @@ function countAssignedCourts(assignments) {
     }).length;
 }
 
+function getSearchPageCourtroomRowsForCounts(assignments) {
+    const courtroomRows = (assignments || []).filter(row => (row.assignment_type || '').trim() === 'Courtroom');
+    const MITCHELL_ROOMS = ["600M","636M","231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"];
+    const CUMMINGS_ROOMS = ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C"];
+
+    const rowsToCount = [];
+
+    const appendCourthouseRooms = (courthouse, rooms) => {
+        const courtRows = courtroomRows.filter(row => (row.courthouse || '').trim() === courthouse);
+        rooms.forEach(room => {
+            const match = courtRows.find(row => (row.location_detail || '').trim() === room);
+            rowsToCount.push(match || { assignment_type: 'Courtroom', assignment_notes: '', assigned_member: '' });
+        });
+    };
+
+    appendCourthouseRooms('Mitchell', MITCHELL_ROOMS);
+    appendCourthouseRooms('Cummings', CUMMINGS_ROOMS);
+
+    const juvenileRows = courtroomRows.filter(row => (row.courthouse || '').trim() === 'Juvenile');
+    juvenileRows.forEach(row => rowsToCount.push(row));
+
+    return rowsToCount;
+}
+
+function getSearchPageFixedPostRowsForCounts(assignments) {
+    const allFixedPosts = (assignments || []).filter(row => (row.assignment_type || '').trim() === 'Fixed Post');
+
+    const MITCHELL_POSTS = [
+        { post: "Calvert", detail: "8:00 AM", part: "0800-1" },
+        { post: "Calvert", detail: "8:00 AM", part: "0800-2" },
+        { post: "Calvert", detail: "8:00 AM", part: "0800-3" },
+        { post: "Lexington", detail: "7:00 AM - 3:00 PM", part: "0700-1500" },
+        { post: "Lexington", detail: "3:00 PM - 11:00 PM", part: "1500-2300" },
+        { post: "Lexington", detail: "11:00 PM - 7:00 AM", part: "2300-0700" },
+        { post: "Fayette H/C Console room", detail: "7:00 AM", part: "0700" },
+        { post: "Fayette H/C Console room", detail: "7:15 AM", part: "0715" },
+        { post: "Lock Up West", detail: "1 of 2", part: "OPEN-1" },
+        { post: "Lock Up West", detail: "2 of 2", part: "OPEN-2" },
+        { post: "Jury Room", detail: "7:30 AM", part: "0730" },
+        { post: "St. Paul", detail: "7:30 AM", part: "0730" },
+        { post: "St. Paul", detail: "8:30 AM", part: "0830" },
+        { post: "Rover", detail: "7:00 AM", part: "0700" },
+        { post: "Judges", detail: "7:00 AM", part: "0700" }
+    ];
+
+    const CUMMINGS_POSTS = [
+        { post: "Cummings", detail: "8:00 AM", part: "0800" },
+        { post: "Cummings", detail: "8:30 AM", part: "0830-1" },
+        { post: "Cummings", detail: "8:30 AM", part: "0830-2" },
+        { post: "Fayette St. H/C", detail: "7:15 AM", part: "0715" },
+        { post: "Fayette St. H/C", detail: "9:00 AM", part: "0900" },
+        { post: "Console Room", detail: "8:30 AM", part: "0830-1" },
+        { post: "Console Room", detail: "8:30 AM", part: "0830-2" },
+        { post: "Lock Up East", detail: "8:00 AM", part: "0800" },
+        { post: "Garage", detail: "6:00 AM", part: "0600" },
+        { post: "Garage", detail: "4:00 PM", part: "1600" },
+        { post: "Family Court", detail: "8:00 AM", part: "0800" },
+        { post: "Transportation", detail: "", part: "" }
+    ];
+
+    const pickPreferredRow = (rows) => (rows || []).find(r => (r.assigned_member || '').trim()) || (rows || [])[0] || null;
+
+    const buildSlots = (courthouse, posts) => {
+        const postsType = allFixedPosts.filter(row => (row.courthouse || '').trim() === courthouse);
+        return posts.map(slot => {
+            const slotMatches = postsType.filter(row => {
+                if ((row.location_group || '').trim() !== slot.post) return false;
+                if (slot.part && (row.part || '').trim() === slot.part) return true;
+                if (slot.detail && (row.location_detail || '').trim() === slot.detail) return true;
+                if (!slot.part && !slot.detail && !(row.part || '').trim() && !(row.location_detail || '').trim()) return true;
+                return false;
+            });
+            const fallbackMatches = postsType.filter(row => (row.location_group || '').trim() === slot.post && !(row.part || '').trim() && !(row.location_detail || '').trim());
+            const selected = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
+            return selected || { assignment_type: 'Fixed Post', assignment_notes: '', assigned_member: '' };
+        });
+    };
+
+    return [
+        ...buildSlots('Mitchell', MITCHELL_POSTS),
+        ...buildSlots('Cummings', CUMMINGS_POSTS)
+    ];
+}
+
 function getAssignmentTotals(assignments) {
-    let vacant = 0;
-    let filled = 0;
-    let open = 0;
-
-    (assignments || []).forEach(row => {
-        const type = (row.assignment_type || '').trim();
-
-        if (type !== 'Courtroom' && type !== 'Fixed Post') return;
-
-        const assignedNames = parseAssignedMemberValue(row.assigned_member || '');
-        const hasAssignedMember = assignedNames.length > 0;
-
-        if (type === 'Fixed Post') {
-            if (hasAssignedMember) filled += 1;
-            else vacant += 1;
-            return;
-        }
-
-        // Courtroom logic:
-        const label = normalizeAssignmentLabel(row.assignment_notes || '');
+    const relevantRows = [
+        ...getSearchPageFixedPostRowsForCounts(assignments),
+        ...getSearchPageCourtroomRowsForCounts(assignments)
+    ];
 
         // DNS or no assignment => ignore completely
         if (!label || label === 'DNS') return;
 
-        // OPEN => counts as open (doesn't matter if a name is in there)
-        if (label === 'OPEN') {
-            open += 1;
-            return;
-        }
+        if (slotState === 'vacant') totals.vacant += 1;
+        else if (slotState === 'filled') totals.filled += 1;
+        else if (slotState === 'open') totals.open += 1;
 
-        // Active assignment => vacant/filled based on name
-        if (hasAssignedMember) filled += 1;
-        else vacant += 1;
-    });
-
-    return { vacant, filled, open };
+        return totals;
+    }, { vacant: 0, filled: 0, open: 0 });
 }
 
 function countBorrowedDeputies(assignments, deputies) {
