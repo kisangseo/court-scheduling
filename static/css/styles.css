@@ -474,3 +474,8 @@ h4 {
         grid-template-columns: minmax(0, 1fr);
     }
 }
+
+.high-profile-flag {
+    color: #c62828;
+    font-weight: 700;
+}
