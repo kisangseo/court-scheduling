@@ -1396,8 +1396,17 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
     const rooms = courthouse === "Mitchell"
         ? ["600M","636M", "231M","417M","556C","215M","441M","309M","226M","420M","400M","236M","203M","451M","438M"]
         : courthouse === "Cummings"
-            ? ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C"]
-            : ["329C","428M","406M"];
+            ? ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C"]
+            : courthouse === "Juvenile"
+                ? ["329C","428M","406M"]
+                : ["126","120","12","124"];
+
+    const familyRoomDefaults = {
+        "126": { part: "F-1", judge_name: "Zaslow" },
+        "120": { part: "F-2", judge_name: "M. Middleton" },
+        "12": { part: "F-3", judge_name: "N. Barmore" },
+        "124": { part: "F-4", judge_name: "T-Hill" }
+    };
 
     const courtroomRows = typeGroups["Courtroom"] || [];
     const courtroomTable = document.createElement("table");
@@ -1777,12 +1786,6 @@ function search() {
                 overtimeLeft.appendChild(juvenile.overtime);
             }
 
-            if (includeFamily) {
-                const h = document.createElement("h4");
-                h.textContent = "Family Overtime";
-                overtimeLeft.appendChild(h);
-                overtimeLeft.appendChild(family.overtime);
-            }
 
             overtimeRow.appendChild(createSectionCell("Overtime", overtimeLeft));
 

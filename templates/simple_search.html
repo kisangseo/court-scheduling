@@ -591,7 +591,6 @@ function searchSimple() {
         const juvCourt = renderCourtroomTable('Juvenile', grouped['Juvenile'] || []);
         const juvOt = renderOvertimeTable(grouped['Juvenile'] || []);
         const familyCourt = renderCourtroomTable('Family', grouped['Family'] || []);
-        const familyOt = renderOvertimeTable(grouped['Family'] || []);
 
         const mitchellTotal = {
             total: mitchellPosts.stats.total + mitchellCourt.stats.total + mitchellOt.stats.total,
@@ -609,9 +608,9 @@ function searchSimple() {
             filled: juvCourt.stats.filled + juvOt.stats.filled
         };
         const familyTotal = {
-            total: familyCourt.stats.total + familyOt.stats.total,
-            vacant: familyCourt.stats.vacant + familyOt.stats.vacant,
-            filled: familyCourt.stats.filled + familyOt.stats.filled
+            total: familyCourt.stats.total,
+            vacant: familyCourt.stats.vacant,
+            filled: familyCourt.stats.filled
         };
 
         const mitchellBox = createCourthouseBox('Mitchell', formatCountMetrics(mitchellTotal.vacant, mitchellTotal.filled));
@@ -633,7 +632,6 @@ function searchSimple() {
 
         const familyBox = createCourthouseBox('Family', formatCountMetrics(familyTotal.vacant, familyTotal.filled));
         familyBox.appendChild(createSectionCell('Courtroom', familyCourt.table));
-        familyBox.appendChild(createSectionCell('Overtime', familyOt.table));
 
         juvTopRow.appendChild(juvenileBox);
         juvTopRow.appendChild(familyBox);
