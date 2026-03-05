@@ -301,6 +301,7 @@ th, td {
 
 .metric-red { color: #b42318; font-weight: 700; }
 .metric-green { color: #067647; font-weight: 700; }
+.metric-purple { color: #6f42c1; font-weight: 700; }
 .metric-blue { color: #175cd3; font-weight: 700; }
 .counts-inline { margin-left: 10px; font-size: 0.9em; }
 h3 {

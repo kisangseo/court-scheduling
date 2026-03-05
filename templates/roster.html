@@ -490,25 +490,43 @@ function createDeputyRow(dep, includeDivision) {
 }
 
 
+function normalizeAssignmentLabel(value) {
+    return (value || '').trim().toUpperCase();
+}
+
 function getTotalNeededFromAssignments(assignments) {
-    const FIXED_REQUIRED_SLOTS = {
-        mitchell: { courtroom: 16, fixedPost: 15 },
-        cummings: { courtroom: 11, fixedPost: 12 }
-    };
+    let needed = 0;
 
-    // Mirror main-page counting behavior: each rendered slot row counts, including repeated time slots.
-    const juvenileCourtroomCount = (assignments || []).filter(row =>
-        row.assignment_type === 'Courtroom' &&
-        (row.courthouse || '').trim().toLowerCase() === 'juvenile'
-    ).length;
+    (assignments || []).forEach(row => {
+        const type = (row.assignment_type || '').trim();
+        const hasAssignedMember = (row.assigned_member || '').trim().length > 0;
 
-    return (
-        FIXED_REQUIRED_SLOTS.mitchell.courtroom +
-        FIXED_REQUIRED_SLOTS.mitchell.fixedPost +
-        FIXED_REQUIRED_SLOTS.cummings.courtroom +
-        FIXED_REQUIRED_SLOTS.cummings.fixedPost +
-        juvenileCourtroomCount
-    );
+        if (type === 'Fixed Post') {
+            if (!hasAssignedMember) needed += 1;
+            return;
+        }
+
+        if (type !== 'Courtroom') {
+            return;
+        }
+
+        const assignmentLabel = normalizeAssignmentLabel(row.assignment_notes || '');
+
+        if (!assignmentLabel || assignmentLabel === 'DNS') {
+            return;
+        }
+
+        if (assignmentLabel === 'OPEN') {
+            needed += 1;
+            return;
+        }
+
+        if (!hasAssignedMember) {
+            needed += 1;
+        }
+    });
+
+    return needed;
 }
 
 function updateCourtSecurityStatusCounts(deputies, totalNeeded) {
