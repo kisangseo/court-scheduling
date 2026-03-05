@@ -81,7 +81,6 @@ const CUMMINGS_POSTS = [
 const MITCHELL_ROOMS = ["600M", "636M","231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"];
 const CUMMINGS_ROOMS = ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C"];
 const JUVENILE_ROOMS = ["329C","428M","406M"];
-const TRANSPORT_COUNTIES = ['Baltimore County', 'Anne Arundel County', 'Howard County', 'Carroll County'];
 
 let allDeputies = [];
 let latestRows = [];
@@ -258,34 +257,6 @@ function createEmptySectionCell() {
     const cell = document.createElement('div');
     cell.className = 'section-cell';
     return cell;
-}
-
-function renderTransportPanel(grouped) {
-    const panel = document.createElement('div');
-    panel.id = 'transportPanel';
-    panel.className = 'section-cell';
-
-    const h = document.createElement('h3');
-    h.textContent = 'Transport Detail';
-    panel.appendChild(h);
-
-    const table = document.createElement('table');
-    table.innerHTML = `<thead><tr><th>Deputy</th><th>County</th></tr></thead><tbody></tbody>`;
-    const tbody = table.querySelector('tbody');
-
-    const transportRows = grouped['Transport'] || [];
-    const mapped = transportRows.length > 0
-        ? transportRows.filter(r => r.assignment_type === 'Transport').map(r => ({ county: r.location_detail || '', deputy: r.assigned_member || '' }))
-        : TRANSPORT_COUNTIES.map(c => ({ county: c, deputy: '' }));
-
-    mapped.forEach(entry => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${entry.deputy || ''}</td><td>${entry.county}</td>`;
-        tbody.appendChild(tr);
-    });
-
-    panel.appendChild(table);
-    return panel;
 }
 
 function formatBorrowedCourthouse(courthouse) {
@@ -579,10 +550,9 @@ function searchSimple() {
         overtimeRow.appendChild(createSectionCell('Overtime', cummingsOt.table));
 
         juvTopRow.appendChild(createSectionCell('Juvenile', juvCourt.table, formatCountMetrics(juvenileTotal.vacant, juvenileTotal.filled, juvenileTotal.open)));
-        juvTopRow.appendChild(createSectionCell('Transport Detail', renderTransportPanel(grouped).querySelector('table')));
+        juvTopRow.appendChild(createSectionCell('Borrowed Deputies', renderBorrowedPanel(latestRows).querySelector('table')));
 
         juvBottomRow.appendChild(createSectionCell('Juvenile Overtime', juvOt.table));
-        juvBottomRow.appendChild(createSectionCell('Borrowed Deputies', renderBorrowedPanel(latestRows).querySelector('table')));
 
         const overallVacant = mitchellTotal.vacant + cummingsTotal.vacant + juvenileTotal.vacant;
         const overallFilled = mitchellTotal.filled + cummingsTotal.filled + juvenileTotal.filled;
