@@ -86,8 +86,29 @@ const TRANSPORT_COUNTIES = ['Baltimore County', 'Anne Arundel County', 'Howard C
 let allDeputies = [];
 let latestRows = [];
 
-function formatCountMetrics(vacant, filled) {
-    return `<span class="metric-red">Vacant ${vacant}</span> / <span class="metric-green">Filled ${filled}</span>`;
+function formatCountMetrics(vacant, filled, open = 0) {
+    return `<span class="metric-red">Vacant ${vacant}</span> / <span class="metric-green">Filled ${filled}</span> / <span class="metric-purple">Open ${open}</span>`;
+}
+
+function normalizeCourtroomAssignmentLabel(value) {
+    return (value || '').trim().toUpperCase();
+}
+
+function getSlotState(assignmentType, assignmentLabel, hasAssignedMember) {
+    const type = (assignmentType || '').trim();
+
+    if (type === 'Fixed Post') {
+        return hasAssignedMember ? 'filled' : 'vacant';
+    }
+
+    if (type === 'Courtroom') {
+        const normalized = normalizeCourtroomAssignmentLabel(assignmentLabel);
+        if (!normalized || normalized === 'DNS') return 'inactive';
+        if (normalized === 'OPEN') return 'open';
+        return hasAssignedMember ? 'filled' : 'vacant';
+    }
+
+    return 'inactive';
 }
 
 function buildSimpleViewUrl(pathname) {
@@ -114,10 +135,17 @@ function parseAssignedNames(value) {
     return [text];
 }
 
-function countFilled(rows) {
-    const total = rows.length;
-    const filled = rows.filter(r => (r.assigned_member || '').trim()).length;
-    return { total, filled, vacant: Math.max(total - filled, 0) };
+function getStats(rows) {
+    const stats = { vacant: 0, filled: 0, open: 0, total: 0 };
+    rows.forEach(row => {
+        const slotState = getSlotState(row.assignment_type, row.assignment_notes || '', !!(row.assigned_member || '').trim());
+        if (slotState === 'inactive') return;
+        stats.total += 1;
+        if (slotState === 'vacant') stats.vacant += 1;
+        if (slotState === 'filled') stats.filled += 1;
+        if (slotState === 'open') stats.open += 1;
+    });
+    return stats;
 }
 
 function renderPostTable(courthouse, rows) {
@@ -139,7 +167,11 @@ function renderPostTable(courthouse, rows) {
         );
         const fallbackMatches = postRows.filter(r => r.location_group === slot.post && !r.part && !r.location_detail);
         const assigned = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
-        countRows.push({ assigned_member: assigned ? (assigned.assigned_member || '') : '' });
+        countRows.push({
+            assignment_type: 'Fixed Post',
+            assignment_notes: '',
+            assigned_member: assigned ? (assigned.assigned_member || '') : ''
+        });
 
         const tr = document.createElement('tr');
         const showPost = index === 0 || postSlots[index - 1].post !== slot.post;
@@ -147,7 +179,15 @@ function renderPostTable(courthouse, rows) {
         tbody.appendChild(tr);
     });
 
-    return { table, stats: countFilled(countRows) };
+    return { table, stats: getStats(countRows) };
+}
+
+function buildCourtroomAssignmentText(row) {
+    const assignmentText = (row?.assignment_notes || '').trim();
+    const isHighProfile = !!row?.is_high_profile;
+    if (isHighProfile && assignmentText) return `${assignmentText} / High Profile`;
+    if (isHighProfile) return 'High Profile';
+    return assignmentText;
 }
 
 function renderCourtroomTable(courthouse, rows) {
@@ -169,14 +209,18 @@ function renderCourtroomTable(courthouse, rows) {
     const countRows = [];
     rowsToRender.forEach(row => {
         const room = row.location_detail || '';
-        countRows.push({ assigned_member: row ? (row.assigned_member || '') : '' });
+        countRows.push({
+            assignment_type: 'Courtroom',
+            assignment_notes: row ? (row.assignment_notes || '') : '',
+            assigned_member: row ? (row.assigned_member || '') : ''
+        });
 
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${row ? (row.judge_name || '') : ''}</td><td>${room}${row && row.part ? '/' + row.part : ''}</td><td>${row ? (row.assignment_notes || '') : ''}</td><td>${row ? (row.assigned_member || '') : ''}</td>`;
+        tr.innerHTML = `<td>${row ? (row.judge_name || '') : ''}</td><td>${room}${row && row.part ? '/' + row.part : ''}</td><td>${buildCourtroomAssignmentText(row)}</td><td>${row ? (row.assigned_member || '') : ''}</td>`;
         tbody.appendChild(tr);
     });
 
-    return { table, stats: countFilled(countRows) };
+    return { table, stats: getStats(countRows) };
 }
 
 function renderOvertimeTable(rows) {
@@ -197,7 +241,7 @@ function renderOvertimeTable(rows) {
         tbody.appendChild(tr);
     }
 
-    return { table, stats: countFilled(overtimeRows) };
+    return { table, stats: getStats(overtimeRows) };
 }
 
 function createSectionCell(title, contentEl, countHtml = '') {
@@ -498,23 +542,29 @@ function searchSimple() {
 
         const mitchellTotal = {
             total: mitchellPosts.stats.total + mitchellCourt.stats.total + mitchellOt.stats.total,
-            filled: mitchellPosts.stats.filled + mitchellCourt.stats.filled + mitchellOt.stats.filled
+            vacant: mitchellPosts.stats.vacant + mitchellCourt.stats.vacant + mitchellOt.stats.vacant,
+            filled: mitchellPosts.stats.filled + mitchellCourt.stats.filled + mitchellOt.stats.filled,
+            open: mitchellPosts.stats.open + mitchellCourt.stats.open + mitchellOt.stats.open
         };
         const cummingsTotal = {
             total: cummingsPosts.stats.total + cummingsCourt.stats.total + cummingsOt.stats.total,
-            filled: cummingsPosts.stats.filled + cummingsCourt.stats.filled + cummingsOt.stats.filled
+            vacant: cummingsPosts.stats.vacant + cummingsCourt.stats.vacant + cummingsOt.stats.vacant,
+            filled: cummingsPosts.stats.filled + cummingsCourt.stats.filled + cummingsOt.stats.filled,
+            open: cummingsPosts.stats.open + cummingsCourt.stats.open + cummingsOt.stats.open
         };
         const juvenileTotal = {
             total: juvCourt.stats.total + juvOt.stats.total,
-            filled: juvCourt.stats.filled + juvOt.stats.filled
+            vacant: juvCourt.stats.vacant + juvOt.stats.vacant,
+            filled: juvCourt.stats.filled + juvOt.stats.filled,
+            open: juvCourt.stats.open + juvOt.stats.open
         };
 
-        const mitchellPostCell = createSectionCell('Mitchell', mitchellPosts.table, formatCountMetrics(Math.max(mitchellTotal.total - mitchellTotal.filled, 0), mitchellTotal.filled));
+        const mitchellPostCell = createSectionCell('Mitchell', mitchellPosts.table, formatCountMetrics(mitchellTotal.vacant, mitchellTotal.filled, mitchellTotal.open));
         const mitchellPostHeader = document.createElement('h4');
         mitchellPostHeader.textContent = 'Security Post';
         mitchellPostCell.insertBefore(mitchellPostHeader, mitchellPosts.table);
 
-        const cummingsPostCell = createSectionCell('Cummings', cummingsPosts.table, formatCountMetrics(Math.max(cummingsTotal.total - cummingsTotal.filled, 0), cummingsTotal.filled));
+        const cummingsPostCell = createSectionCell('Cummings', cummingsPosts.table, formatCountMetrics(cummingsTotal.vacant, cummingsTotal.filled, cummingsTotal.open));
         const cummingsPostHeader = document.createElement('h4');
         cummingsPostHeader.textContent = 'Security Post';
         cummingsPostCell.insertBefore(cummingsPostHeader, cummingsPosts.table);
@@ -528,15 +578,16 @@ function searchSimple() {
         overtimeRow.appendChild(createSectionCell('Overtime', mitchellOt.table));
         overtimeRow.appendChild(createSectionCell('Overtime', cummingsOt.table));
 
-        juvTopRow.appendChild(createSectionCell('Juvenile', juvCourt.table, formatCountMetrics(Math.max(juvenileTotal.total - juvenileTotal.filled, 0), juvenileTotal.filled)));
+        juvTopRow.appendChild(createSectionCell('Juvenile', juvCourt.table, formatCountMetrics(juvenileTotal.vacant, juvenileTotal.filled, juvenileTotal.open)));
         juvTopRow.appendChild(createSectionCell('Transport Detail', renderTransportPanel(grouped).querySelector('table')));
 
         juvBottomRow.appendChild(createSectionCell('Juvenile Overtime', juvOt.table));
         juvBottomRow.appendChild(createSectionCell('Borrowed Deputies', renderBorrowedPanel(latestRows).querySelector('table')));
 
-        const overallTotal = mitchellTotal.total + cummingsTotal.total + juvenileTotal.total;
+        const overallVacant = mitchellTotal.vacant + cummingsTotal.vacant + juvenileTotal.vacant;
         const overallFilled = mitchellTotal.filled + cummingsTotal.filled + juvenileTotal.filled;
-        document.getElementById('overallAssignmentCounts').innerHTML = formatCountMetrics(Math.max(overallTotal - overallFilled, 0), overallFilled);
+        const overallOpen = mitchellTotal.open + cummingsTotal.open + juvenileTotal.open;
+        document.getElementById('overallAssignmentCounts').innerHTML = formatCountMetrics(overallVacant, overallFilled, overallOpen);
 
         renderRoster();
     });

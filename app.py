@@ -1266,34 +1266,40 @@ def search():
 
     query = """
         SELECT TOP 200
-            assignment_date,
-            courthouse,
-            assignment_type,
-            location_group,
-            location_detail,
-            judge_name,
-            part,
-            assigned_member,
-            assignment_notes
-        FROM dbo.court_assignments
+            a.assignment_date,
+            a.courthouse,
+            a.assignment_type,
+            a.location_group,
+            a.location_detail,
+            a.judge_name,
+            a.part,
+            a.assigned_member,
+            a.assignment_notes,
+            ISNULL(m.is_high_profile, 0) AS is_high_profile
+        FROM dbo.court_assignments a
+        LEFT JOIN dbo.courtroom_meta m
+            ON m.assignment_date = a.assignment_date
+            AND m.courthouse = a.courthouse
+            AND ISNULL(m.location_detail, '') = ISNULL(a.location_detail, '')
+            AND ISNULL(m.part, '') = ISNULL(a.part, '')
         WHERE 1=1
     """
 
     params = []
 
     if name:
-        query += " AND assigned_member LIKE ?"
+        query += " AND a.assigned_member LIKE ?"
         params.append(f"%{name}%")
 
     if date:
-        query += " AND assignment_date = ?"
+        query += " AND a.assignment_date = ?"
         params.append(date)
 
     if courthouse:
-        query += " AND courthouse = ?"
+        query += " AND a.courthouse = ?"
         params.append(courthouse)
 
-    query += " ORDER BY assignment_date DESC"
+    query += " ORDER BY a.assignment_date DESC"
 
     conn = get_conn()
     cursor = conn.cursor()
