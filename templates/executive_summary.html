@@ -296,8 +296,6 @@ async function loadSummary() {
             const borrowedCount = countBorrowedDeputies(assignments, deputies);
             const neededBreakdown = getNeededBreakdownFromAssignments(assignments);
             const highProfileCaseCount = countHighProfileCases(courtroomMetaRows);
-            const assignedCourtsCount = countAssignedCourts(assignments);
-
             return {
                 label: dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }),
                 needed: neededBreakdown.total,
@@ -305,7 +303,6 @@ async function loadSummary() {
                 neededPosts: neededBreakdown.posts,
                 available: availableCount,
                 highProfileCases: highProfileCaseCount,
-                assignedCourts: assignedCourtsCount,
                 unavailableBreakdown,
                 borrowed: borrowedCount
             };
@@ -324,10 +321,9 @@ function renderSummary(dayResults) {
     const neededCells = dayResults.map(day => `<td><span class="metric-brown">Court: ${day.neededCourts || 0}</span> / <span class="metric-green">Posts: ${day.neededPosts || 0}</span></td>`).join('');
     const availableCells = dayResults.map(day => `<td>${day.available}</td>`).join('');
     const highProfileCells = dayResults.map(day => `<td>${day.highProfileCases || 0}</td>`).join('');
-    const assignedCourtsCells = dayResults.map(day => `<td>${day.assignedCourts || 0}</td>`).join('');
-    const sickCells = dayResults.map(day => `<td>Sick: ${day.unavailableBreakdown.sick}</td>`).join('');
+    const leaveCells = dayResults.map(day => `<td>Scheduled Leave: ${day.unavailableBreakdown.leave}</td>`).join('');
     const unavailableCells = dayResults.map(day => `<td>Unavailable: ${day.unavailableBreakdown.unavailable}</td>`).join('');
-    const leaveCells = dayResults.map(day => `<td>Leave: ${day.unavailableBreakdown.leave}</td>`).join('');
+    const sickCells = dayResults.map(day => `<td>Sick: ${day.unavailableBreakdown.sick}</td>`).join('');
     const calloutCells = dayResults.map(day => `<td>Callout: ${day.unavailableBreakdown.callout}</td>`).join('');
     const borrowedCells = dayResults.map(day => `<td>${day.borrowed}</td>`).join('');
 
@@ -353,12 +349,8 @@ function renderSummary(dayResults) {
                     ${highProfileCells}
                 </tr>
                 <tr>
-                    <td class="metric-label">Assigned Courts</td>
-                    ${assignedCourtsCells}
-                </tr>
-                <tr>
-                    <td class="metric-label">Number Unavailable Breakdown</td>
-                    ${sickCells}
+                    <td class="metric-label">Unavailable</td>
+                    ${leaveCells}
                 </tr>
                 <tr>
                     <td class="metric-label">&nbsp;</td>
@@ -366,7 +358,7 @@ function renderSummary(dayResults) {
                 </tr>
                 <tr>
                     <td class="metric-label">&nbsp;</td>
-                    ${leaveCells}
+                    ${sickCells}
                 </tr>
                 <tr>
                     <td class="metric-label">&nbsp;</td>
