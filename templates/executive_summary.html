@@ -113,18 +113,7 @@ function getSlotState(assignmentType, assignmentLabel, hasAssignedMember) {
     return 'inactive';
 }
 
-function pickPreferredRow(rows) {
-    return (rows || []).find(r => (r.assigned_member || '').trim()) || (rows || [])[0] || null;
-}
 
-function isTransportDetailRow(row) {
-    const type = (row?.assignment_type || '').trim().toLowerCase();
-    const group = (row?.location_group || '').trim().toLowerCase();
-    const detail = (row?.location_detail || '').trim().toLowerCase();
-
-    if (type === 'transport') return true;
-    return group.includes('transport') || detail.includes('transport');
-}
 
 function getNeededBreakdownFromAssignments(assignments) {
     const rows = assignments || [];
@@ -273,71 +262,11 @@ function countAssignedCourts(assignments) {
     }).length;
 }
 
-function getMainSearchCourtroomRows(assignments) {
-    const rows = (assignments || []).filter(row => (row.assignment_type || '').trim() === 'Courtroom');
-    const MITCHELL_ROOMS = ["600M","636M","231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"];
-    const CUMMINGS_ROOMS = ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C"];
-
-    const mapped = [];
-
-    [
-        ['Mitchell', MITCHELL_ROOMS],
-        ['Cummings', CUMMINGS_ROOMS]
-    ].forEach(([courthouse, rooms]) => {
-        const courtRows = rows.filter(row => (row.courthouse || '').trim() === courthouse);
-        rooms.forEach(room => {
-            const roomMatches = courtRows.filter(row => (row.location_detail || '').trim() === room);
-            const match = pickPreferredRow(roomMatches);
-            if (match) mapped.push(match);
-        });
-    });
-
-    const juvenileRows = rows.filter(row => (row.courthouse || '').trim() === 'Juvenile');
-    const juvenileByRoom = new Map();
-    juvenileRows.forEach(row => {
-        const key = `${(row.location_detail || '').trim()}|${(row.part || '').trim()}`;
-        if (!juvenileByRoom.has(key)) {
-            juvenileByRoom.set(key, []);
-        }
-        juvenileByRoom.get(key).push(row);
-    });
-    juvenileByRoom.forEach(roomRows => {
-        const selected = pickPreferredRow(roomRows);
-        if (selected) mapped.push(selected);
-    });
-
-    const otherRows = rows.filter(row => {
-        const courthouse = (row.courthouse || '').trim();
-        return courthouse && courthouse !== 'Mitchell' && courthouse !== 'Cummings' && courthouse !== 'Juvenile';
-    });
-    const otherByCourtroom = new Map();
-    otherRows.forEach(row => {
-        const key = [
-            (row.courthouse || '').trim(),
-            (row.location_detail || '').trim(),
-            (row.part || '').trim()
-        ].join('|');
-
-        if (!otherByCourtroom.has(key)) {
-            otherByCourtroom.set(key, []);
-        }
-        otherByCourtroom.get(key).push(row);
-    });
-
-    otherByCourtroom.forEach(roomRows => {
-        const selected = pickPreferredRow(roomRows);
-        if (selected) mapped.push(selected);
-    });
-
-    return mapped;
-}
-
 function getAssignmentTotals(assignments) {
-    const fixedPostRows = (assignments || []).filter(row => {
-        return (row.assignment_type || '').trim() === 'Fixed Post' && !isTransportDetailRow(row);
+    const relevantRows = (assignments || []).filter(row => {
+        const assignmentType = (row.assignment_type || '').trim();
+        return assignmentType === 'Courtroom' || assignmentType === 'Fixed Post';
     });
-    const courtroomRows = getMainSearchCourtroomRows(assignments);
-    const relevantRows = [...fixedPostRows, ...courtroomRows];
 
     return relevantRows.reduce((totals, row) => {
         const hasAssignedMember = (row.assigned_member || '').trim().length > 0;
@@ -345,9 +274,10 @@ function getAssignmentTotals(assignments) {
 
         if (slotState === 'vacant') totals.vacant += 1;
         else if (slotState === 'filled') totals.filled += 1;
+        else if (slotState === 'open') totals.open += 1;
 
         return totals;
-    }, { vacant: 0, filled: 0 });
+    }, { vacant: 0, filled: 0, open: 0 });
 }
 
 function countBorrowedDeputies(assignments, deputies) {
