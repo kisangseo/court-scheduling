@@ -253,6 +253,17 @@ function createSectionCell(title, contentEl, countHtml = '') {
     return cell;
 }
 
+function createCourthouseBox(title, countHtml = '') {
+    const box = document.createElement('div');
+    box.className = 'courthouse-box';
+
+    const h3 = document.createElement('h3');
+    h3.innerHTML = countHtml ? `${title} <span class="counts-inline">${countHtml}</span>` : title;
+    box.appendChild(h3);
+
+    return box;
+}
+
 function createEmptySectionCell() {
     const cell = document.createElement('div');
     cell.className = 'section-cell';
@@ -501,6 +512,11 @@ function searchSimple() {
         overtimeRow.innerHTML = '';
         juvTopRow.innerHTML = '';
         juvBottomRow.innerHTML = '';
+        postsRow.style.display = 'grid';
+        juvTopRow.style.display = 'grid';
+        courtroomsRow.style.display = 'none';
+        overtimeRow.style.display = 'none';
+        juvBottomRow.style.display = 'none';
 
         const mitchellPosts = renderPostTable('Mitchell', grouped['Mitchell'] || []);
         const cummingsPosts = renderPostTable('Cummings', grouped['Cummings'] || []);
@@ -530,29 +546,25 @@ function searchSimple() {
             open: juvCourt.stats.open + juvOt.stats.open
         };
 
-        const mitchellPostCell = createSectionCell('Mitchell', mitchellPosts.table, formatCountMetrics(mitchellTotal.vacant, mitchellTotal.filled, mitchellTotal.open));
-        const mitchellPostHeader = document.createElement('h4');
-        mitchellPostHeader.textContent = 'Security Post';
-        mitchellPostCell.insertBefore(mitchellPostHeader, mitchellPosts.table);
+        const mitchellBox = createCourthouseBox('Mitchell', formatCountMetrics(mitchellTotal.vacant, mitchellTotal.filled, mitchellTotal.open));
+        mitchellBox.appendChild(createSectionCell('Security Post', mitchellPosts.table));
+        mitchellBox.appendChild(createSectionCell('Courtroom', mitchellCourt.table));
+        mitchellBox.appendChild(createSectionCell('Overtime', mitchellOt.table));
 
-        const cummingsPostCell = createSectionCell('Cummings', cummingsPosts.table, formatCountMetrics(cummingsTotal.vacant, cummingsTotal.filled, cummingsTotal.open));
-        const cummingsPostHeader = document.createElement('h4');
-        cummingsPostHeader.textContent = 'Security Post';
-        cummingsPostCell.insertBefore(cummingsPostHeader, cummingsPosts.table);
+        const cummingsBox = createCourthouseBox('Cummings', formatCountMetrics(cummingsTotal.vacant, cummingsTotal.filled, cummingsTotal.open));
+        cummingsBox.appendChild(createSectionCell('Security Post', cummingsPosts.table));
+        cummingsBox.appendChild(createSectionCell('Courtroom', cummingsCourt.table));
+        cummingsBox.appendChild(createSectionCell('Overtime', cummingsOt.table));
 
-        postsRow.appendChild(mitchellPostCell);
-        postsRow.appendChild(cummingsPostCell);
+        postsRow.appendChild(mitchellBox);
+        postsRow.appendChild(cummingsBox);
 
-        courtroomsRow.appendChild(createSectionCell('Courtroom', mitchellCourt.table));
-        courtroomsRow.appendChild(createSectionCell('Courtroom', cummingsCourt.table));
+        const juvenileBox = createCourthouseBox('Juvenile', formatCountMetrics(juvenileTotal.vacant, juvenileTotal.filled, juvenileTotal.open));
+        juvenileBox.appendChild(createSectionCell('Courtroom', juvCourt.table));
+        juvenileBox.appendChild(createSectionCell('Overtime', juvOt.table));
 
-        overtimeRow.appendChild(createSectionCell('Overtime', mitchellOt.table));
-        overtimeRow.appendChild(createSectionCell('Overtime', cummingsOt.table));
-
-        juvTopRow.appendChild(createSectionCell('Juvenile', juvCourt.table, formatCountMetrics(juvenileTotal.vacant, juvenileTotal.filled, juvenileTotal.open)));
+        juvTopRow.appendChild(juvenileBox);
         juvTopRow.appendChild(createSectionCell('Borrowed Deputies', renderBorrowedPanel(latestRows).querySelector('table')));
-
-        juvBottomRow.appendChild(createSectionCell('Juvenile Overtime', juvOt.table));
 
         const overallVacant = mitchellTotal.vacant + cummingsTotal.vacant + juvenileTotal.vacant;
         const overallFilled = mitchellTotal.filled + cummingsTotal.filled + juvenileTotal.filled;

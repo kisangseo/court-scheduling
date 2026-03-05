@@ -53,6 +53,21 @@ th, td {
     gap: 12px;
 }
 
+.courthouse-box {
+    border: 1px solid #d0d5dd;
+    border-radius: 10px;
+    background: #fff;
+    padding: 10px;
+}
+
+.courthouse-box .section-cell h3 {
+    margin-top: 10px;
+}
+
+.courthouse-box .section-cell:first-of-type h3 {
+    margin-top: 6px;
+}
+
 .section-row {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -339,7 +354,7 @@ h4 {
 
 #resultsGrid table {
     font-size: 0.95em;
-    table-layout: fixed;
+    table-layout: auto;
 }
 
 #resultsGrid th,
