@@ -218,13 +218,35 @@ function renderCourtroomTable(courthouse, rows) {
     table.innerHTML = `<thead><tr><th>Judge</th><th>Courtroom</th><th>Assignment</th><th>Deputy</th></tr></thead><tbody></tbody>`;
     const tbody = table.querySelector('tbody');
 
-    const rowsToRender = courthouse === 'Juvenile'
-        ? [...courtRows].sort((a, b) => {
-            const roomA = (a.location_detail || '').localeCompare(b.location_detail || '');
-            if (roomA !== 0) return roomA;
-            return (a.part || '').localeCompare(b.part || '');
-        })
-        : rooms.map(room => courtRows.find(r => r.location_detail === room) || { location_detail: room });
+    const rowsToRender = [...courtRows].sort((a, b) => {
+        const roomA = (a.location_detail || '').localeCompare(b.location_detail || '');
+        if (roomA !== 0) return roomA;
+        return (a.part || '').localeCompare(b.part || '');
+    });
+
+    if (courthouse !== 'Juvenile') {
+        const rowsByRoom = new Map();
+        rowsToRender.forEach(row => {
+            const key = row.location_detail || '';
+            if (!rowsByRoom.has(key)) rowsByRoom.set(key, []);
+            rowsByRoom.get(key).push(row);
+        });
+
+        const orderedRows = [];
+        rooms.forEach(room => {
+            const matches = rowsByRoom.get(room) || [];
+            if (matches.length) {
+                orderedRows.push(...matches);
+            } else {
+                orderedRows.push({ location_detail: room });
+            }
+            rowsByRoom.delete(room);
+        });
+
+        rowsByRoom.forEach(matches => orderedRows.push(...matches));
+        rowsToRender.length = 0;
+        rowsToRender.push(...orderedRows);
+    }
 
     const countRows = [];
     rowsToRender.forEach(row => {
