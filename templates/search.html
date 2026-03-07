@@ -1153,7 +1153,9 @@ function buildAssignmentChip(name, role, owningCell = null) {
   chip.dataset.transferredOut = 'false';
   chip.textContent = (name || '').trim();
   chip.dataset.transferOutTime = '';
-  chip.dataset.transferInTime = getTransferredInTimeForChip(owningCell, name);
+  chip.dataset.transferInTime = getTransferredInTimeForChip(owningCell, name)
+    || transferMap[(name || '').trim()]?.latestIn
+    || '';
 
   if (owningCell && transferredOutChipKeys.has(getTransferredChipKey(owningCell, name))) {
     chip.dataset.transferredOut = 'true';
@@ -1698,7 +1700,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
 
     return sections;
 }
-let transferMap = {}; // { "Name": { history: [{out, in}], latestOut, openTransferIndex } }
+let transferMap = {}; // { "Name": { history: [{out, in}], latestOut, latestIn, openTransferIndex } }
 let transferredOutChipKeys = new Set();
 let transferredInChipMeta = new Map();
 
@@ -1772,7 +1774,14 @@ function fetchTransfersForDate() {
           }
         }
         const latestOut = history.length > 0 ? (history[history.length - 1]?.out || null) : null;
-        transferMap[name] = { history, latestOut, openTransferIndex };
+        let latestIn = null;
+        for (let i = history.length - 1; i >= 0; i--) {
+          if (history[i]?.in) {
+            latestIn = history[i].in;
+            break;
+          }
+        }
+        transferMap[name] = { history, latestOut, latestIn, openTransferIndex };
       });
     })
     .catch(() => { transferMap = {}; });
@@ -1808,10 +1817,14 @@ function applyTransferCaptionToRosterAndGrid() {
   document.querySelectorAll('.assignment-chip').forEach(chip => {
     const name = (chip.dataset.name || chip.textContent || '').trim();
     const owningCell = chip.closest('.editable');
-    const inTime = chip.dataset.transferInTime || getTransferredInTimeForChip(owningCell, name);
-    const outTime = chip.dataset.transferOutTime || '';
-    const text = outTime ? `out: ${outTime}` : (inTime ? `in: ${inTime}` : '');
+    const transferState = transferMap[(name || '').trim()] || {};
     const isTransferredOut = isChipMarkedTransferredOut(chip) || isCurrentlyTransferredOut(name);
+    const outTime = chip.dataset.transferOutTime || transferState.latestOut || '';
+    const inTime = chip.dataset.transferInTime
+      || getTransferredInTimeForChip(owningCell, name)
+      || transferState.latestIn
+      || '';
+    const text = isTransferredOut ? (outTime ? `out: ${outTime}` : '') : (inTime ? `in: ${inTime}` : '');
 
     chip.classList.toggle('transferred-out', isTransferredOut);
 
