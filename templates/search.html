@@ -909,7 +909,8 @@ function renderRoster() {
     }
 
     initRosterDrag();
-    refreshRosterAssignedState();
+    persistTransferredChipKeysForDate(document.getElementById('date')?.value || '');
+  refreshRosterAssignedState();
 }
 
 function parseDateOnly(value) {
@@ -1704,6 +1705,36 @@ let transferMap = {}; // { "Name": { history: [{out, in}], latestOut, latestIn, 
 let transferredOutChipKeys = new Set();
 let transferredInChipMeta = new Map();
 
+
+function getTransferredChipStorageKey(dateValue) {
+  return `transferredOutChipKeys:${(dateValue || '').trim()}`;
+}
+
+function loadTransferredChipKeysForDate(dateValue) {
+  const date = (dateValue || '').trim();
+  transferredOutChipKeys = new Set();
+  if (!date) return;
+  try {
+    const raw = localStorage.getItem(getTransferredChipStorageKey(date));
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(parsed)) {
+      transferredOutChipKeys = new Set(parsed.filter(Boolean));
+    }
+  } catch (_) {
+    transferredOutChipKeys = new Set();
+  }
+}
+
+function persistTransferredChipKeysForDate(dateValue) {
+  const date = (dateValue || document.getElementById('date')?.value || '').trim();
+  if (!date) return;
+  try {
+    localStorage.setItem(getTransferredChipStorageKey(date), JSON.stringify(Array.from(transferredOutChipKeys)));
+  } catch (_) {
+    // ignore storage errors
+  }
+}
+
 function isCurrentlyTransferredOut(name) {
   const t = transferMap[(name || '').trim()];
   return !!(t && t.openTransferIndex);
@@ -1727,12 +1758,18 @@ function getTransferredChipKey(cell, name) {
 
 function rememberTransferredChip(cell, name) {
   const key = getTransferredChipKey(cell, name);
-  if (key) transferredOutChipKeys.add(key);
+  if (key) {
+    transferredOutChipKeys.add(key);
+    persistTransferredChipKeysForDate(cell?.dataset?.date || document.getElementById('date')?.value || '');
+  }
 }
 
 function forgetTransferredChip(cell, name) {
   const key = getTransferredChipKey(cell, name);
-  if (key) transferredOutChipKeys.delete(key);
+  if (key) {
+    transferredOutChipKeys.delete(key);
+    persistTransferredChipKeysForDate(cell?.dataset?.date || document.getElementById('date')?.value || '');
+  }
 }
 
 function rememberTransferredInChip(cell, name, inTime) {
@@ -1754,7 +1791,7 @@ function getTransferredInTimeForChip(cell, name) {
 
 function fetchTransfersForDate() {
   const date = document.getElementById("date")?.value;
-  if (!date) { transferMap = {}; return Promise.resolve(); }
+  if (!date) { transferMap = {}; transferredOutChipKeys = new Set(); return Promise.resolve(); }
 
   return fetch(`/api/transfers?date=${date}`)
     .then(r => r.json())
@@ -1842,6 +1879,7 @@ function applyTransferCaptionToRosterAndGrid() {
     cap.textContent = `(${text})`;
   });
 
+  persistTransferredChipKeysForDate(document.getElementById('date')?.value || '');
   refreshRosterAssignedState();
 }
 function search() {
@@ -1849,6 +1887,7 @@ function search() {
     const date = document.getElementById("date").value;
     const courthouse = document.getElementById("courthouse").value;
 
+    loadTransferredChipKeysForDate(date);
     loadCachedDateState(date);
     localStorage.setItem('searchPageDate', date || '');
     fetchGlobalAssignmentTotals(date);
