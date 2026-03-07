@@ -1630,10 +1630,18 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
     }
 
     if (includeFlags.includeJuvenile) {
-        const juvenileRows = (grouped["Juvenile"] || []).filter(r => r.assignment_type === "Courtroom");
+        const juvenileRows = (grouped["Juvenile"] || [])
+            .filter(r => r.assignment_type === "Courtroom")
+            .filter(r => {
+                const room = (r.location_detail || "").trim().toUpperCase();
+                const part = (r.part || "").toString().trim().toUpperCase().replace(/^PART\s+/, "");
+                const judge = (r.judge_name || "").trim().toUpperCase();
+                return !(room === "329C" && (part === "2" || judge === "LEWIS"));
+            });
         const juvenileExpected = [
             { building: "JCC", room: "329C", part: "C-1", judge: "Blomquist" },
             { building: "Cummings", room: "", part: "16", judge: "Vittoria" },
+            { building: "Mitchell", room: "", part: "81", judge: "Storm" },
             { building: "Mitchell", room: "428M", part: "22", judge: "R. Rafferty" },
             { building: "Mitchell", room: "428M", part: "82", judge: "M. Phinnett" },
             { building: "Mitchell", room: "428M", part: "85", judge: "Silkworth" },
