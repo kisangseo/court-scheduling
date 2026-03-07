@@ -1437,10 +1437,10 @@ function getCourtroomRoomOrder(courthouse) {
         return ["600M", "636M", "231M", "417M", "556C", "215M", "441M", "309M", "226M", "420M", "400M", "236M", "203M", "451M", "438M"];
     }
     if (courthouse === "Cummings") {
-        return ["225C", "201C", "430C", "329C", "230C", "227C", "540C", "404C", "523C", "528C", "103,105", "317,327 & 339, 303"];
+        return ["225C", "201C", "430C", "329C", "230C", "227C", "540C", "404C", "523C", "228C", "223C", "528C", "113C", "103,105", "317,327 & 339, 303"];
     }
     if (courthouse === "Family") {
-        return ["126", "120", "12", "124"];
+        return ["126", "120", "122", "124"];
     }
     return [];
 }
@@ -1456,7 +1456,7 @@ function getCourtroomDefaults(courthouse) {
         return {
             "126": { part: "F-1", judge_name: "Zaslow" },
             "120": { part: "F-2", judge_name: "M. Middleton" },
-            "12": { part: "F-3", judge_name: "N. Barmore" },
+            "122": { part: "F-3", judge_name: "N. Barmore" },
             "124": { part: "F-4", judge_name: "T-Hill" }
         };
     }
@@ -1523,17 +1523,125 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
 
     const body = table.querySelector("tbody");
     const combinedRows = [];
-    const addRowsForCourthouse = (courthouse, buildingLabel) => {
+    const addRowsByExpectedOrder = (courthouse, expectedRows) => {
         const rows = (grouped[courthouse] || []).filter(r => r.assignment_type === "Courtroom");
-        const ordered = orderCourtroomRows(courthouse, rows);
-        ordered.forEach(row => combinedRows.push({ ...row, __building: buildingLabel || courthouse, __courthouse: courthouse }));
+        const remaining = [...rows];
+
+        expectedRows.forEach(expected => {
+            const normalizePart = (value) => (value || "").toString().trim().toUpperCase().replace(/^PART\s+/, "");
+            const matchIndex = remaining.findIndex(row => {
+                const expectedRoom = (expected.room || "").trim().toUpperCase();
+                const expectedPart = normalizePart(expected.part);
+                const rowRoom = (row.location_detail || "").trim().toUpperCase();
+                const rowPart = normalizePart(row.part);
+                return rowRoom === expectedRoom && rowPart === expectedPart;
+            });
+
+            const matched = matchIndex >= 0 ? remaining.splice(matchIndex, 1)[0] : null;
+            combinedRows.push({
+                ...(matched || {}),
+                location_detail: matched?.location_detail || expected.room,
+                part: matched?.part || expected.part,
+                judge_name: matched?.judge_name || expected.judge,
+                __building: expected.building,
+                __courthouse: courthouse
+            });
+        });
+
+        remaining
+            .sort((a, b) => {
+                const roomCompare = (a.location_detail || "").localeCompare(b.location_detail || "");
+                if (roomCompare !== 0) return roomCompare;
+                return (a.part || "").localeCompare(b.part || "");
+            })
+            .forEach(row => combinedRows.push({ ...row, __building: courthouse, __courthouse: courthouse }));
     };
 
+    if (includeFlags.includeCummings || includeFlags.includeMitchell) {
+        const mainExpected = [
+            { courthouse: "Cummings", building: "Cummings", room: "225C", part: "23", judge: "A. Carrion" },
+            { courthouse: "Cummings", building: "Cummings", room: "201C", part: "3", judge: "E. Atas" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "600M", part: "30", judge: "S. Avery" },
+            { courthouse: "Cummings", building: "Cummings", room: "430C", part: "24", judge: "K. Ausby" },
+            { courthouse: "Cummings", building: "Cummings", room: "329C", part: "29", judge: "" },
+            { courthouse: "Cummings", building: "Cummings", room: "230C", part: "59", judge: "Y. Bryant" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "636M", part: "33", judge: "C. Chen" },
+            { courthouse: "Cummings", building: "Cummings", room: "227C", part: "2", judge: "N. Copeland" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "231M", part: "27", judge: "S. Cox" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "417M", part: "7", judge: "P. Cucuzzella" },
+            { courthouse: "Cummings", building: "Cummings", room: "540C", part: "13", judge: "G. DiPietro" },
+            { courthouse: "Cummings", building: "Cummings", room: "404C", part: "34", judge: "C. Dorsey" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "556C", part: "10", judge: "J. Geller" },
+            { courthouse: "Cummings", building: "Cummings", room: "523C", part: "14", judge: "A. Handy" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "215M", part: "8", judge: "D. Middleton" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "441M", part: "1", judge: "J. Hong" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "309M", part: "18", judge: "C. Jones" },
+            { courthouse: "Cummings", building: "Cummings", room: "228C", part: "11", judge: "L. Mays" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "226M", part: "28", judge: "K. McBride" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "420M", part: "17", judge: "P. McKeithen" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "400M", part: "35", judge: "J. Nugent" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "236M", part: "19", judge: "Ringgold-Kirksey" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "203M", part: "32", judge: "J. Schiffer" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "451M", part: "25", judge: "M. Schreiber" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "438M", part: "21", judge: "Y. Tanner" },
+            { courthouse: "Cummings", building: "Cummings", room: "223C", part: "6", judge: "H. Tipton" },
+            { courthouse: "Cummings", building: "Cummings", room: "528C", part: "31", judge: "B. Williams" },
+            { courthouse: "Cummings", building: "Cummings", room: "113C", part: "04", judge: "Lazerow" },
+            { courthouse: "Cummings", building: "Cummings", room: "103,105", part: "1st FL", judge: "Magistrates" },
+            { courthouse: "Cummings", building: "Cummings", room: "317,327 & 339, 303", part: "3rd FL", judge: "Magistrates" }
+        ];
+
+        const groupedMainExpected = {
+            Cummings: mainExpected.filter(entry => entry.courthouse === "Cummings"),
+            Mitchell: mainExpected.filter(entry => entry.courthouse === "Mitchell")
+        };
+
+        if (includeFlags.includeCummings) {
+            addRowsByExpectedOrder("Cummings", groupedMainExpected.Cummings);
+        }
+        if (includeFlags.includeMitchell) {
+            addRowsByExpectedOrder("Mitchell", groupedMainExpected.Mitchell);
+        }
+
+        if (includeFlags.includeCummings && includeFlags.includeMitchell) {
+            const mainRows = combinedRows.splice(0, combinedRows.length);
+            const normalizePart = (value) => (value || "").toString().trim().toUpperCase().replace(/^PART\s+/, "");
+            mainExpected.forEach(expected => {
+                const matchIndex = mainRows.findIndex(row =>
+                    row.__courthouse === expected.courthouse &&
+                    (row.location_detail || "").trim().toUpperCase() === expected.room.toUpperCase() &&
+                    normalizePart(row.part) === normalizePart(expected.part)
+                );
+                if (matchIndex >= 0) {
+                    combinedRows.push(mainRows.splice(matchIndex, 1)[0]);
+                }
+            });
+            combinedRows.push(...mainRows);
+        }
+    }
+
+    if (includeFlags.includeFamily) {
+        addRowsByExpectedOrder("Family", [
+            { building: "East", room: "126", part: "F-1", judge: "Zaslow" },
+            { building: "East", room: "120", part: "F-2", judge: "M. Middleton" },
+            { building: "East", room: "122", part: "F-3", judge: "N. Barmore" },
+            { building: "East", room: "124", part: "F-4", judge: "T-Hill" }
+        ]);
+    }
+
     if (includeFlags.includeJuvenile) {
-        const juvenileRows = (grouped["Juvenile"] || []).filter(r => r.assignment_type === "Courtroom");
+        const juvenileRows = (grouped["Juvenile"] || [])
+            .filter(r => r.assignment_type === "Courtroom")
+            .filter(r => {
+                const room = (r.location_detail || "").trim().toUpperCase();
+                const part = (r.part || "").toString().trim().toUpperCase().replace(/^PART\s+/, "");
+                const judge = (r.judge_name || "").trim().toUpperCase();
+                return !(room === "329C" && (part === "2" || judge === "LEWIS"));
+            });
         const juvenileExpected = [
             { building: "JCC", room: "329C", part: "C-1", judge: "Blomquist" },
             { building: "Cummings", room: "", part: "16", judge: "Vittoria" },
+            { building: "Mitchell", room: "", part: "81", judge: "Storm" },
             { building: "Mitchell", room: "428M", part: "22", judge: "R. Rafferty" },
             { building: "Mitchell", room: "428M", part: "82", judge: "M. Phinnett" },
             { building: "Mitchell", room: "428M", part: "85", judge: "Silkworth" },
@@ -1579,10 +1687,6 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
             })
             .forEach(row => combinedRows.push({ ...row, __building: "Juvenile", __courthouse: "Juvenile" }));
     }
-
-    if (includeFlags.includeCummings) addRowsForCourthouse("Cummings");
-    if (includeFlags.includeMitchell) addRowsForCourthouse("Mitchell");
-    if (includeFlags.includeFamily) addRowsForCourthouse("Family");
 
     combinedRows.forEach(row => {
         const courthouse = row.__courthouse;
