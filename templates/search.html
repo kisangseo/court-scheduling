@@ -712,7 +712,7 @@ function getDefaultTransferTimeValue() {
     return `${h}:${m} ${meridiem}`;
 }
 
-function openTransferTimePicker({ title, defaultTime, onSave }) {
+function openTransferTimePicker({ title, defaultTime, onSave, onCancel }) {
     const overlay = document.createElement('div');
     overlay.style.position = 'fixed';
     overlay.style.inset = '0';
@@ -754,18 +754,25 @@ function openTransferTimePicker({ title, defaultTime, onSave }) {
     saveBtn.type = 'button';
     saveBtn.textContent = 'Save';
 
-    const close = () => overlay.remove();
+    let didSave = false;
+    const close = (reason = 'dismiss') => {
+        overlay.remove();
+        if (!didSave && typeof onCancel === 'function') {
+            onCancel(reason);
+        }
+    };
 
-    cancelBtn.addEventListener('click', close);
+    cancelBtn.addEventListener('click', () => close('cancel'));
     saveBtn.addEventListener('click', () => {
         const normalized = normalizeUserTimeValue(input.value) || input.value.trim();
         if (!normalized) return;
+        didSave = true;
         onSave(normalized);
-        close();
+        close('save');
     });
 
     overlay.addEventListener('click', (evt) => {
-        if (evt.target === overlay) close();
+        if (evt.target === overlay) close('outside-click');
     });
 
     actions.appendChild(cancelBtn);
@@ -827,6 +834,12 @@ function applyDeputyToCell(dropCell, assignedName, role) {
                     return fetchTransfersForDate().then(() => applyTransferCaptionToRosterAndGrid());
                 })
                 .catch(() => {});
+            },
+            onCancel: () => {
+                item.remove();
+                forgetTransferredInChip(dropCell, assignedName);
+                setPendingAssignmentFromCell(dropCell);
+                refreshRosterAssignedState();
             }
         });
     }
