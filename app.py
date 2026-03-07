@@ -144,6 +144,70 @@ def _build_baltimore_email(full_name):
     return f"{first_name}.{last_name}@baltimorecity.gov"
 
 
+def _ensure_deputy_transfers_table(cursor):
+    cursor.execute("""
+        IF OBJECT_ID('dbo.deputy_transfers', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.deputy_transfers (
+                assignment_date DATE NOT NULL,
+                full_name NVARCHAR(255) NOT NULL,
+                transfer_out_time DATETIME NULL,
+                transfer_in_time DATETIME NULL,
+                transfer_history NVARCHAR(MAX) NULL,
+                CONSTRAINT PK_deputy_transfers PRIMARY KEY (assignment_date, full_name)
+            )
+        END
+
+        IF COL_LENGTH('dbo.deputy_transfers', 'transfer_history') IS NULL
+        BEGIN
+            ALTER TABLE dbo.deputy_transfers ADD transfer_history NVARCHAR(MAX) NULL;
+        END
+    """)
+
+
+def _default_time_label():
+    return datetime.now().strftime("%I:%M %p").lstrip("0")
+
+
+def _normalize_time_label(value):
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    for pattern in ["%I:%M %p", "%I %p", "%H:%M", "%H%M"]:
+        try:
+            return datetime.strptime(text.upper(), pattern).strftime("%I:%M %p").lstrip("0")
+        except ValueError:
+            continue
+    return text
+
+
+def _safe_transfer_history_load(raw_history, out_dt=None, in_dt=None):
+    history = []
+    if raw_history:
+        try:
+            parsed = json.loads(raw_history)
+            if isinstance(parsed, list):
+                history = [
+                    {
+                        "out": _normalize_time_label((entry or {}).get("out")),
+                        "in": _normalize_time_label((entry or {}).get("in"))
+                    }
+                    for entry in parsed if isinstance(entry, dict)
+                ]
+        except (json.JSONDecodeError, TypeError):
+            history = []
+
+    if not history and out_dt:
+        history.append({
+            "out": out_dt.strftime("%I:%M %p").lstrip("0"),
+            "in": in_dt.strftime("%I:%M %p").lstrip("0") if in_dt else None
+        })
+
+    return history[:3]
+
+
 @app.route("/api/transfers")
 def get_transfers():
     assignment_date = request.args.get("date")
@@ -152,25 +216,19 @@ def get_transfers():
 
     conn = get_conn()
     cursor = conn.cursor()
+    _ensure_deputy_transfers_table(cursor)
     cursor.execute("""
-        SELECT full_name, transfer_out_time, transfer_in_time
+        SELECT full_name, transfer_out_time, transfer_in_time, transfer_history
         FROM dbo.deputy_transfers
         WHERE assignment_date = ?
     """, (assignment_date,))
     rows = cursor.fetchall()
     conn.close()
 
-    def fmt(dt):
-        if not dt:
-            return None
-        # "9:05 AM" formatting
-        return dt.strftime("%I:%M %p").lstrip("0")
-
     return jsonify([
         {
             "full_name": r[0],
-            "out_time": fmt(r[1]),
-            "in_time": fmt(r[2]),
+            "history": _safe_transfer_history_load(r[3], r[1], r[2]),
         }
         for r in rows
     ])
@@ -181,27 +239,71 @@ def transfer_out():
     data = request.json or {}
     assignment_date = data.get("assignment_date")
     full_name = data.get("full_name")
+    transfer_time = _normalize_time_label(data.get("transfer_time")) or _default_time_label()
+    transfer_index = data.get("transfer_index")
     if not assignment_date or not full_name:
         return jsonify({"status": "error", "message": "missing assignment_date/full_name"}), 400
 
     conn = get_conn()
     cursor = conn.cursor()
 
-    # Upsert: set OUT if not set (or overwrite if you want; I’m doing "set/overwrite" for simplicity)
+    _ensure_deputy_transfers_table(cursor)
+    cursor.execute("""
+        SELECT transfer_history, transfer_out_time, transfer_in_time
+        FROM dbo.deputy_transfers
+        WHERE assignment_date = ? AND full_name = ?
+    """, (assignment_date, full_name))
+    existing = cursor.fetchone()
+
+    history = _safe_transfer_history_load(existing[0], existing[1], existing[2]) if existing else []
+
+    target_index = None
+    try:
+        if transfer_index is not None:
+            target_index = int(transfer_index) - 1
+    except (TypeError, ValueError):
+        target_index = None
+
+    if target_index is not None and 0 <= target_index < len(history):
+        history[target_index]["out"] = transfer_time
+    else:
+        if len(history) >= 3:
+            conn.close()
+            return jsonify({"status": "error", "message": "Maximum of 3 transfers reached"}), 400
+        history.append({"out": transfer_time, "in": None})
+        target_index = len(history) - 1
+
+    latest = history[target_index] if 0 <= target_index < len(history) else history[-1]
+
     cursor.execute("""
         MERGE dbo.deputy_transfers AS t
         USING (SELECT ? AS assignment_date, ? AS full_name) AS s
         ON t.assignment_date = s.assignment_date AND t.full_name = s.full_name
         WHEN MATCHED THEN
-            UPDATE SET transfer_out_time = CAST(SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time' AS datetime)
+            UPDATE SET
+                transfer_history = ?,
+                transfer_out_time = NULL,
+                transfer_in_time = NULL
         WHEN NOT MATCHED THEN
-            INSERT (assignment_date, full_name, transfer_out_time, transfer_in_time)
-            VALUES (?, ?, CAST(SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time' AS datetime), NULL);
-    """, (assignment_date, full_name, assignment_date, full_name))
+            INSERT (assignment_date, full_name, transfer_out_time, transfer_in_time, transfer_history)
+            VALUES (?, ?, NULL, NULL, ?);
+    """, (
+        assignment_date,
+        full_name,
+        json.dumps(history),
+        assignment_date,
+        full_name,
+        json.dumps(history),
+    ))
 
     conn.commit()
     conn.close()
-    return jsonify({"status": "success"})
+    return jsonify({
+        "status": "success",
+        "transfer_index": target_index + 1,
+        "out_time": latest.get("out"),
+        "history": history
+    })
 
 
 @app.route("/api/transfer-in", methods=["POST"])
@@ -209,24 +311,62 @@ def transfer_in():
     data = request.json or {}
     assignment_date = data.get("assignment_date")
     full_name = data.get("full_name")
+    transfer_time = _normalize_time_label(data.get("transfer_time")) or _default_time_label()
+    transfer_index = data.get("transfer_index")
     if not assignment_date or not full_name:
         return jsonify({"status": "error", "message": "missing assignment_date/full_name"}), 400
 
     conn = get_conn()
     cursor = conn.cursor()
 
-    # Only set IN if the row exists + has an OUT time (so “in” only happens after a real transfer-out)
+    _ensure_deputy_transfers_table(cursor)
+    cursor.execute("""
+        SELECT transfer_history, transfer_out_time, transfer_in_time
+        FROM dbo.deputy_transfers
+        WHERE assignment_date = ? AND full_name = ?
+    """, (assignment_date, full_name))
+    existing = cursor.fetchone()
+
+    history = _safe_transfer_history_load(existing[0], existing[1], existing[2]) if existing else []
+    if not history:
+        conn.close()
+        return jsonify({"status": "error", "message": "No transfer-out found"}), 400
+
+    target_index = None
+    try:
+        if transfer_index is not None:
+            idx = int(transfer_index) - 1
+            if 0 <= idx < len(history):
+                target_index = idx
+    except (TypeError, ValueError):
+        target_index = None
+
+    if target_index is None:
+        for i in range(len(history) - 1, -1, -1):
+            if history[i].get("out") and not history[i].get("in"):
+                target_index = i
+                break
+
+    if target_index is None:
+        conn.close()
+        return jsonify({"status": "error", "message": "No open transfer-out found"}), 400
+
+    history[target_index]["in"] = transfer_time
+
     cursor.execute("""
         UPDATE dbo.deputy_transfers
-        SET transfer_in_time = CAST(SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time' AS datetime)
-        WHERE assignment_date = ?
-          AND full_name = ?
-          AND transfer_out_time IS NOT NULL
-    """, (assignment_date, full_name))
+        SET transfer_history = ?, transfer_out_time = NULL, transfer_in_time = NULL
+        WHERE assignment_date = ? AND full_name = ?
+    """, (json.dumps(history), assignment_date, full_name))
 
     conn.commit()
     conn.close()
-    return jsonify({"status": "success"})
+    return jsonify({
+        "status": "success",
+        "transfer_index": target_index + 1,
+        "in_time": history[target_index].get("in"),
+        "history": history
+    })
 @app.route("/")
 def index():
     return render_template("search.html")
