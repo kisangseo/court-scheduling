@@ -102,6 +102,7 @@ function shouldCountFixedPostSlot(slotMeta = {}) {
 
     if (courthouse === 'mitchell' && post === 'calvert' && part === '0800-3') return false;
     if (courthouse === 'cummings' && post === 'cummings' && part === '0830-2') return false;
+    if (post === 'transportation') return false;
     return true;
 }
 

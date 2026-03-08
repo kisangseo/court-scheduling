@@ -58,6 +58,7 @@ const MITCHELL_POSTS = [
     { post: "Lock Up West", detail: "1 of 2", part: "OPEN-1" },
     { post: "Lock Up West", detail: "2 of 2", part: "OPEN-2" },
     { post: "Jury Room", detail: "7:30 AM", part: "0730" },
+    { post: "Jury Room", detail: "7:30 AM", part: "0800" },
     { post: "St. Paul", detail: "7:30 AM", part: "0730" },
     { post: "St. Paul", detail: "8:30 AM", part: "0830" },
     { post: "Rover", detail: "7:00 AM", part: "0700" },
@@ -112,6 +113,7 @@ function shouldCountFixedPostSlot(slotMeta = {}) {
 
     if (courthouse === 'mitchell' && post === 'calvert' && part === '0800-3') return false;
     if (courthouse === 'cummings' && post === 'cummings' && part === '0830-2') return false;
+    if (post === 'transportation') return false;
     return true;
 }
 

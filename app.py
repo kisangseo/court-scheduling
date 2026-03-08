@@ -1337,6 +1337,10 @@ def assignment_totals():
             if courthouse == "cummings" and post == "cummings" and part == "0830-2":
                 continue
 
+            # Transportation is informational only and should not count toward totals.
+            if post == "transportation":
+                continue
+
             if assigned:
                 filled += 1
             else:
