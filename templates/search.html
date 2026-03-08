@@ -174,6 +174,10 @@ function getDeputyRole(deputy) {
     return (deputy.role || deputy.capacity_tag || "").trim().toUpperCase();
 }
 
+function getDeputyCapacityTag(deputy) {
+    return (deputy.capacity_tag || "").trim();
+}
+
 function normalizeRoleValue(role) {
     return (role || "").toUpperCase().replace(/\s+/g, "").replace(/_/g, "-");
 }
@@ -195,10 +199,11 @@ function createRosterItem(deputy, options = {}) {
 
     const showDivision = options.showDivision === true;
     const division = (deputy.division || "Unassigned Division").trim() || "Unassigned Division";
+    const capacityTag = getDeputyCapacityTag(deputy);
 
     deputyRow.textContent = showDivision
-        ? `${deputy.full_name} - ${division}`
-        : `${deputy.full_name}`;
+        ? `${deputy.full_name}${capacityTag ? ` (${capacityTag})` : ""} - ${division}`
+        : `${deputy.full_name}${capacityTag ? ` (${capacityTag})` : ""}`;
 
     return deputyRow;
 }
@@ -370,6 +375,10 @@ function shouldCountFixedPostSlot(slotMeta = {}) {
     }
 
     if (courthouse === 'cummings' && post === 'cummings' && part === '0830-2') {
+        return false;
+    }
+
+    if (courthouse === 'cummings' && post === 'transportation') {
         return false;
     }
 
@@ -1008,13 +1017,20 @@ function isNoGunFixedPost(courthouse, post) {
     return (normalizedCourthouse === 'mitchell' && (
             normalizedPost === 'fayette h/c console room'
             || normalizedPost === 'lock up west'
-            || normalizedPost === 'jury room'
         ))
         || (normalizedCourthouse === 'cummings' && (
             normalizedPost === 'fayette st. h/c'
             || normalizedPost === 'console room'
             || normalizedPost === 'lock up east'
         ));
+}
+
+function requiresSingleArmedAcrossPost(courthouse, post) {
+    const normalizedCourthouse = (courthouse || '').trim().toLowerCase();
+    const normalizedPost = (post || '').trim().toLowerCase();
+
+    return normalizedCourthouse === 'mitchell'
+        && (normalizedPost === 'jury room' || normalizedPost === 'st. paul');
 }
 
 function requiresPrimarySecurityRole(courthouse, post, shift) {
@@ -1117,6 +1133,22 @@ function isEligibleForCell(cell, role) {
             if ((candidate.dataset.room || '').trim() !== post) return false;
             return (candidate.dataset.shift || '').trim() === shift;
         });
+
+        const matchingPostCells = Array.from(
+            document.querySelectorAll('.editable[data-type="Fixed Post"]')
+        ).filter(candidate => (candidate.dataset.room || '').trim() === post);
+
+        if (requiresSingleArmedAcrossPost(courthouse, post) && !isArmedRole(role)) {
+            const hasArmedAssigned = matchingPostCells.some(candidate =>
+                getAssignedNamesFromCell(candidate).some(isArmedByName)
+            );
+
+            if (!hasArmedAssigned) {
+                return false;
+            }
+
+            return true;
+        }
 
         const requirePrimary = requiresPrimarySecurityRole(courthouse, post, shift);
 
