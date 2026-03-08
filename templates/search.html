@@ -1104,6 +1104,39 @@ function updateFixedPostArmedWarnings() {
     });
 }
 
+function getSingleArmedAcrossPostViolations() {
+    const groupedCells = new Map();
+
+    document.querySelectorAll('.editable[data-type="Fixed Post"]').forEach(cell => {
+        const post = (cell.dataset.room || '').trim();
+        const courthouse = (cell.dataset.courthouse || '').trim();
+        if (!requiresSingleArmedAcrossPost(courthouse, post)) return;
+
+        const key = `${courthouse}|${post}`;
+        if (!groupedCells.has(key)) {
+            groupedCells.set(key, { courthouse, post, cells: [] });
+        }
+        groupedCells.get(key).cells.push(cell);
+    });
+
+    const violations = [];
+
+    groupedCells.forEach(group => {
+        const hasAssignments = group.cells.some(cell => getAssignedNamesFromCell(cell).length > 0);
+        if (!hasAssignments) return;
+
+        const hasArmedAssigned = group.cells.some(cell =>
+            getAssignedNamesFromCell(cell).some(isArmedByName)
+        );
+
+        if (!hasArmedAssigned) {
+            violations.push({ courthouse: group.courthouse, post: group.post });
+        }
+    });
+
+    return violations;
+}
+
 function isEligibleForCell(cell, role) {
     const category = getCellAssignmentCategory(cell);
     if (category === 'courtroom') {
@@ -2495,6 +2528,15 @@ document.addEventListener("click", function(e) {
 document.getElementById("saveAssignments").addEventListener("click", function() {
 
     document.querySelectorAll('.courtroom-meta-row').forEach(rowEl => setPendingCourtroomMetaFromRow(rowEl));
+
+    const armedPostViolations = getSingleArmedAcrossPostViolations();
+    if (armedPostViolations.length > 0) {
+        const message = armedPostViolations
+            .map(v => `${v.courthouse} - ${v.post}`)
+            .join(', ');
+        alert(`Save blocked: These posts require at least one armed deputy before saving: ${message}.`);
+        return;
+    }
 
     const saveStatus = document.getElementById("saveStatus");
     if (saveStatus) {
