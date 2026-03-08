@@ -214,6 +214,10 @@ function getAssignedNamesFromCell(cell) {
         .filter(Boolean);
 }
 
+function getAssignedChipsFromCell(cell) {
+    return Array.from(cell.querySelectorAll('.assignment-chip'));
+}
+
 function parseAssignedMemberValue(value) {
     const text = (value || '').trim();
     if (!text) return [];
@@ -1054,9 +1058,30 @@ function requiresPrimarySecurityRole(courthouse, post, shift) {
 }
 
 function isArmedByName(name) {
+    const chipWithRole = document.querySelector(`.assignment-chip[data-name="${CSS.escape((name || '').trim())}"][data-role]`);
+    const chipRole = (chipWithRole?.dataset?.role || '').trim().toUpperCase();
+    if (chipRole) return isArmedRole(chipRole);
+
     const deputy = getDeputyRecordByName(name);
     const role = getDeputyRole(deputy || {});
+    if (!role) return true;
     return isArmedRole(role);
+}
+
+function isArmedAssignmentChip(chip) {
+    const role = (chip?.dataset?.role || '').trim().toUpperCase();
+    if (role) return isArmedRole(role);
+
+    const name = (chip?.dataset?.name || chip?.textContent || '').trim();
+    return isArmedByName(name);
+}
+
+function getSingleArmedAcrossPostsForCourthouse(courthouse) {
+    const normalizedCourthouse = (courthouse || '').trim().toLowerCase();
+    if (normalizedCourthouse === 'mitchell') {
+        return ['jury room', 'st. paul'];
+    }
+    return [];
 }
 
 function updateFixedPostArmedWarnings() {
@@ -1112,9 +1137,9 @@ function getSingleArmedAcrossPostViolations() {
         const courthouse = (cell.dataset.courthouse || '').trim();
         if (!requiresSingleArmedAcrossPost(courthouse, post)) return;
 
-        const key = `${courthouse}|${post}`;
+        const key = courthouse;
         if (!groupedCells.has(key)) {
-            groupedCells.set(key, { courthouse, post, cells: [] });
+            groupedCells.set(key, { courthouse, posts: getSingleArmedAcrossPostsForCourthouse(courthouse), cells: [] });
         }
         groupedCells.get(key).cells.push(cell);
     });
@@ -1126,11 +1151,11 @@ function getSingleArmedAcrossPostViolations() {
         if (!hasAssignments) return;
 
         const hasArmedAssigned = group.cells.some(cell =>
-            getAssignedNamesFromCell(cell).some(isArmedByName)
+            getAssignedChipsFromCell(cell).some(isArmedAssignmentChip)
         );
 
         if (!hasArmedAssigned) {
-            violations.push({ courthouse: group.courthouse, post: group.post });
+            violations.push({ courthouse: group.courthouse, post: group.posts.join(' / ') || 'required posts' });
         }
     });
 
@@ -1167,13 +1192,19 @@ function isEligibleForCell(cell, role) {
             return (candidate.dataset.shift || '').trim() === shift;
         });
 
-        const matchingPostCells = Array.from(
-            document.querySelectorAll('.editable[data-type="Fixed Post"]')
-        ).filter(candidate => (candidate.dataset.room || '').trim() === post);
-
         if (requiresSingleArmedAcrossPost(courthouse, post) && !isArmedRole(role)) {
-            const hasArmedAssigned = matchingPostCells.some(candidate =>
-                getAssignedNamesFromCell(candidate).some(isArmedByName)
+            const singleArmedPosts = getSingleArmedAcrossPostsForCourthouse(courthouse);
+            const acrossPostCells = Array.from(
+                document.querySelectorAll('.editable[data-type="Fixed Post"]')
+            ).filter(candidate => {
+                const candidateCourthouse = (candidate.dataset.courthouse || '').trim().toLowerCase();
+                const candidatePost = (candidate.dataset.room || '').trim().toLowerCase();
+                return candidateCourthouse === (courthouse || '').trim().toLowerCase()
+                    && singleArmedPosts.includes(candidatePost);
+            });
+
+            const hasArmedAssigned = acrossPostCells.some(candidate =>
+                getAssignedChipsFromCell(candidate).some(isArmedAssignmentChip)
             );
 
             if (!hasArmedAssigned) {
