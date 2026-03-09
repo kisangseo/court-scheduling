@@ -29,6 +29,7 @@
     <button onclick="window.open('/staffing', '_blank')">Staffing Resources Daily</button>
     <button onclick="openExecutiveSummary()">Executive Summary</button>
     <button id="saveAssignments">Save Assignments</button>
+    <button id="clearAssignmentsBtn" type="button">Clear</button>
     <span id="saveStatus" class="counts-inline"></span>
 </div>
 
@@ -2458,6 +2459,45 @@ function openExecutiveSummary() {
     window.open(url, '_blank');
 }
 
+
+function clearDailyAssignments() {
+    const date = document.getElementById("date")?.value || "";
+    if (!date) {
+        alert("Please choose a date before clearing assignments.");
+        return;
+    }
+
+    const shouldClear = confirm("Are you sure you want to clear all post and courtroom assignments, and reset all high profile checkboxes for this date?");
+    if (!shouldClear) {
+        return;
+    }
+
+    fetch("/api/clear-daily-assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignment_date: date })
+    })
+        .then(async response => {
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(payload.message || "Unable to clear assignments.");
+            }
+            return payload;
+        })
+        .then(() => {
+            pendingAssignments = {};
+            pendingNotes = {};
+            pendingJudges = {};
+            pendingCourtroomMeta = {};
+            updateSaveStatusBadge();
+            search();
+            loadRoster();
+        })
+        .catch(err => {
+            alert(err.message || "Unable to clear assignments.");
+        });
+}
+
 function importPreviousWeekdayEntries() {
     const date = document.getElementById("date")?.value || "";
     if (!date) {
@@ -2520,6 +2560,7 @@ window.onload = function() {
     });
     document.getElementById("courthouse").addEventListener("change", search);
     document.getElementById("importPreviousWeekdayBtn").addEventListener("click", importPreviousWeekdayEntries);
+    document.getElementById("clearAssignmentsBtn").addEventListener("click", clearDailyAssignments);
     document.getElementById("date").addEventListener("change", function() {
         localStorage.setItem('searchPageDate', document.getElementById("date").value || '');
         search();
