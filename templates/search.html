@@ -195,7 +195,7 @@ function getCanonicalRole(role) {
     if (normalizedRole === 'DEP' || normalizedRole === 'F' || normalizedRole === 'COURT') return 'COURT';
     if (normalizedRole === 'SPO' || normalizedRole === 'ARMED') return 'ARMED';
     if (normalizedRole === 'SPO-UA' || normalizedRole === 'SPOUA' || normalizedRole === 'NOSPO' || normalizedRole === 'NO-SPO' || normalizedRole === 'CSO' || normalizedRole === 'BASIC') return 'BASIC';
-    if (normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9') return 'DEPK9';
+    if (normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9') return 'COURT';
     return normalizedRole;
 }
 
@@ -203,8 +203,7 @@ function getCourtSecuritySortRank(deputy) {
     const role = getCanonicalRole(getDeputyRole(deputy));
     if (role === 'COURT') return 0;
     if (role === 'ARMED') return 1;
-    if (role === 'DEPK9') return 2;
-    if (role === 'BASIC') return 3;
+    if (role === 'BASIC') return 2;
     return 6;
 }
 
@@ -218,9 +217,11 @@ function createRosterItem(deputy, options = {}) {
     const division = (deputy.division || "Unassigned Division").trim() || "Unassigned Division";
     const capacityTag = getDeputyCapacityTag(deputy);
 
+    const displayCapacityTag = getCanonicalRole(capacityTag);
+
     deputyRow.textContent = showDivision
-        ? `${deputy.full_name}${capacityTag ? ` (${capacityTag})` : ""} - ${division}`
-        : `${deputy.full_name}${capacityTag ? ` (${capacityTag})` : ""}`;
+        ? `${deputy.full_name}${displayCapacityTag ? ` (${displayCapacityTag})` : ""} - ${division}`
+        : `${deputy.full_name}${displayCapacityTag ? ` (${displayCapacityTag})` : ""}`;
 
     return deputyRow;
 }
@@ -1043,7 +1044,8 @@ function isArmedRole(role) {
 }
 
 function isPrimarySecurityRole(role) {
-    return getCanonicalRole(role) === 'ARMED';
+    const canonicalRole = getCanonicalRole(role);
+    return canonicalRole === 'ARMED' || canonicalRole === 'COURT';
 }
 
 function isNoGunFixedPost(courthouse, post) {
@@ -1197,7 +1199,7 @@ function getSingleArmedAcrossPostViolations() {
 function isEligibleForCell(cell, role) {
     const category = getCellAssignmentCategory(cell);
     if (category === 'courtroom') {
-        return isArmedRole(role);
+        return getCanonicalRole(role) === 'COURT';
     }
 
     if (category === 'security') {
