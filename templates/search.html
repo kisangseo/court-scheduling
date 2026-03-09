@@ -1455,6 +1455,114 @@ function setPendingAssignmentFromCell(cell) {
     updateSaveStatusBadge();
 }
 
+
+function getDeputyAutocompleteMatches(query) {
+    const normalizedQuery = (query || '').trim().toLowerCase();
+    if (normalizedQuery.length < 4) return [];
+
+    return allDeputies
+        .filter(dep => {
+            const fullName = (dep.full_name || '').toLowerCase();
+            return fullName.includes(normalizedQuery);
+        })
+        .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
+        .slice(0, 8);
+}
+
+function createAssignmentTypeahead(cell) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'assignment-typeahead';
+    wrapper.style.position = 'relative';
+    wrapper.style.marginTop = '6px';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'assignment-typeahead-input';
+    input.placeholder = 'Type deputy name (4+ chars)…';
+    input.autocomplete = 'off';
+    input.style.width = '100%';
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'assignment-typeahead-dropdown';
+    dropdown.style.position = 'absolute';
+    dropdown.style.top = '100%';
+    dropdown.style.left = '0';
+    dropdown.style.right = '0';
+    dropdown.style.background = 'white';
+    dropdown.style.border = '1px solid #D0D5DD';
+    dropdown.style.borderRadius = '6px';
+    dropdown.style.boxShadow = '0 8px 16px rgba(16,24,40,.12)';
+    dropdown.style.maxHeight = '200px';
+    dropdown.style.overflowY = 'auto';
+    dropdown.style.zIndex = '30';
+    dropdown.style.display = 'none';
+
+    const hideDropdown = () => {
+        dropdown.style.display = 'none';
+        dropdown.innerHTML = '';
+    };
+
+    const applySelection = (dep) => {
+        if (!dep) return;
+        const name = (dep.full_name || '').trim();
+        const role = getDeputyRole(dep || {});
+        if (!name) return;
+        applyDeputyToCell(cell, name, role);
+        input.value = '';
+        hideDropdown();
+    };
+
+    const renderMatches = () => {
+        const query = input.value || '';
+        const matches = getDeputyAutocompleteMatches(query);
+
+        dropdown.innerHTML = '';
+        if (matches.length === 0) {
+            hideDropdown();
+            return;
+        }
+
+        matches.forEach(dep => {
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'assignment-typeahead-option';
+            option.style.display = 'block';
+            option.style.width = '100%';
+            option.style.textAlign = 'left';
+            option.style.border = '0';
+            option.style.background = 'transparent';
+            option.style.padding = '8px 10px';
+            option.style.cursor = 'pointer';
+            option.textContent = `${dep.full_name || ''} (${getCanonicalRole(getDeputyRole(dep || {})) || ''})`;
+            option.addEventListener('mousedown', (evt) => {
+                evt.preventDefault();
+                applySelection(dep);
+            });
+            dropdown.appendChild(option);
+        });
+
+        dropdown.style.display = 'block';
+    };
+
+    input.addEventListener('input', renderMatches);
+    input.addEventListener('focus', renderMatches);
+    input.addEventListener('keydown', (evt) => {
+        if (evt.key !== 'Enter') return;
+        const query = input.value || '';
+        const matches = getDeputyAutocompleteMatches(query);
+        if (matches.length === 0) return;
+        evt.preventDefault();
+        applySelection(matches[0]);
+    });
+    input.addEventListener('blur', () => {
+        setTimeout(hideDropdown, 120);
+    });
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(dropdown);
+    return wrapper;
+}
+
 function ensureCellStructure(cell) {
     let list = cell.querySelector('.assignment-list');
     if (!list) {
@@ -1463,7 +1571,11 @@ function ensureCellStructure(cell) {
         cell.appendChild(list);
     }
 
-
+    let typeahead = cell.querySelector('.assignment-typeahead');
+    if (!typeahead) {
+        typeahead = createAssignmentTypeahead(cell);
+        cell.appendChild(typeahead);
+    }
 
     return list;
 }
