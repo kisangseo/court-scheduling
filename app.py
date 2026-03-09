@@ -1463,6 +1463,64 @@ def clear_daily_assignments():
     return jsonify({"status": "success"})
 
 
+@app.route("/api/clear-section-assignments", methods=["POST"])
+def clear_section_assignments():
+    data = request.json or {}
+    assignment_date = (data.get("assignment_date") or "").strip()
+    section_type = (data.get("section_type") or "").strip().lower()
+    courthouse = (data.get("courthouse") or "").strip()
+
+    if not assignment_date:
+        return jsonify({"status": "error", "message": "assignment_date is required"}), 400
+
+    if section_type not in {"fixed_post", "courtroom"}:
+        return jsonify({"status": "error", "message": "section_type must be fixed_post or courtroom"}), 400
+
+    conn = get_conn()
+    cursor = conn.cursor()
+    if section_type == "courtroom":
+        _ensure_courtroom_meta_table(cursor)
+
+    if section_type == "fixed_post":
+        if not courthouse:
+            return jsonify({"status": "error", "message": "courthouse is required for fixed_post clear"}), 400
+
+        cursor.execute("""
+            UPDATE dbo.court_assignments
+            SET assigned_member = NULL
+            WHERE assignment_date = ?
+              AND assignment_type = 'Fixed Post'
+              AND courthouse = ?
+        """, (assignment_date, courthouse))
+
+    if section_type == "courtroom":
+        params = [assignment_date]
+        courthouse_clause = ""
+        if courthouse:
+            courthouse_clause = " AND courthouse = ?"
+            params.append(courthouse)
+
+        cursor.execute(f"""
+            UPDATE dbo.court_assignments
+            SET assigned_member = NULL,
+                assignment_notes = NULL
+            WHERE assignment_date = ?
+              AND assignment_type = 'Courtroom'{courthouse_clause}
+        """, params)
+
+        cursor.execute(f"""
+            UPDATE dbo.courtroom_meta
+            SET is_high_profile = 0,
+                updated_at = GETDATE()
+            WHERE assignment_date = ?{courthouse_clause}
+        """, params)
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "success"})
+
+
 @app.route("/api/search")
 def search():
     name = request.args.get("name")

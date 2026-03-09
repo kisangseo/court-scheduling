@@ -24,7 +24,7 @@
     </select>
 
     <button onclick="search()">Search</button>
-    <button id="importPreviousWeekdayBtn" type="button">Import Previous Weekday Entries</button>
+    <button id="importPreviousWeekdayBtn" type="button">Import</button>
     <button onclick="openRoster()">Roster</button>
     <button onclick="window.open('/staffing', '_blank')">Staffing Resources Daily</button>
     <button onclick="openExecutiveSummary()">Executive Summary</button>
@@ -1519,7 +1519,16 @@ function initRosterDrag() {
     });
 }
 
-function createSectionCell(title, contentEl, headerCourthouse = "", headerSection = "", subtitle = "") {
+function createHeaderClearButton(label, onClick) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.style.marginLeft = "8px";
+    button.addEventListener("click", onClick);
+    return button;
+}
+
+function createSectionCell(title, contentEl, headerCourthouse = "", headerSection = "", subtitle = "", options = {}) {
     const cell = document.createElement("div");
     cell.className = "section-cell";
 
@@ -1531,6 +1540,10 @@ function createSectionCell(title, contentEl, headerCourthouse = "", headerSectio
     } else {
         // ✅ No counters on Courtrooms / Posts / Overtime headers
         header.textContent = title;
+    }
+
+    if (options && options.clearButtonLabel && typeof options.onClear === "function") {
+        header.appendChild(createHeaderClearButton(options.clearButtonLabel, options.onClear));
     }
 
     cell.appendChild(header);
@@ -2344,13 +2357,19 @@ function search() {
             // =========================
             postsRow.appendChild(
                 includeMitchell
-                    ? createSectionCell("Mitchell", mitchell.posts, "Mitchell", "main", "Security Post")
+                    ? createSectionCell("Mitchell", mitchell.posts, "Mitchell", "main", "Security Post", {
+                        clearButtonLabel: "Clear",
+                        onClear: () => clearSectionAssignments("fixed_post", "Mitchell")
+                    })
                     : createEmptySectionCell()
             );
 
             postsRow.appendChild(
                 includeCummings
-                    ? createSectionCell("Cummings", cummings.posts, "Cummings", "main", "Security Post")
+                    ? createSectionCell("Cummings", cummings.posts, "Cummings", "main", "Security Post", {
+                        clearButtonLabel: "Clear",
+                        onClear: () => clearSectionAssignments("fixed_post", "Cummings")
+                    })
                     : createEmptySectionCell()
             );
 
@@ -2361,7 +2380,14 @@ function search() {
                 includeJuvenile,
                 includeFamily
             });
-            const courtroomsCell = createSectionCell("Courtrooms", combinedCourtrooms);
+            const selectedCourthouse = document.getElementById("courthouse")?.value || "";
+            const courtroomClearCourthouse = ["Mitchell", "Cummings", "Juvenile", "Family"].includes(selectedCourthouse)
+                ? selectedCourthouse
+                : "";
+            const courtroomsCell = createSectionCell("Courtrooms", combinedCourtrooms, "", "", "", {
+                clearButtonLabel: "Clear",
+                onClear: () => clearSectionAssignments("courtroom", courtroomClearCourthouse)
+            });
             courtroomsCell.style.gridColumn = "1 / span 2";
             courtroomsRow.appendChild(courtroomsCell);
 
@@ -2459,6 +2485,54 @@ function openExecutiveSummary() {
     window.open(url, '_blank');
 }
 
+
+function clearSectionAssignments(sectionType, courthouse = "") {
+    const date = document.getElementById("date")?.value || "";
+    if (!date) {
+        alert("Please choose a date before clearing assignments.");
+        return;
+    }
+
+    const sectionLabel = sectionType === "fixed_post"
+        ? `${courthouse} security posts`
+        : courthouse
+            ? `${courthouse} courtrooms`
+            : "courtrooms";
+
+    const shouldClear = confirm(`Clear assignments for ${sectionLabel} only?`);
+    if (!shouldClear) {
+        return;
+    }
+
+    fetch("/api/clear-section-assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            assignment_date: date,
+            section_type: sectionType,
+            courthouse
+        })
+    })
+        .then(async response => {
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(payload.message || "Unable to clear section assignments.");
+            }
+            return payload;
+        })
+        .then(() => {
+            pendingAssignments = {};
+            pendingNotes = {};
+            pendingJudges = {};
+            pendingCourtroomMeta = {};
+            updateSaveStatusBadge();
+            search();
+            loadRoster();
+        })
+        .catch(err => {
+            alert(err.message || "Unable to clear section assignments.");
+        });
+}
 
 function clearDailyAssignments() {
     const date = document.getElementById("date")?.value || "";
