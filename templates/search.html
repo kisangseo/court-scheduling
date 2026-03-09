@@ -77,7 +77,7 @@ let hidePosted = false;
 
 const COURTROOM_ASSIGNMENT_OPTIONS = [
     "Firearm", "DNS", "Open", "Carjacking", "PT46/47", "Robbery", "ATT MUR", "CDS",
-    "Child Abuse", "Murder", "F/T", "Civil", "Motions", "MIS", "Juvenile",
+    "Child Abuse", "Murder", "Manslaughter", "F/T", "Civil", "Motions", "NON-HEARING MOTIONS", "MIS", "Juvenile",
     "Assault", "FIP", "PWID", "Criminal", "FDTX"
 ];
 
@@ -406,6 +406,7 @@ function isInactiveCourtLabel(value) {
         'DNS',
         'F/T',
         'FT',
+        'NON-HEARING MOTIONS',
         'NON-HEARING MOTIONS, CIVIL'
     ].includes(normalized);
 }
