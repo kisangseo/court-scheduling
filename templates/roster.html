@@ -93,11 +93,12 @@
 
 <script>
 const rankOptions = ["Court Security Officer", "Deputy Sheriff", "Sergeant", "Detective"];
-const capabilityOptions = ["COURT", "ARMED", "BASIC", "PATROL", "TRANSPORT", "DET", "SGT"];
+const capabilityOptions = ["COURT", "ARMED", "BASIC", "K9"];
 
 function normalizeCapabilityTag(value) {
     const normalized = (value || "").toUpperCase().replace(/\s+/g, "").replace(/_/g, "-");
-    if (["DEP", "F", "DEP-K9", "DEPK9", "COURT"].includes(normalized)) return "COURT";
+    if (["DEP", "F", "COURT"].includes(normalized)) return "COURT";
+    if (["DEP-K9", "DEPK9", "K9"].includes(normalized)) return "K9";
     if (["SPO", "ARMED"].includes(normalized)) return "ARMED";
     if (["SPO-UA", "SPOUA", "NOSPO", "NO-SPO", "CSO", "BASIC"].includes(normalized)) return "BASIC";
     return value || "";

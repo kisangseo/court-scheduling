@@ -195,7 +195,7 @@ function getCanonicalRole(role) {
     if (normalizedRole === 'DEP' || normalizedRole === 'F' || normalizedRole === 'COURT') return 'COURT';
     if (normalizedRole === 'SPO' || normalizedRole === 'ARMED') return 'ARMED';
     if (normalizedRole === 'SPO-UA' || normalizedRole === 'SPOUA' || normalizedRole === 'NOSPO' || normalizedRole === 'NO-SPO' || normalizedRole === 'CSO' || normalizedRole === 'BASIC') return 'BASIC';
-    if (normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9') return 'COURT';
+    if (normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9' || normalizedRole === 'K9') return 'K9';
     return normalizedRole;
 }
 
@@ -203,7 +203,8 @@ function getCourtSecuritySortRank(deputy) {
     const role = getCanonicalRole(getDeputyRole(deputy));
     if (role === 'COURT') return 0;
     if (role === 'ARMED') return 1;
-    if (role === 'BASIC') return 2;
+    if (role === 'K9') return 2;
+    if (role === 'BASIC') return 3;
     return 6;
 }
 
@@ -1040,12 +1041,12 @@ function getCellAssignmentCategory(cell) {
 
 function isArmedRole(role) {
     const canonicalRole = getCanonicalRole(role);
-    return canonicalRole === 'COURT' || canonicalRole === 'ARMED';
+    return canonicalRole === 'COURT' || canonicalRole === 'ARMED' || canonicalRole === 'K9';
 }
 
 function isPrimarySecurityRole(role) {
     const canonicalRole = getCanonicalRole(role);
-    return canonicalRole === 'ARMED' || canonicalRole === 'COURT';
+    return canonicalRole === 'ARMED' || canonicalRole === 'COURT' || canonicalRole === 'K9';
 }
 
 function isNoGunFixedPost(courthouse, post) {
@@ -1199,7 +1200,8 @@ function getSingleArmedAcrossPostViolations() {
 function isEligibleForCell(cell, role) {
     const category = getCellAssignmentCategory(cell);
     if (category === 'courtroom') {
-        return getCanonicalRole(role) === 'COURT';
+        const canonicalRole = getCanonicalRole(role);
+        return canonicalRole === 'COURT' || canonicalRole === 'K9';
     }
 
     if (category === 'security') {

@@ -97,14 +97,14 @@ document.addEventListener("DOMContentLoaded", function() {
         const certifiedCourtRoom = sortCourtSecurityFirst(
             courtSecurityDeputies.filter(dep => {
                 const capacityTag = normalize(dep.capacity_tag);
-                return ["court", "f", "dep", "spo", "dep-k9", "depk9"].includes(capacityTag);
+                return ["court", "k9", "f", "dep", "dep-k9", "depk9"].includes(capacityTag);
             })
         ).map(dep => dep.full_name);
 
         const certifiedDoor = sortCourtSecurityFirst(
             courtSecurityDeputies.filter(dep => {
                 const capacityTag = normalize(dep.capacity_tag);
-                return ["court", "armed", "basic", "f", "dep", "spo", "nospo", "cso", "spo-ua", "spoua", "dep-k9", "depk9"].includes(capacityTag);
+                return ["court", "armed", "basic", "k9", "f", "dep", "spo", "nospo", "cso", "spo-ua", "spoua", "dep-k9", "depk9"].includes(capacityTag);
             })
         ).map(dep => dep.full_name);
 

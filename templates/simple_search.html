@@ -418,7 +418,7 @@ function getCanonicalRole(role) {
     if (normalizedRole === 'DEP' || normalizedRole === 'F' || normalizedRole === 'COURT') return 'COURT';
     if (normalizedRole === 'SPO' || normalizedRole === 'ARMED') return 'ARMED';
     if (normalizedRole === 'SPO-UA' || normalizedRole === 'SPOUA' || normalizedRole === 'NOSPO' || normalizedRole === 'NO-SPO' || normalizedRole === 'CSO' || normalizedRole === 'BASIC') return 'BASIC';
-    if (normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9') return 'COURT';
+    if (normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9' || normalizedRole === 'K9') return 'K9';
     return normalizedRole;
 }
 
@@ -426,7 +426,8 @@ function getCourtSecuritySortRank(deputy) {
     const role = getCanonicalRole(deputy.capacity_tag || deputy.role || '');
     if (role === 'COURT') return 0;
     if (role === 'ARMED') return 1;
-    if (role === 'BASIC') return 2;
+    if (role === 'K9') return 2;
+    if (role === 'BASIC') return 3;
     return 6;
 }
 
