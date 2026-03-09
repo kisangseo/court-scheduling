@@ -108,7 +108,7 @@ function normalizeCourtroomAssignmentLabel(value) {
 
 function isOpenCourtLabel(value) {
     const normalized = normalizeCourtroomAssignmentLabel(value);
-    return normalized === 'OPEN' || normalized === 'F/T' || normalized === 'FT';
+    return normalized === 'OPEN';
 }
 
 function shouldCountFixedPostSlot(slotMeta = {}) {
@@ -132,7 +132,7 @@ function getSlotState(assignmentType, assignmentLabel, hasAssignedMember, slotMe
 
     if (type === 'Courtroom') {
         const normalized = normalizeCourtroomAssignmentLabel(assignmentLabel);
-        if (!normalized || normalized === 'DNS') return 'inactive';
+        if (!normalized || normalized === 'DNS' || normalized === 'F/T' || normalized === 'FT') return 'inactive';
         if (isOpenCourtLabel(normalized)) return 'open';
         return hasAssignedMember ? 'filled' : 'vacant';
     }

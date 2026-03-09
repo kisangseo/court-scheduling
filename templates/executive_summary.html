@@ -116,8 +116,8 @@ function getSlotState(assignmentType, assignmentLabel, hasAssignedMember, slotMe
 
     if (type === 'Courtroom') {
         const normalized = normalizeAssignmentLabel(assignmentLabel);
-        if (!normalized || normalized === 'DNS') return 'inactive';
-        if (normalized === 'OPEN' || normalized === 'F/T' || normalized === 'FT') return 'open';
+        if (!normalized || normalized === 'DNS' || normalized === 'F/T' || normalized === 'FT') return 'inactive';
+        if (normalized === 'OPEN') return 'open';
         return hasAssignedMember ? 'filled' : 'vacant';
     }
 
