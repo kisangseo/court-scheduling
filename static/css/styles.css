@@ -7,6 +7,32 @@ body {
     padding: 20px;
 }
 
+.top-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.top-nav-controls,
+.assignment-action-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.assignment-header-box {
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    background: #fff;
+    padding: 8px 12px;
+    display: inline-block;
+}
+
+.assignment-header-box h2 {
+    margin: 0;
+}
+
 table {
     border-collapse: collapse;
     width: 100%;
