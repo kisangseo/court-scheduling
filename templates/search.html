@@ -172,7 +172,10 @@ function isCourtSecurityDeputy(deputy) {
         || capacityTag.includes("court security")
         || capacityTag.includes("cso")
         || normalizedCapacity === "dep"
-        || normalizedCapacity === "depk9";
+        || normalizedCapacity === "depk9"
+        || normalizedCapacity === "court"
+        || normalizedCapacity === "armed"
+        || normalizedCapacity === "basic";
 }
 
 function getDeputyRole(deputy) {
@@ -187,14 +190,20 @@ function normalizeRoleValue(role) {
     return (role || "").toUpperCase().replace(/\s+/g, "").replace(/_/g, "-");
 }
 
+function getCanonicalRole(role) {
+    const normalizedRole = normalizeRoleValue(role);
+    if (normalizedRole === 'DEP' || normalizedRole === 'F' || normalizedRole === 'COURT') return 'COURT';
+    if (normalizedRole === 'SPO' || normalizedRole === 'ARMED') return 'ARMED';
+    if (normalizedRole === 'SPO-UA' || normalizedRole === 'SPOUA' || normalizedRole === 'NOSPO' || normalizedRole === 'NO-SPO' || normalizedRole === 'CSO' || normalizedRole === 'BASIC') return 'BASIC';
+    if (normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9') return 'COURT';
+    return normalizedRole;
+}
+
 function getCourtSecuritySortRank(deputy) {
-    const normalizedRole = normalizeRoleValue(getDeputyRole(deputy));
-    if (normalizedRole === "DEP") return 0;
-    if (normalizedRole === "F") return 1;
-    if (normalizedRole === "SPO") return 2;
-    if (normalizedRole === "DEP-K9" || normalizedRole === "DEPK9") return 3;
-    if (normalizedRole === "SPO-UA" || normalizedRole === "SPOUA") return 4;
-    if (normalizedRole === "NOSPO" || normalizedRole === "NO-SPO") return 5;
+    const role = getCanonicalRole(getDeputyRole(deputy));
+    if (role === 'COURT') return 0;
+    if (role === 'ARMED') return 1;
+    if (role === 'BASIC') return 2;
     return 6;
 }
 
@@ -208,9 +217,11 @@ function createRosterItem(deputy, options = {}) {
     const division = (deputy.division || "Unassigned Division").trim() || "Unassigned Division";
     const capacityTag = getDeputyCapacityTag(deputy);
 
+    const displayCapacityTag = getCanonicalRole(capacityTag);
+
     deputyRow.textContent = showDivision
-        ? `${deputy.full_name}${capacityTag ? ` (${capacityTag})` : ""} - ${division}`
-        : `${deputy.full_name}${capacityTag ? ` (${capacityTag})` : ""}`;
+        ? `${deputy.full_name}${displayCapacityTag ? ` (${displayCapacityTag})` : ""} - ${division}`
+        : `${deputy.full_name}${displayCapacityTag ? ` (${displayCapacityTag})` : ""}`;
 
     return deputyRow;
 }
@@ -1028,11 +1039,13 @@ function getCellAssignmentCategory(cell) {
 }
 
 function isArmedRole(role) {
-    return role === 'DEP' || role === 'SPO' || role === 'F';
+    const canonicalRole = getCanonicalRole(role);
+    return canonicalRole === 'COURT' || canonicalRole === 'ARMED';
 }
 
 function isPrimarySecurityRole(role) {
-    return role === 'SPO' || role === 'F';
+    const canonicalRole = getCanonicalRole(role);
+    return canonicalRole === 'ARMED' || canonicalRole === 'COURT';
 }
 
 function isNoGunFixedPost(courthouse, post) {
@@ -1186,7 +1199,7 @@ function getSingleArmedAcrossPostViolations() {
 function isEligibleForCell(cell, role) {
     const category = getCellAssignmentCategory(cell);
     if (category === 'courtroom') {
-        return isArmedRole(role);
+        return getCanonicalRole(role) === 'COURT';
     }
 
     if (category === 'security') {

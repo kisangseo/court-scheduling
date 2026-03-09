@@ -93,7 +93,15 @@
 
 <script>
 const rankOptions = ["Court Security Officer", "Deputy Sheriff", "Sergeant", "Detective"];
-const capabilityOptions = ["CSO", "DEP", "SPO", "F", "PATROL", "TRANSPORT", "DET", "SGT"];
+const capabilityOptions = ["COURT", "ARMED", "BASIC", "PATROL", "TRANSPORT", "DET", "SGT"];
+
+function normalizeCapabilityTag(value) {
+    const normalized = (value || "").toUpperCase().replace(/\s+/g, "").replace(/_/g, "-");
+    if (["DEP", "F", "DEP-K9", "DEPK9", "COURT"].includes(normalized)) return "COURT";
+    if (["SPO", "ARMED"].includes(normalized)) return "ARMED";
+    if (["SPO-UA", "SPOUA", "NOSPO", "NO-SPO", "CSO", "BASIC"].includes(normalized)) return "BASIC";
+    return value || "";
+}
 
 function buildOptions(selectEl, values, selectedValue = "") {
     selectEl.innerHTML = "";
@@ -136,7 +144,7 @@ function buildBaltimoreEmail(fullName) {
 }
 
 buildOptions(document.getElementById("newRank"), rankOptions, "Court Security Officer");
-buildOptions(document.getElementById("newCapability"), capabilityOptions, "CSO");
+buildOptions(document.getElementById("newCapability"), capabilityOptions, "COURT");
 
 function isCourtSecurityDeputy(deputy) {
     const division = (deputy.division || "").trim().toLowerCase();
@@ -407,14 +415,14 @@ function createDeputyRow(dep, includeDivision) {
     rankDisplay.textContent = dep.rank || "";
 
     const capabilityDisplay = document.createElement("span");
-    capabilityDisplay.textContent = dep.capacity_tag || "";
+    capabilityDisplay.textContent = normalizeCapabilityTag(dep.capacity_tag || "");
 
     const rankSelect = document.createElement("select");
     buildOptions(rankSelect, rankOptions, dep.rank || "");
     rankSelect.style.display = "none";
 
     const capabilitySelect = document.createElement("select");
-    buildOptions(capabilitySelect, capabilityOptions, dep.capacity_tag || "");
+    buildOptions(capabilitySelect, capabilityOptions, normalizeCapabilityTag(dep.capacity_tag || ""));
     capabilitySelect.style.display = "none";
 
     const statusTd = document.createElement("td");
