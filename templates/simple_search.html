@@ -111,6 +111,11 @@ function isOpenCourtLabel(value) {
     return normalized === 'OPEN' || normalized.startsWith('OPEN-');
 }
 
+function isOpenAssignedMember(value) {
+    const normalized = normalizeCourtroomAssignmentLabel(value);
+    return normalized === 'OPEN' || normalized.startsWith('OPEN-');
+}
+
 function isInactiveCourtLabel(value) {
     const normalized = normalizeCourtroomAssignmentLabel(value);
     return !normalized || [
@@ -143,7 +148,7 @@ function getSlotState(assignmentType, assignmentLabel, hasAssignedMember, slotMe
     if (type === 'Courtroom') {
         const normalized = normalizeCourtroomAssignmentLabel(assignmentLabel);
         if (isInactiveCourtLabel(normalized)) return 'inactive';
-        if (isOpenCourtLabel(normalized)) return 'open';
+        if (isOpenCourtLabel(normalized) || isOpenAssignedMember(slotMeta.assignedMember || '')) return 'open';
         return hasAssignedMember ? 'filled' : 'vacant';
     }
 
@@ -184,7 +189,8 @@ function getStats(rows) {
             {
                 courthouse: row.courthouse,
                 post: row.location_group,
-                part: row.part
+                part: row.part,
+                assignedMember: row.assigned_member || ''
             }
         );
         if (slotState === 'inactive') return;
@@ -406,17 +412,10 @@ function formatBorrowedCourthouse(courthouse) {
 
 function isCourtSecurityDeputy(deputy) {
     const division = (deputy.division || '').trim().toLowerCase();
-    const capacityTag = (deputy.capacity_tag || '').trim().toLowerCase();
-    const normalizedCapacity = capacityTag.replace(/[\s_-]+/g, '');
-    return division === 'court security'
+    return division === 'court security officer'
+        || division === 'court security officer division'
         || division === 'court security division'
-        || capacityTag.includes('court security')
-        || capacityTag.includes('cso')
-        || normalizedCapacity === 'dep'
-        || normalizedCapacity === 'depk9'
-        || normalizedCapacity === 'court'
-        || normalizedCapacity === 'armed'
-        || normalizedCapacity === 'basic';
+        || division === 'court security';
 }
 
 function normalizeRoleValue(role) {
