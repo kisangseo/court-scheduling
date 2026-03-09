@@ -108,7 +108,7 @@ function normalizeCourtroomAssignmentLabel(value) {
 
 function isOpenCourtLabel(value) {
     const normalized = normalizeCourtroomAssignmentLabel(value);
-    return normalized === 'OPEN';
+    return normalized === 'OPEN' || normalized.startsWith('OPEN-');
 }
 
 function isInactiveCourtLabel(value) {
