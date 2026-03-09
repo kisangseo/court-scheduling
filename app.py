@@ -1604,6 +1604,27 @@ def import_previous_weekday():
     cursor = conn.cursor()
 
     cursor.execute("""
+        UPDATE t
+        SET
+            t.assigned_member = s.assigned_member,
+            t.assignment_notes = s.assignment_notes,
+            t.shift_time = COALESCE(NULLIF(t.shift_time, ''), s.shift_time)
+        FROM dbo.court_assignments t
+        INNER JOIN dbo.court_assignments s
+            ON t.courthouse = s.courthouse
+           AND t.assignment_type = s.assignment_type
+           AND ISNULL(t.location_group,'') = ISNULL(s.location_group,'')
+           AND ISNULL(t.location_detail,'') = ISNULL(s.location_detail,'')
+           AND ISNULL(t.part,'') = ISNULL(s.part,'')
+        WHERE t.assignment_date = ?
+          AND s.assignment_date = ?
+          AND ISNULL(t.assigned_member,'') = ''
+          AND ISNULL(s.assigned_member,'') <> ''
+    """, (target_date_str, source_date_str))
+
+    updated_count = cursor.rowcount if cursor.rowcount != -1 else 0
+
+    cursor.execute("""
         INSERT INTO dbo.court_assignments (
             assignment_date,
             courthouse,
@@ -1643,7 +1664,8 @@ def import_previous_weekday():
           )
     """, (target_date_str, source_date_str, target_date_str))
 
-    imported_count = cursor.rowcount if cursor.rowcount != -1 else 0
+    inserted_count = cursor.rowcount if cursor.rowcount != -1 else 0
+    imported_count = updated_count + inserted_count
     conn.commit()
     conn.close()
 
@@ -1651,6 +1673,8 @@ def import_previous_weekday():
         "status": "success",
         "target_date": target_date_str,
         "source_date": source_date_str,
+        "updated_count": updated_count,
+        "inserted_count": inserted_count,
         "imported_count": imported_count,
     })
 
