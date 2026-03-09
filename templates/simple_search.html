@@ -98,12 +98,17 @@ const FAMILY_ROOM_DEFAULTS = {
 let allDeputies = [];
 let latestRows = [];
 
-function formatCountMetrics(vacant, filled) {
-    return `<span class="metric-red">Vacant ${vacant}</span> / <span class="metric-green">Filled ${filled}</span>`;
+function formatCountMetrics(vacant, filled, open) {
+    return `<span class="metric-red">Vacant ${vacant}</span> / <span class="metric-green">Filled ${filled}</span> / <span class="metric-blue">Open ${open}</span>`;
 }
 
 function normalizeCourtroomAssignmentLabel(value) {
     return (value || '').trim().toUpperCase();
+}
+
+function isOpenCourtLabel(value) {
+    const normalized = normalizeCourtroomAssignmentLabel(value);
+    return normalized === 'OPEN' || normalized === 'F/T' || normalized === 'FT';
 }
 
 function shouldCountFixedPostSlot(slotMeta = {}) {
@@ -128,6 +133,7 @@ function getSlotState(assignmentType, assignmentLabel, hasAssignedMember, slotMe
     if (type === 'Courtroom') {
         const normalized = normalizeCourtroomAssignmentLabel(assignmentLabel);
         if (!normalized || normalized === 'DNS') return 'inactive';
+        if (isOpenCourtLabel(normalized)) return 'open';
         return hasAssignedMember ? 'filled' : 'vacant';
     }
 
@@ -159,7 +165,7 @@ function parseAssignedNames(value) {
 }
 
 function getStats(rows) {
-    const stats = { vacant: 0, filled: 0, total: 0 };
+    const stats = { vacant: 0, filled: 0, open: 0, total: 0 };
     rows.forEach(row => {
         const slotState = getSlotState(
             row.assignment_type,
@@ -175,6 +181,7 @@ function getStats(rows) {
         stats.total += 1;
         if (slotState === 'vacant') stats.vacant += 1;
         if (slotState === 'filled') stats.filled += 1;
+        if (slotState === 'open') stats.open += 1;
     });
     return stats;
 }
@@ -662,30 +669,34 @@ function searchSimple() {
         const mitchellTotal = {
             total: mitchellPosts.stats.total + mitchellCourt.stats.total + mitchellOt.stats.total,
             vacant: mitchellPosts.stats.vacant + mitchellCourt.stats.vacant + mitchellOt.stats.vacant,
-            filled: mitchellPosts.stats.filled + mitchellCourt.stats.filled + mitchellOt.stats.filled
+            filled: mitchellPosts.stats.filled + mitchellCourt.stats.filled + mitchellOt.stats.filled,
+            open: mitchellPosts.stats.open + mitchellCourt.stats.open + mitchellOt.stats.open
         };
         const cummingsTotal = {
             total: cummingsPosts.stats.total + cummingsCourt.stats.total + cummingsOt.stats.total,
             vacant: cummingsPosts.stats.vacant + cummingsCourt.stats.vacant + cummingsOt.stats.vacant,
-            filled: cummingsPosts.stats.filled + cummingsCourt.stats.filled + cummingsOt.stats.filled
+            filled: cummingsPosts.stats.filled + cummingsCourt.stats.filled + cummingsOt.stats.filled,
+            open: cummingsPosts.stats.open + cummingsCourt.stats.open + cummingsOt.stats.open
         };
         const juvenileTotal = {
             total: juvCourt.stats.total + juvOt.stats.total,
             vacant: juvCourt.stats.vacant + juvOt.stats.vacant,
-            filled: juvCourt.stats.filled + juvOt.stats.filled
+            filled: juvCourt.stats.filled + juvOt.stats.filled,
+            open: juvCourt.stats.open + juvOt.stats.open
         };
         const familyTotal = {
             total: familyCourt.stats.total,
             vacant: familyCourt.stats.vacant,
-            filled: familyCourt.stats.filled
+            filled: familyCourt.stats.filled,
+            open: familyCourt.stats.open
         };
 
-        const mitchellBox = createCourthouseBox('Mitchell', formatCountMetrics(mitchellTotal.vacant, mitchellTotal.filled));
+        const mitchellBox = createCourthouseBox('Mitchell', formatCountMetrics(mitchellTotal.vacant, mitchellTotal.filled, mitchellTotal.open));
         mitchellBox.appendChild(createSectionCell('Security Post', mitchellPosts.table));
         mitchellBox.appendChild(createSectionCell('Courtroom', mitchellCourt.table));
         mitchellBox.appendChild(createSectionCell('Overtime', mitchellOt.table));
 
-        const cummingsBox = createCourthouseBox('Cummings', formatCountMetrics(cummingsTotal.vacant, cummingsTotal.filled));
+        const cummingsBox = createCourthouseBox('Cummings', formatCountMetrics(cummingsTotal.vacant, cummingsTotal.filled, cummingsTotal.open));
         cummingsBox.appendChild(createSectionCell('Security Post', cummingsPosts.table));
         cummingsBox.appendChild(createSectionCell('Courtroom', cummingsCourt.table));
         cummingsBox.appendChild(createSectionCell('Overtime', cummingsOt.table));
@@ -693,11 +704,11 @@ function searchSimple() {
         postsRow.appendChild(mitchellBox);
         postsRow.appendChild(cummingsBox);
 
-        const juvenileBox = createCourthouseBox('Juvenile', formatCountMetrics(juvenileTotal.vacant, juvenileTotal.filled));
+        const juvenileBox = createCourthouseBox('Juvenile', formatCountMetrics(juvenileTotal.vacant, juvenileTotal.filled, juvenileTotal.open));
         juvenileBox.appendChild(createSectionCell('Courtroom', juvCourt.table));
         juvenileBox.appendChild(createSectionCell('Overtime', juvOt.table));
 
-        const familyBox = createCourthouseBox('Family', formatCountMetrics(familyTotal.vacant, familyTotal.filled));
+        const familyBox = createCourthouseBox('Family', formatCountMetrics(familyTotal.vacant, familyTotal.filled, familyTotal.open));
         familyBox.appendChild(createSectionCell('Courtroom', familyCourt.table));
 
         juvTopRow.appendChild(juvenileBox);
@@ -707,7 +718,8 @@ function searchSimple() {
 
         const overallVacant = mitchellTotal.vacant + cummingsTotal.vacant + juvenileTotal.vacant + familyTotal.vacant;
         const overallFilled = mitchellTotal.filled + cummingsTotal.filled + juvenileTotal.filled + familyTotal.filled;
-        document.getElementById('overallAssignmentCounts').innerHTML = formatCountMetrics(overallVacant, overallFilled);
+        const overallOpen = mitchellTotal.open + cummingsTotal.open + juvenileTotal.open + familyTotal.open;
+        document.getElementById('overallAssignmentCounts').innerHTML = formatCountMetrics(overallVacant, overallFilled, overallOpen);
 
         renderRoster();
     });

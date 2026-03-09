@@ -63,7 +63,7 @@ let pendingCourtroomMeta = {};
 let allDeputies = [];
 let rawDeputies = [];
 let selectedDeputy = null;
-let globalAssignmentTotals = { vacant: 0, filled: 0 };
+let globalAssignmentTotals = { vacant: 0, filled: 0, open: 0 };
 let globalPostedNames = new Set();
 let hidePosted = false;
 
@@ -143,7 +143,8 @@ function loadCachedDateState(date) {
             const parsedTotals = JSON.parse(totalsRaw);
             globalAssignmentTotals = {
                 vacant: parsedTotals.vacant || 0,
-                filled: parsedTotals.filled || 0
+                filled: parsedTotals.filled || 0,
+                open: parsedTotals.open || 0
             };
         }
     } catch (_) {
@@ -361,12 +362,17 @@ function getAssignedNamesAcrossGrid() {
     return names;
 }
 
-function formatCountMetrics(vacant, filled, colorFilled = 'metric-green') {
-    return `<span class="metric-red">Vacant ${vacant}</span> / <span class="${colorFilled}">Filled ${filled}</span>`;
+function formatCountMetrics(vacant, filled, open, colorFilled = 'metric-green') {
+    return `<span class="metric-red">Vacant ${vacant}</span> / <span class="${colorFilled}">Filled ${filled}</span> / <span class="metric-blue">Open ${open}</span>`;
 }
 
 function normalizeCourtroomAssignmentLabel(value) {
     return (value || '').trim().toUpperCase();
+}
+
+function isOpenCourtLabel(value) {
+    const normalized = normalizeCourtroomAssignmentLabel(value);
+    return normalized === 'OPEN' || normalized === 'F/T' || normalized === 'FT';
 }
 
 function shouldCountFixedPostSlot(slotMeta = {}) {
@@ -400,6 +406,7 @@ function getSlotState(assignmentType, assignmentLabel, hasAssignedMember, slotMe
     if (type === 'Courtroom') {
         const normalized = normalizeCourtroomAssignmentLabel(assignmentLabel);
         if (!normalized || normalized === 'DNS') return 'inactive';
+        if (isOpenCourtLabel(normalized)) return 'open';
         return hasAssignedMember ? 'filled' : 'vacant';
     }
 
@@ -510,7 +517,7 @@ function setPendingCourtroomMetaFromRow(rowEl) {
 function fetchGlobalAssignmentTotals(dateValue) {
     const date = dateValue || document.getElementById('date').value;
     if (!date) {
-        globalAssignmentTotals = { vacant: 0, filled: 0 };
+        globalAssignmentTotals = { vacant: 0, filled: 0, open: 0 };
         updateAssignmentCountBadges();
         return Promise.resolve();
     }
@@ -521,6 +528,7 @@ function fetchGlobalAssignmentTotals(dateValue) {
             const relevantRows = (rows || []).filter(row => row.assignment_type === 'Courtroom' || row.assignment_type === 'Fixed Post');
             let vacant = 0;
             let filled = 0;
+            let open = 0;
 
             relevantRows.forEach(row => {
                 const hasAssignedMember = (row.assigned_member || '').trim().length > 0;
@@ -531,6 +539,7 @@ function fetchGlobalAssignmentTotals(dateValue) {
                 });
                 if (slotState === 'vacant') vacant += 1;
                 else if (slotState === 'filled') filled += 1;
+                else if (slotState === 'open') open += 1;
             });
 
             const posted = new Set();
@@ -542,14 +551,14 @@ function fetchGlobalAssignmentTotals(dateValue) {
                 });
             globalPostedNames = posted;
 
-            globalAssignmentTotals = { vacant, filled };
+            globalAssignmentTotals = { vacant, filled, open };
             cacheDateState(date, posted, globalAssignmentTotals);
             updateAssignmentCountBadges();
             refreshRosterHeaderCounts();
             refreshRosterAssignedState();
         })
         .catch(() => {
-            globalAssignmentTotals = { vacant: 0, filled: 0 };
+            globalAssignmentTotals = { vacant: 0, filled: 0, open: 0 };
             globalPostedNames = new Set();
             cacheDateState(date, globalPostedNames, globalAssignmentTotals);
             updateAssignmentCountBadges();
@@ -562,13 +571,14 @@ function updateAssignmentCountBadges() {
     const statsBySection = {};
     let overallVacant = 0;
     let overallFilled = 0;
+    let overallOpen = 0;
 
     document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"], .editable[data-type="Overtime"]').forEach(cell => {
         const courthouse = cell.dataset.courthouse || '';
         const sectionType = cell.dataset.type || '';
         const key = `${courthouse}|${sectionType}`;
         if (!statsBySection[key]) {
-            statsBySection[key] = { vacant: 0, filled: 0, type: sectionType };
+            statsBySection[key] = { vacant: 0, filled: 0, open: 0, type: sectionType };
         }
 
         if (sectionType === 'Overtime') {
@@ -601,36 +611,41 @@ function updateAssignmentCountBadges() {
         } else if (slotState === 'filled') {
             statsBySection[key].filled += 1;
             overallFilled += 1;
+        } else if (slotState === 'open') {
+            statsBySection[key].open += 1;
+            overallOpen += 1;
         }
     });
 
     const hasLiveAssignmentGrid = document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"]').length > 0;
     const sourceVacant = hasLiveAssignmentGrid ? overallVacant : (globalAssignmentTotals.vacant || 0);
     const sourceFilled = hasLiveAssignmentGrid ? overallFilled : (globalAssignmentTotals.filled || 0);
+    const sourceOpen = hasLiveAssignmentGrid ? overallOpen : (globalAssignmentTotals.open || 0);
     const overallBadge = document.getElementById('overallAssignmentCounts');
     if (overallBadge) {
-        overallBadge.innerHTML = formatCountMetrics(sourceVacant, sourceFilled);
+        overallBadge.innerHTML = formatCountMetrics(sourceVacant, sourceFilled, sourceOpen);
     }
 
     document.querySelectorAll('[data-badge-key]').forEach(el => {
         const key = el.dataset.badgeKey;
-        const stats = statsBySection[key] || { vacant: 0, filled: 0, type: '' };
+        const stats = statsBySection[key] || { vacant: 0, filled: 0, open: 0, type: '' };
 
         if (stats.type === 'Overtime') {
             el.innerHTML = `<span class="metric-blue">Filled ${stats.filled}</span>`;
             return;
         }
 
-        el.innerHTML = formatCountMetrics(stats.vacant, stats.filled);
+        el.innerHTML = formatCountMetrics(stats.vacant, stats.filled, stats.open);
     });
 
     document.querySelectorAll('[data-main-badge]').forEach(el => {
         const courthouse = el.dataset.mainBadge || '';
-        const postStats = statsBySection[`${courthouse}|Fixed Post`] || { vacant: 0, filled: 0 };
-        const courtroomStats = statsBySection[`${courthouse}|Courtroom`] || { vacant: 0, filled: 0 };
+        const postStats = statsBySection[`${courthouse}|Fixed Post`] || { vacant: 0, filled: 0, open: 0 };
+        const courtroomStats = statsBySection[`${courthouse}|Courtroom`] || { vacant: 0, filled: 0, open: 0 };
         const vacant = postStats.vacant + courtroomStats.vacant;
         const filled = postStats.filled + courtroomStats.filled;
-        el.innerHTML = formatCountMetrics(vacant, filled);
+        const open = postStats.open + courtroomStats.open;
+        el.innerHTML = formatCountMetrics(vacant, filled, open);
     });
 }
 
