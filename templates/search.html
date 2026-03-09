@@ -13,7 +13,6 @@
 <div class="top-controls">
     <h2>Court Assignments <span id="overallAssignmentCounts" class="counts-inline"></span> <label class="simple-view-toggle"><input type="checkbox" id="simpleViewToggle"> Simple View</label></h2>
 
-    <input type="text" id="name" placeholder="Search by Name">
     <input type="date" id="date">
 
     <select id="courthouse">
@@ -25,6 +24,7 @@
     </select>
 
     <button onclick="search()">Search</button>
+    <button id="importPreviousWeekdayBtn" type="button">Import Previous Weekday Entries</button>
     <button onclick="openRoster()">Roster</button>
     <button onclick="window.open('/staffing', '_blank')">Staffing Resources Daily</button>
     <button onclick="openExecutiveSummary()">Executive Summary</button>
@@ -2282,7 +2282,6 @@ function applyTransferCaptionToRosterAndGrid() {
   refreshRosterAssignedState();
 }
 function search() {
-    const name = document.getElementById("name").value;
     const date = document.getElementById("date").value;
     const courthouse = document.getElementById("courthouse").value;
 
@@ -2291,7 +2290,7 @@ function search() {
     localStorage.setItem('searchPageDate', date || '');
     fetchGlobalAssignmentTotals(date);
 
-    fetch(`/api/search?name=${encodeURIComponent(name)}&date=${encodeURIComponent(date)}&courthouse=${encodeURIComponent(courthouse)}`)
+    fetch(`/api/search?date=${encodeURIComponent(date)}&courthouse=${encodeURIComponent(courthouse)}`)
         .then(response => response.json())
         .then(data => {
             const postsRow = document.getElementById("postsRow");
@@ -2437,11 +2436,9 @@ function buildSimpleViewUrl(pathname) {
     const params = new URLSearchParams();
     const date = document.getElementById("date")?.value || "";
     const courthouse = document.getElementById("courthouse")?.value || "";
-    const name = document.getElementById("name")?.value || "";
 
     if (date) params.set("date", date);
     if (courthouse) params.set("courthouse", courthouse);
-    if (name) params.set("name", name);
 
     const query = params.toString();
     return query ? `${pathname}?${query}` : pathname;
@@ -2454,6 +2451,36 @@ function openExecutiveSummary() {
     const query = params.toString();
     const url = query ? `/executive-summary?${query}` : '/executive-summary';
     window.open(url, '_blank');
+}
+
+function importPreviousWeekdayEntries() {
+    const date = document.getElementById("date")?.value || "";
+    if (!date) {
+        alert("Please choose a date before importing entries.");
+        return;
+    }
+
+    fetch("/api/import-previous-weekday", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_date: date })
+    })
+        .then(async response => {
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(payload.message || "Unable to import entries.");
+            }
+            return payload;
+        })
+        .then(payload => {
+            const importedCount = payload.imported_count || 0;
+            const sourceDate = payload.source_date || "previous weekday";
+            alert(`Imported ${importedCount} entries from ${sourceDate}.`);
+            search();
+        })
+        .catch(err => {
+            alert(err.message || "Unable to import entries.");
+        });
 }
 
 window.onload = function() {
@@ -2487,6 +2514,7 @@ window.onload = function() {
         if (row) setPendingCourtroomMetaFromRow(row);
     });
     document.getElementById("courthouse").addEventListener("change", search);
+    document.getElementById("importPreviousWeekdayBtn").addEventListener("click", importPreviousWeekdayEntries);
     document.getElementById("date").addEventListener("change", function() {
         localStorage.setItem('searchPageDate', document.getElementById("date").value || '');
         search();

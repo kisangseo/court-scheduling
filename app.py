@@ -56,6 +56,13 @@ def _parse_date_value(value):
         return None
 
 
+def _previous_weekday(target_date):
+    cursor_date = target_date - timedelta(days=1)
+    while cursor_date.weekday() >= 5:
+        cursor_date -= timedelta(days=1)
+    return cursor_date
+
+
 def _parse_status_payload(status_text):
     if not status_text:
         return {"legacy": None, "ranges": [], "weekly_unavailable": []}
@@ -1540,6 +1547,74 @@ def search():
     conn.close()
 
     return jsonify(results)
+
+
+@app.route("/api/import-previous-weekday", methods=["POST"])
+def import_previous_weekday():
+    data = request.json or {}
+    target_date_raw = data.get("target_date")
+    target_date = _parse_date_value(target_date_raw)
+
+    if not target_date:
+        return jsonify({"status": "error", "message": "target_date is required (YYYY-MM-DD)"}), 400
+
+    source_date = _previous_weekday(target_date)
+    source_date_str = source_date.isoformat()
+    target_date_str = target_date.isoformat()
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO dbo.court_assignments (
+            assignment_date,
+            courthouse,
+            assignment_type,
+            location_group,
+            location_detail,
+            part,
+            judge_name,
+            shift_time,
+            assigned_member,
+            assignment_notes,
+            created_at
+        )
+        SELECT
+            ?,
+            s.courthouse,
+            s.assignment_type,
+            s.location_group,
+            s.location_detail,
+            s.part,
+            s.judge_name,
+            s.shift_time,
+            s.assigned_member,
+            s.assignment_notes,
+            GETDATE()
+        FROM dbo.court_assignments s
+        WHERE s.assignment_date = ?
+          AND NOT EXISTS (
+              SELECT 1
+              FROM dbo.court_assignments t
+              WHERE t.assignment_date = ?
+                AND t.courthouse = s.courthouse
+                AND t.assignment_type = s.assignment_type
+                AND ISNULL(t.location_group,'') = ISNULL(s.location_group,'')
+                AND ISNULL(t.location_detail,'') = ISNULL(s.location_detail,'')
+                AND ISNULL(t.part,'') = ISNULL(s.part,'')
+          )
+    """, (target_date_str, source_date_str, target_date_str))
+
+    imported_count = cursor.rowcount if cursor.rowcount != -1 else 0
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "status": "success",
+        "target_date": target_date_str,
+        "source_date": source_date_str,
+        "imported_count": imported_count,
+    })
 
 if __name__ == "__main__":
     app.run(debug=True)
