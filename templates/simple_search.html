@@ -403,21 +403,31 @@ function isCourtSecurityDeputy(deputy) {
         || capacityTag.includes('court security')
         || capacityTag.includes('cso')
         || normalizedCapacity === 'dep'
-        || normalizedCapacity === 'depk9';
+        || normalizedCapacity === 'depk9'
+        || normalizedCapacity === 'court'
+        || normalizedCapacity === 'armed'
+        || normalizedCapacity === 'basic';
 }
 
 function normalizeRoleValue(role) {
     return (role || '').toUpperCase().replace(/\s+/g, '').replace(/_/g, '-');
 }
 
+function getCanonicalRole(role) {
+    const normalizedRole = normalizeRoleValue(role);
+    if (normalizedRole === 'DEP' || normalizedRole === 'F' || normalizedRole === 'COURT') return 'COURT';
+    if (normalizedRole === 'SPO' || normalizedRole === 'ARMED') return 'ARMED';
+    if (normalizedRole === 'SPO-UA' || normalizedRole === 'SPOUA' || normalizedRole === 'NOSPO' || normalizedRole === 'NO-SPO' || normalizedRole === 'CSO' || normalizedRole === 'BASIC') return 'BASIC';
+    if (normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9' || normalizedRole === 'K9') return 'K9';
+    return normalizedRole;
+}
+
 function getCourtSecuritySortRank(deputy) {
-    const normalizedRole = normalizeRoleValue(deputy.capacity_tag || deputy.role || '');
-    if (normalizedRole === 'DEP') return 0;
-    if (normalizedRole === 'F') return 1;
-    if (normalizedRole === 'SPO') return 2;
-    if (normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9') return 3;
-    if (normalizedRole === 'SPO-UA' || normalizedRole === 'SPOUA') return 4;
-    if (normalizedRole === 'NOSPO' || normalizedRole === 'NO-SPO') return 5;
+    const role = getCanonicalRole(deputy.capacity_tag || deputy.role || '');
+    if (role === 'COURT') return 0;
+    if (role === 'ARMED') return 1;
+    if (role === 'K9') return 2;
+    if (role === 'BASIC') return 3;
     return 6;
 }
 
@@ -565,13 +575,13 @@ function renderRoster() {
     const courtSecurityAvailable = courtSecurityAll
         .filter(isDeputyAvailable)
         .sort((a, b) => getCourtSecuritySortRank(a) - getCourtSecuritySortRank(b)
-            || normalizeRoleValue(a.capacity_tag || a.role || '').localeCompare(normalizeRoleValue(b.capacity_tag || b.role || ''))
+            || getCanonicalRole(a.capacity_tag || a.role || '').localeCompare(getCanonicalRole(b.capacity_tag || b.role || ''))
             || (a.full_name || '').localeCompare(b.full_name || ''));
     courtSecurityAvailable.forEach(dep => {
         const item = document.createElement('div');
         item.className = 'roster-item';
         const name = (dep.full_name || '').trim();
-        item.textContent = `${name} (${dep.capacity_tag || ''})`;
+        item.textContent = `${name} (${getCanonicalRole(dep.capacity_tag || dep.role || '') || ''})`;
         if (postedNames.has(name)) item.classList.add('assigned');
         courtList.appendChild(item);
     });
@@ -612,7 +622,7 @@ function renderRoster() {
             const item = document.createElement('div');
             item.className = 'roster-item';
             const name = (dep.full_name || '').trim();
-            item.textContent = `${name} (${dep.capacity_tag || ''})`;
+            item.textContent = `${name} (${getCanonicalRole(dep.capacity_tag || dep.role || '') || ''})`;
             if (postedNames.has(name)) item.classList.add('assigned');
             fullList.appendChild(item);
         });
