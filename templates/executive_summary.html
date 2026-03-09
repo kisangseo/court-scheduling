@@ -95,6 +95,16 @@ function normalizeAssignmentLabel(value) {
     return (value || '').trim().toUpperCase();
 }
 
+function isInactiveCourtLabel(value) {
+    const normalized = normalizeAssignmentLabel(value);
+    return !normalized || [
+        'DNS',
+        'F/T',
+        'FT',
+        'NON-HEARING MOTIONS, CIVIL'
+    ].includes(normalized);
+}
+
 function shouldCountFixedPostSlot(slotMeta = {}) {
     const courthouse = (slotMeta.courthouse || '').trim().toLowerCase();
     const post = (slotMeta.post || '').trim().toLowerCase();
@@ -116,7 +126,7 @@ function getSlotState(assignmentType, assignmentLabel, hasAssignedMember, slotMe
 
     if (type === 'Courtroom') {
         const normalized = normalizeAssignmentLabel(assignmentLabel);
-        if (!normalized || normalized === 'DNS' || normalized === 'F/T' || normalized === 'FT') return 'inactive';
+        if (isInactiveCourtLabel(normalized)) return 'inactive';
         if (normalized === 'OPEN') return 'open';
         return hasAssignedMember ? 'filled' : 'vacant';
     }
@@ -268,8 +278,7 @@ function countAssignedCourts(assignments) {
     return (assignments || []).filter(row => {
         if ((row.assignment_type || '').trim() !== 'Courtroom') return false;
         const assignmentLabel = normalizeAssignmentLabel(row.assignment_notes || '');
-        if (!assignmentLabel) return false;
-        return assignmentLabel !== 'DNS';
+        return !isInactiveCourtLabel(assignmentLabel);
     }).length;
 }
 
