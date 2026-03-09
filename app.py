@@ -1620,6 +1620,17 @@ def import_previous_weekday():
           AND s.assignment_date = ?
           AND ISNULL(t.assigned_member,'') = ''
           AND ISNULL(s.assigned_member,'') <> ''
+          AND NOT EXISTS (
+              SELECT 1
+              FROM dbo.court_assignments t_populated
+              WHERE t_populated.assignment_date = t.assignment_date
+                AND t_populated.courthouse = t.courthouse
+                AND t_populated.assignment_type = t.assignment_type
+                AND ISNULL(t_populated.location_group,'') = ISNULL(t.location_group,'')
+                AND ISNULL(t_populated.location_detail,'') = ISNULL(t.location_detail,'')
+                AND ISNULL(t_populated.part,'') = ISNULL(t.part,'')
+                AND ISNULL(t_populated.assigned_member,'') <> ''
+          )
     """, (target_date_str, source_date_str))
 
     updated_count = cursor.rowcount if cursor.rowcount != -1 else 0
