@@ -1425,6 +1425,44 @@ def update_courtroom_meta():
     return {"status": "success"}
 
 
+@app.route("/api/clear-daily-assignments", methods=["POST"])
+def clear_daily_assignments():
+    data = request.json or {}
+    assignment_date = (data.get("assignment_date") or "").strip()
+
+    if not assignment_date:
+        return jsonify({"status": "error", "message": "assignment_date is required"}), 400
+
+    conn = get_conn()
+    cursor = conn.cursor()
+    _ensure_courtroom_meta_table(cursor)
+
+    cursor.execute("""
+        UPDATE dbo.court_assignments
+        SET assigned_member = NULL
+        WHERE assignment_date = ?
+    """, (assignment_date,))
+
+    cursor.execute("""
+        UPDATE dbo.court_assignments
+        SET assignment_notes = NULL
+        WHERE assignment_date = ?
+          AND assignment_type = 'Courtroom'
+    """, (assignment_date,))
+
+    cursor.execute("""
+        UPDATE dbo.courtroom_meta
+        SET is_high_profile = 0,
+            updated_at = GETDATE()
+        WHERE assignment_date = ?
+    """, (assignment_date,))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "success"})
+
+
 @app.route("/api/search")
 def search():
     name = request.args.get("name")
