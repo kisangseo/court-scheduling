@@ -93,7 +93,7 @@
 
 <script>
 const rankOptions = ["Court Security Officer", "Deputy Sheriff", "Sergeant", "Detective"];
-const capabilityOptions = ["CSO", "DEP", "SPO", "F", "PATROL", "TRANSPORT", "DET", "SGT"];
+const capabilityOptions = ["COURT", "ARMED", "BASIC", "PATROL", "TRANSPORT", "DET", "SGT"];
 
 function buildOptions(selectEl, values, selectedValue = "") {
     selectEl.innerHTML = "";
@@ -136,7 +136,7 @@ function buildBaltimoreEmail(fullName) {
 }
 
 buildOptions(document.getElementById("newRank"), rankOptions, "Court Security Officer");
-buildOptions(document.getElementById("newCapability"), capabilityOptions, "CSO");
+buildOptions(document.getElementById("newCapability"), capabilityOptions, "COURT");
 
 function isCourtSecurityDeputy(deputy) {
     const division = (deputy.division || "").trim().toLowerCase();
