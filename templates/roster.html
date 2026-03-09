@@ -503,6 +503,16 @@ function normalizeAssignmentLabel(value) {
     return (value || '').trim().toUpperCase();
 }
 
+function isInactiveCourtLabel(value) {
+    const normalized = normalizeAssignmentLabel(value);
+    return !normalized || [
+        'DNS',
+        'F/T',
+        'FT',
+        'NON-HEARING MOTIONS, CIVIL'
+    ].includes(normalized);
+}
+
 
 function getTotalNeededFromAssignments(assignments) {
     const rows = assignments || [];
@@ -544,7 +554,7 @@ function getTotalNeededFromAssignments(assignments) {
     const totalCourts = rows.filter(row => {
         if ((row.assignment_type || '').trim() !== 'Courtroom') return false;
         const assignmentLabel = normalizeAssignmentLabel(row.assignment_notes || '');
-        return !!assignmentLabel && assignmentLabel !== 'DNS';
+        return !isInactiveCourtLabel(assignmentLabel);
     }).length;
 
     return totalPosts + totalCourts;

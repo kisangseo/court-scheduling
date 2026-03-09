@@ -400,6 +400,16 @@ function isOpenCourtLabel(value) {
     return normalized === 'OPEN';
 }
 
+function isInactiveCourtLabel(value) {
+    const normalized = normalizeCourtroomAssignmentLabel(value);
+    return !normalized || [
+        'DNS',
+        'F/T',
+        'FT',
+        'NON-HEARING MOTIONS, CIVIL'
+    ].includes(normalized);
+}
+
 function shouldCountFixedPostSlot(slotMeta = {}) {
     const courthouse = (slotMeta.courthouse || '').trim().toLowerCase();
     const post = (slotMeta.post || '').trim().toLowerCase();
@@ -430,7 +440,7 @@ function getSlotState(assignmentType, assignmentLabel, hasAssignedMember, slotMe
 
     if (type === 'Courtroom') {
         const normalized = normalizeCourtroomAssignmentLabel(assignmentLabel);
-        if (!normalized || normalized === 'DNS' || normalized === 'F/T' || normalized === 'FT') return 'inactive';
+        if (isInactiveCourtLabel(normalized)) return 'inactive';
         if (isOpenCourtLabel(normalized)) return 'open';
         return hasAssignedMember ? 'filled' : 'vacant';
     }
