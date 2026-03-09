@@ -164,11 +164,14 @@ function cacheDateState(date, postedSet, totals) {
 function isCourtSecurityDeputy(deputy) {
     const division = (deputy.division || "").trim().toLowerCase();
     const capacityTag = (deputy.capacity_tag || "").trim().toLowerCase();
+    const normalizedCapacity = capacityTag.replace(/[\s_-]+/g, "");
 
     return division === "court security"
         || division === "court security division"
         || capacityTag.includes("court security")
-        || capacityTag.includes("cso");
+        || capacityTag.includes("cso")
+        || normalizedCapacity === "dep"
+        || normalizedCapacity === "depk9";
 }
 
 function getDeputyRole(deputy) {
@@ -185,11 +188,13 @@ function normalizeRoleValue(role) {
 
 function getCourtSecuritySortRank(deputy) {
     const normalizedRole = normalizeRoleValue(getDeputyRole(deputy));
-    if (normalizedRole === "F") return 0;
-    if (normalizedRole === "SPO") return 1;
-    if (normalizedRole === "SPO-UA" || normalizedRole === "SPOUA") return 2;
-    if (normalizedRole === "NOSPO" || normalizedRole === "NO-SPO") return 3;
-    return 4;
+    if (normalizedRole === "DEP") return 0;
+    if (normalizedRole === "F") return 1;
+    if (normalizedRole === "SPO") return 2;
+    if (normalizedRole === "DEP-K9" || normalizedRole === "DEPK9") return 3;
+    if (normalizedRole === "SPO-UA" || normalizedRole === "SPOUA") return 4;
+    if (normalizedRole === "NOSPO" || normalizedRole === "NO-SPO") return 5;
+    return 6;
 }
 
 function createRosterItem(deputy, options = {}) {

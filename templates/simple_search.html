@@ -397,7 +397,28 @@ function formatBorrowedCourthouse(courthouse) {
 function isCourtSecurityDeputy(deputy) {
     const division = (deputy.division || '').trim().toLowerCase();
     const capacityTag = (deputy.capacity_tag || '').trim().toLowerCase();
-    return division === 'court security' || division === 'court security division' || capacityTag.includes('court security') || capacityTag.includes('cso');
+    const normalizedCapacity = capacityTag.replace(/[\s_-]+/g, '');
+    return division === 'court security'
+        || division === 'court security division'
+        || capacityTag.includes('court security')
+        || capacityTag.includes('cso')
+        || normalizedCapacity === 'dep'
+        || normalizedCapacity === 'depk9';
+}
+
+function normalizeRoleValue(role) {
+    return (role || '').toUpperCase().replace(/\s+/g, '').replace(/_/g, '-');
+}
+
+function getCourtSecuritySortRank(deputy) {
+    const normalizedRole = normalizeRoleValue(deputy.capacity_tag || deputy.role || '');
+    if (normalizedRole === 'DEP') return 0;
+    if (normalizedRole === 'F') return 1;
+    if (normalizedRole === 'SPO') return 2;
+    if (normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9') return 3;
+    if (normalizedRole === 'SPO-UA' || normalizedRole === 'SPOUA') return 4;
+    if (normalizedRole === 'NOSPO' || normalizedRole === 'NO-SPO') return 5;
+    return 6;
 }
 
 function getDeputyByName(name) {
@@ -541,7 +562,11 @@ function renderRoster() {
     courtColumn.appendChild(courtHeading);
 
     const courtList = document.createElement('div');
-    const courtSecurityAvailable = courtSecurityAll.filter(isDeputyAvailable).sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+    const courtSecurityAvailable = courtSecurityAll
+        .filter(isDeputyAvailable)
+        .sort((a, b) => getCourtSecuritySortRank(a) - getCourtSecuritySortRank(b)
+            || normalizeRoleValue(a.capacity_tag || a.role || '').localeCompare(normalizeRoleValue(b.capacity_tag || b.role || ''))
+            || (a.full_name || '').localeCompare(b.full_name || ''));
     courtSecurityAvailable.forEach(dep => {
         const item = document.createElement('div');
         item.className = 'roster-item';
