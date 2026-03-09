@@ -238,7 +238,7 @@ function normalizeCapacityTag(deputy) {
 
 function isCourtCapable(deputy) {
     const tag = normalizeCapacityTag(deputy);
-    return tag === 'F' || tag === 'SPO';
+    return tag === 'COURT' || tag === 'ARMED' || tag === 'F' || tag === 'DEP' || tag === 'SPO';
 }
 
 function parseAssignedMemberValue(value) {
