@@ -116,7 +116,8 @@ function getSlotState(assignmentType, assignmentLabel, hasAssignedMember, slotMe
 
     if (type === 'Courtroom') {
         const normalized = normalizeAssignmentLabel(assignmentLabel);
-        if (!normalized || normalized === 'DNS') return 'inactive';
+        if (!normalized || normalized === 'DNS' || normalized === 'F/T' || normalized === 'FT') return 'inactive';
+        if (normalized === 'OPEN') return 'open';
         return hasAssignedMember ? 'filled' : 'vacant';
     }
 
@@ -369,7 +370,7 @@ function getAssignmentTotals(assignments) {
         ...getSearchPageCourtroomRowsForCounts(assignments)
     ];
 
-    const totals = { vacant: 0, filled: 0 };
+    const totals = { vacant: 0, filled: 0, open: 0 };
 
     relevantRows.forEach(row => {
         const hasAssignedMember = (row.assigned_member || '').trim().length > 0;
@@ -381,6 +382,7 @@ function getAssignmentTotals(assignments) {
 
         if (slotState === 'vacant') totals.vacant += 1;
         else if (slotState === 'filled') totals.filled += 1;
+        else if (slotState === 'open') totals.open += 1;
     });
 
     return totals;
@@ -462,6 +464,7 @@ async function loadSummary() {
             const neededBreakdown = getNeededBreakdownFromAssignments(assignments);
             const assignmentTotals = getAssignmentTotals(assignments);
             const highProfileCaseCount = countHighProfileCases(courtroomMetaRows);
+            const openCourtsCount = assignmentTotals.open || 0;
             return {
                 label: dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }),
                 needed: neededBreakdown.total,
@@ -473,6 +476,7 @@ async function loadSummary() {
                 availablePostsUnarmed: availableUnarmedCount,
                 assignmentTotals,
                 highProfileCases: highProfileCaseCount,
+                openCourts: openCourtsCount,
                 unavailableBreakdown,
                 borrowed: borrowedCount
             };
@@ -497,9 +501,11 @@ function renderSummary(dayResults) {
         : dayResults.map(day => `<td><span class="metric-blue">Total: ${day.available || 0}</span></td>`).join('');
     const assignmentCounterCells = dayResults.map(day =>
   `<td><span class="metric-red">Vacant ${day.assignmentTotals?.vacant || 0}</span> / ` +
-  `<span class="metric-green">Filled ${day.assignmentTotals?.filled || 0}</span></td>`
+  `<span class="metric-green">Filled ${day.assignmentTotals?.filled || 0}</span> / ` +
+  `<span class="metric-blue">Open ${day.assignmentTotals?.open || 0}</span></td>`
 ).join('');
     const highProfileCells = dayResults.map(day => `<td>${day.highProfileCases || 0}</td>`).join('');
+    const openCourtsCells = dayResults.map(day => `<td>${day.openCourts || 0}</td>`).join('');
     const unavailableTotalCells = dayResults.map(day => {
         const breakdown = day.unavailableBreakdown || { sick: 0, unavailable: 0, leave: 0, callout: 0 };
         const total = (breakdown.sick || 0) + (breakdown.unavailable || 0) + (breakdown.leave || 0) + (breakdown.callout || 0);
@@ -559,6 +565,10 @@ function renderSummary(dayResults) {
                 <tr>
                     <td class="metric-label">High Profile Case</td>
                     ${highProfileCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">Open Courts</td>
+                    ${openCourtsCells}
                 </tr>
                 ${unavailableRows}
                 <tr>
