@@ -222,10 +222,10 @@ function isCourtSecurity(deputy) {
 function getUnavailableBreakdown(status) {
     const normalized = (status || '').toLowerCase();
     return {
-        sick: normalized.includes('sick') ? 1 : 0,
+        scheduled_leave: normalized.includes('scheduled leave') ? 1 : 0,
+        unscheduled_leave: normalized.includes('unscheduled leave') || normalized.includes('unscheduled') ? 1 : 0,
         unavailable: normalized.includes('unavailable') ? 1 : 0,
-        leave: normalized.includes('leave') ? 1 : 0,
-        callout: normalized.includes('callout') ? 1 : 0
+        training: normalized.includes('training') ? 1 : 0
     };
 }
 
@@ -237,13 +237,11 @@ function isOutStatus(status) {
     const normalized = normalizeStatus(status);
     if (!normalized) return false;
 
-    return normalized.includes('sick')
-        || normalized.includes('leave')
-        || normalized.includes('light duty')
-        || normalized === 'ld'
-        || normalized.includes(' ld')
+    return normalized.includes('scheduled leave')
+        || normalized.includes('unscheduled leave')
+        || normalized.includes('unscheduled')
         || normalized.includes('unavailable')
-        || normalized.includes('callout')
+        || normalized.includes('training')
         || normalized.includes('out');
 }
 
@@ -522,21 +520,25 @@ function renderSummary(dayResults) {
     const highProfileCells = dayResults.map(day => `<td>${day.highProfileCases || 0}</td>`).join('');
     const openCourtsCells = dayResults.map(day => `<td>${day.openCourts || 0}</td>`).join('');
     const unavailableTotalCells = dayResults.map(day => {
-        const breakdown = day.unavailableBreakdown || { sick: 0, unavailable: 0, leave: 0, callout: 0 };
-        const total = (breakdown.sick || 0) + (breakdown.unavailable || 0) + (breakdown.leave || 0) + (breakdown.callout || 0);
+        const breakdown = day.unavailableBreakdown || { scheduled_leave: 0, unscheduled_leave: 0, unavailable: 0, training: 0 };
+        const total = (breakdown.scheduled_leave || 0) + (breakdown.unscheduled_leave || 0) + (breakdown.unavailable || 0) + (breakdown.training || 0);
         return `<td>${total}</td>`;
     }).join('');
-    const leaveCells = dayResults.map(day => `<td>Scheduled Leave: ${day.unavailableBreakdown?.leave || 0}</td>`).join('');
+    const scheduledLeaveCells = dayResults.map(day => `<td>Scheduled Leave: ${day.unavailableBreakdown?.scheduled_leave || 0}</td>`).join('');
+    const unscheduledLeaveCells = dayResults.map(day => `<td>Unscheduled Leave: ${day.unavailableBreakdown?.unscheduled_leave || 0}</td>`).join('');
     const unavailableCells = dayResults.map(day => `<td>Unavailable: ${day.unavailableBreakdown?.unavailable || 0}</td>`).join('');
-    const sickCells = dayResults.map(day => `<td>Sick: ${day.unavailableBreakdown?.sick || 0}</td>`).join('');
-    const calloutCells = dayResults.map(day => `<td>Callout: ${day.unavailableBreakdown?.callout || 0}</td>`).join('');
+    const trainingCells = dayResults.map(day => `<td>Training: ${day.unavailableBreakdown?.training || 0}</td>`).join('');
     const borrowedCells = dayResults.map(day => `<td>${day.borrowed}</td>`).join('');
 
     const unavailableRows = showSummaryDetail
         ? `
                 <tr>
                     <td class="metric-label">Unavailable</td>
-                    ${leaveCells}
+                    ${scheduledLeaveCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">&nbsp;</td>
+                    ${unscheduledLeaveCells}
                 </tr>
                 <tr>
                     <td class="metric-label">&nbsp;</td>
@@ -544,11 +546,7 @@ function renderSummary(dayResults) {
                 </tr>
                 <tr>
                     <td class="metric-label">&nbsp;</td>
-                    ${sickCells}
-                </tr>
-                <tr>
-                    <td class="metric-label">&nbsp;</td>
-                    ${calloutCells}
+                    ${trainingCells}
                 </tr>`
         : `
                 <tr>

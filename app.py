@@ -40,10 +40,14 @@ def _normalize_status_type(status_type):
     if not status_type:
         return None
     normalized = status_type.strip().lower()
-    if normalized in ["sick", "leave", "light duty"]:
-        return normalized.title() if normalized != "light duty" else "Light Duty"
-    if normalized in ["unscheduled", "unscheduled leave", "callout sick", "unscheduled leave or callout sick"]:
-        return "Unscheduled"
+    if normalized in ["scheduled leave", "leave"]:
+        return "Scheduled Leave"
+    if normalized in ["unscheduled", "unscheduled leave", "callout sick", "unscheduled leave or callout sick", "sick"]:
+        return "Unscheduled Leave"
+    if normalized in ["training"]:
+        return "Training"
+    if normalized in ["unavailable"]:
+        return "Unavailable"
     return status_type
 
 
@@ -122,10 +126,13 @@ def _is_off_for_assignment(status_text, target_date):
 
     normalized = effective_status.strip().lower()
     off_indicators = [
-        "sick",
+        "scheduled leave",
+        "unscheduled leave",
         "leave",
         "unscheduled",
         "unavailable",
+        "training",
+        "sick",
         "vacation",
         "pto",
         "fmla",
@@ -505,7 +512,7 @@ def update_status_range():
     ))
     removed_count = 0
 
-    if status in ["Sick", "Leave", "Light Duty", "Unscheduled"] and start_date and end_date:
+    if status in ["Scheduled Leave", "Unscheduled Leave", "Unavailable", "Training"] and start_date and end_date:
 
         cursor.execute("""
             SELECT assignment_date, courthouse, assignment_type,
