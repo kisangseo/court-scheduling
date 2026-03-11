@@ -208,12 +208,35 @@ def _normalize_time_label(value):
     text = str(value).strip()
     if not text:
         return None
-    for pattern in ["%I:%M %p", "%I %p", "%H:%M", "%H%M"]:
+    for pattern in ["%I:%M:%S %p", "%I:%M %p", "%I %p", "%H:%M:%S", "%H:%M", "%H%M"]:
         try:
-            return datetime.strptime(text.upper(), pattern).strftime("%I:%M %p").lstrip("0")
+            parsed = datetime.strptime(text.upper(), pattern)
+            if parsed.second:
+                return parsed.strftime("%I:%M:%S %p").lstrip("0")
+            return parsed.strftime("%I:%M %p").lstrip("0")
         except ValueError:
             continue
     return text
+
+
+def _parse_time_label(value):
+    normalized = _normalize_time_label(value)
+    if not normalized:
+        return None
+    for pattern in ["%I:%M:%S %p", "%I:%M %p"]:
+        try:
+            return datetime.strptime(normalized.upper(), pattern)
+        except ValueError:
+            continue
+    return None
+
+
+def _format_time_label(dt_value):
+    if not dt_value:
+        return None
+    if dt_value.second:
+        return dt_value.strftime("%I:%M:%S %p").lstrip("0")
+    return dt_value.strftime("%I:%M %p").lstrip("0")
 
 
 def _safe_transfer_history_load(raw_history, out_dt=None, in_dt=None):
@@ -384,7 +407,12 @@ def transfer_in():
         conn.close()
         return jsonify({"status": "error", "message": "No open transfer-out found"}), 400
 
-    history[target_index]["in"] = transfer_time
+    out_time_value = _parse_time_label(history[target_index].get("out"))
+    in_time_value = _parse_time_label(transfer_time)
+    if out_time_value and in_time_value and in_time_value == out_time_value:
+        in_time_value = in_time_value + timedelta(seconds=1)
+
+    history[target_index]["in"] = _format_time_label(in_time_value) if in_time_value else transfer_time
 
     cursor.execute("""
         UPDATE dbo.deputy_transfers
