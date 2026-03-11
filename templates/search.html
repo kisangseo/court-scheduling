@@ -2161,6 +2161,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
                     part: effectivePart,
                     assignment_notes: assignmentSelect.value
                 });
+                updateAssignmentCountBadges();
             });
         }
 
@@ -2352,6 +2353,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                     part: effectivePart,
                     assignment_notes: assignmentSelect.value
                 });
+                updateAssignmentCountBadges();
             });
         }
         tr.querySelectorAll('.courtroom-time-input').forEach(inputEl => {
