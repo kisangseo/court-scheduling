@@ -92,15 +92,27 @@
 </div>
 
 <script>
-const rankOptions = ["Court Security Officer", "Deputy Sheriff", "Sergeant", "Detective"];
-const capabilityOptions = ["COURT", "ARMED", "BASIC", "K9"];
+const rankOptions = ["Cadet", "CSO", "SPO", "DEP", "SGT", "LT", "Detective", "CAPT", "MJR"];
+const capabilityOptions = [
+    "DEPUTY",
+    "CSO/SPO-A: Court Trained (FT)",
+    "CSO/SPO-A: Court Trained (contractor)",
+    "CSO/SPO-A: (FT)",
+    "CSO/SPO-A: (contractor)",
+    "CSO/SPO: Court Trained(FT)",
+    "CSO/SPO Court Trained (contractor)",
+    "CSO: Non-SPO/CR",
+    "Cadet"
+];
 
 function normalizeCapabilityTag(value) {
-    const normalized = (value || "").toUpperCase().replace(/\s+/g, "").replace(/_/g, "-");
-    if (["DEP", "F", "COURT"].includes(normalized)) return "COURT";
-    if (["DEP-K9", "DEPK9", "K9"].includes(normalized)) return "K9";
-    if (["SPO", "ARMED"].includes(normalized)) return "ARMED";
-    if (["SPO-UA", "SPOUA", "NOSPO", "NO-SPO", "CSO", "BASIC"].includes(normalized)) return "BASIC";
+    const text = (value || "").trim();
+    const normalized = text.toUpperCase().replace(/\s+/g, "").replace(/_/g, "-");
+    if (["DEP", "F", "COURT"].includes(normalized)) return "DEPUTY";
+    if (["SPO", "ARMED", "DEP-K9", "DEPK9", "K9"].includes(normalized)) return "CSO/SPO-A: (FT)";
+    if (["SPO-UA", "SPOUA", "NOSPO", "NO-SPO", "CSO", "BASIC"].includes(normalized)) return "CSO: Non-SPO/CR";
+    if (normalized === "CADET") return "Cadet";
+    if (capabilityOptions.includes(text)) return text;
     return value || "";
 }
 
@@ -144,8 +156,8 @@ function buildBaltimoreEmail(fullName) {
     return `${firstName}.${lastName}@baltimorecity.gov`;
 }
 
-buildOptions(document.getElementById("newRank"), rankOptions, "Court Security Officer");
-buildOptions(document.getElementById("newCapability"), capabilityOptions, "COURT");
+buildOptions(document.getElementById("newRank"), rankOptions, "CSO");
+buildOptions(document.getElementById("newCapability"), capabilityOptions, "DEPUTY");
 
 function isCourtSecurityDeputy(deputy) {
     const division = (deputy.division || "").trim().toLowerCase();
