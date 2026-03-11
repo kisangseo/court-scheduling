@@ -1003,6 +1003,61 @@ def update_judge_name():
 
     return {"status": "success"}
 
+
+@app.route("/api/update-shift-time", methods=["POST"])
+def update_shift_time():
+    data = request.json or {}
+
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE dbo.court_assignments
+        SET shift_time = ?
+        WHERE assignment_date = ?
+          AND courthouse = ?
+          AND assignment_type = ?
+          AND ISNULL(location_detail, '') = ISNULL(?, '')
+          AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
+    """, (
+        data.get("shift_time"),
+        data.get("assignment_date"),
+        data.get("courthouse"),
+        data.get("assignment_type"),
+        data.get("location_detail"),
+        data.get("part")
+    ))
+
+    if cursor.rowcount == 0:
+        cursor.execute("""
+            INSERT INTO dbo.court_assignments (
+                assignment_date,
+                courthouse,
+                assignment_type,
+                location_group,
+                location_detail,
+                part,
+                judge_name,
+                shift_time,
+                assigned_member,
+                assignment_notes,
+                created_at
+            )
+            VALUES (?, ?, ?, NULL, ?, ?, NULL, ?, NULL, NULL, GETDATE())
+        """, (
+            data.get("assignment_date"),
+            data.get("courthouse"),
+            data.get("assignment_type"),
+            data.get("location_detail"),
+            data.get("part"),
+            data.get("shift_time")
+        ))
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "success"}
+
 @app.route("/api/deputies")
 def get_deputies():
     target_date = request.args.get("date")
@@ -1578,6 +1633,7 @@ def search():
             a.location_detail,
             a.judge_name,
             a.part,
+            a.shift_time,
             a.assigned_member,
             a.assignment_notes,
             ISNULL(m.is_high_profile, 0) AS is_high_profile
