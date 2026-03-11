@@ -412,10 +412,7 @@ function formatBorrowedCourthouse(courthouse) {
 
 function isCourtSecurityDeputy(deputy) {
     const division = (deputy.division || '').trim().toLowerCase();
-    return division === 'court security officer'
-        || division === 'court security officer division'
-        || division === 'court security division'
-        || division === 'court security';
+    return division === 'court security';
 }
 
 function normalizeRoleValue(role) {

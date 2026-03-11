@@ -172,18 +172,10 @@ function cacheDateState(date, postedSet, totals) {
 
 function isCourtSecurityDeputy(deputy) {
     const division = (deputy.division || "").trim().toLowerCase();
-    const capacityTag = (deputy.capacity_tag || "").trim().toLowerCase();
-    const normalizedCapacity = capacityTag.replace(/[\s_-]+/g, "");
+   
 
     return division === "court security"
-        || division === "court security division"
-        || capacityTag.includes("court security")
-        || capacityTag.includes("cso")
-        
-        || normalizedCapacity === "depk9"
-        
-        || normalizedCapacity === "armed"
-        || normalizedCapacity === "basic";
+
 }
 
 function getDeputyRole(deputy) {
