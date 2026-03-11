@@ -448,6 +448,13 @@ function getSlotState(assignmentType, assignmentLabel, hasAssignedMember, slotMe
     return 'inactive';
 }
 
+function setVacantRowHighlight(cell, slotState) {
+    const row = cell.closest('tr');
+    if (!row) return;
+
+    row.classList.toggle('assignment-vacant-row', slotState === 'vacant');
+}
+
 function getPostedNameSetForPostsAndCourtrooms() {
     const names = new Set();
 
@@ -722,6 +729,9 @@ function updateAssignmentCountBadges() {
             post: cell.dataset.room || '',
             part: cell.dataset.part || ''
         });
+
+        setVacantRowHighlight(cell, slotState);
+
         if (slotState === 'vacant') {
             statsBySection[key].vacant += 1;
             overallVacant += 1;
