@@ -2045,11 +2045,12 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
     }
 
     if (includeFlags.includeFamily) {
+        combinedRows.push({ __isFamilyHeader: true, __courthouse: "Family" });
         addRowsByExpectedOrder("Family", [
             { building: "East 434 M", room: "126", part: "F-1", judge: "Zaslow" },
-            { building: "East", room: "120", part: "F-2", judge: "M. Middleton" },
-            { building: "East", room: "122", part: "F-3", judge: "N. Barmore" },
-            { building: "East", room: "124", part: "F-4", judge: "T-Hill" }
+            { building: "East 434 M", room: "120", part: "F-2", judge: "M. Middleton" },
+            { building: "East 434 M", room: "122", part: "F-3", judge: "N. Barmore" },
+            { building: "East 434 M", room: "124", part: "F-4", judge: "T-Hill" }
         ]);
     }
 
@@ -2113,6 +2114,14 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
     }
 
     combinedRows.forEach(row => {
+        if (row.__isFamilyHeader) {
+            const groupTr = document.createElement("tr");
+            groupTr.className = "courtroom-group-row family-group-row";
+            groupTr.innerHTML = `<td colspan="9">Family</td>`;
+            body.appendChild(groupTr);
+            return;
+        }
+
         const courthouse = row.__courthouse;
         const room = row.location_detail || "";
         const defaults = getCourtroomDefaults(courthouse);
@@ -2122,6 +2131,9 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
 
         const tr = document.createElement("tr");
         tr.classList.add("courtroom-meta-row");
+        if (courthouse === "Family") {
+            tr.classList.add("family-courtroom-row");
+        }
         tr.dataset.date = selectedDate;
         tr.dataset.courthouse = courthouse;
         tr.dataset.room = room;

@@ -467,6 +467,21 @@ h4 {
     transform: scale(0.9);
 }
 
+
+.courtroom-table thead th {
+    background-color: #e4e7ec;
+}
+
+.courtroom-group-row td {
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-weight: 700;
+}
+
+.family-courtroom-row td {
+    background: #eff6ff;
+}
+
 @media print {
     #rosterPanel,
     .add-deputy-btn,
