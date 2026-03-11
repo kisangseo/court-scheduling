@@ -68,6 +68,7 @@ let pendingAssignments = {};
 let pendingNotes = {};
 let pendingJudges = {};
 let pendingCourtroomMeta = {};
+let pendingShiftTimes = {};
 let allDeputies = [];
 let rawDeputies = [];
 let selectedDeputy = null;
@@ -484,7 +485,8 @@ function updateSaveStatusBadge() {
         Object.keys(pendingAssignments).length +
         Object.keys(pendingNotes).length +
         Object.keys(pendingJudges).length +
-        Object.keys(pendingCourtroomMeta).length;
+        Object.keys(pendingCourtroomMeta).length +
+        Object.keys(pendingShiftTimes).length;
 
     if (totalChanges <= 0) {
         saveStatus.className = "counts-inline";
@@ -526,6 +528,87 @@ function normalizeUserTimeValue(value) {
 
 function parseStoredTimeToInputValue(value) {
     return normalizeUserTimeValue(value) || value || "";
+}
+
+function formatTimeValueToAmPm(value) {
+    const trimmed = (value || '').trim();
+    const match = trimmed.match(/^(\d{2}):(\d{2})$/);
+    if (!match) return '';
+
+    let hour24 = parseInt(match[1], 10);
+    const minute = match[2];
+    if (Number.isNaN(hour24) || hour24 > 23) return '';
+
+    const meridiem = hour24 >= 12 ? 'PM' : 'AM';
+    let hour12 = hour24 % 12;
+    if (hour12 === 0) hour12 = 12;
+    return `${hour12}:${minute} ${meridiem}`;
+}
+
+function getTimeOptionValues() {
+    const values = [];
+    for (let hour = 0; hour < 24; hour++) {
+        for (let minute = 0; minute < 60; minute += 15) {
+            values.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+        }
+    }
+    return values;
+}
+
+function buildTimeOptionsHtml(selectedValue) {
+    return getTimeOptionValues().map(value => {
+        const selectedAttr = value === selectedValue ? ' selected' : '';
+        return `<option value="${value}"${selectedAttr}>${formatTimeValueToAmPm(value)}</option>`;
+    }).join('');
+}
+
+function parseOvertimeShiftRange(value) {
+    const text = (value || '').trim();
+    const match = text.match(/^(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)$/i);
+    if (!match) {
+        return { start: '', end: '' };
+    }
+
+    const to24Hour = (display) => {
+        const m = display.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/);
+        if (!m) return '';
+
+        let h = parseInt(m[1], 10);
+        const min = m[2];
+        const meridiem = m[3];
+        if (meridiem === 'AM') {
+            if (h === 12) h = 0;
+        } else if (h !== 12) {
+            h += 12;
+        }
+
+        return `${String(h).padStart(2, '0')}:${min}`;
+    };
+
+    return {
+        start: to24Hour(match[1]),
+        end: to24Hour(match[2])
+    };
+}
+
+function buildOvertimeShiftDisplayValue(startValue, endValue) {
+    const start = formatTimeValueToAmPm(startValue);
+    const end = formatTimeValueToAmPm(endValue);
+    if (!start || !end) return '';
+    return `${start} - ${end}`;
+}
+
+function queueOvertimeShiftUpdate(payload) {
+    const key = [
+        payload.assignment_date,
+        payload.courthouse,
+        payload.assignment_type,
+        payload.location_detail,
+        payload.part
+    ].join('|');
+
+    pendingShiftTimes[key] = payload;
+    updateSaveStatusBadge();
 }
 
 function setPendingCourtroomMetaFromRow(rowEl) {
@@ -2251,13 +2334,32 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
     `;
     const overtimeBody = overtimeTable.querySelector("tbody");
     overtimeRows.forEach(row => {
+        const parsedShift = parseOvertimeShiftRange(row.shift_time || '');
         const tr = document.createElement("tr");
         tr.innerHTML = `
             <td>${row.location_detail || ""}</td>
-            <td>${row.shift_time || ""}</td>
+            <td class="editable-overtime-shift"
+                data-date="${selectedDate}"
+                data-courthouse="${courthouse}"
+                data-type="Overtime"
+                data-room="${row.location_detail || ""}"
+                data-part="${row.part || ""}"
+                data-shift="${row.shift_time || ""}">
+                ${row.shift_time || ""}
+            </td>
             <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${row.location_detail}" data-shift="${row.shift_time || ""}" data-part="">${row.assigned_member || ""}</td>
             <td class="editable-assignment" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${row.location_detail || ""}" data-part="${row.assigned_member || ""}">${row.assignment_notes || ""}</td>
         `;
+
+        const shiftCell = tr.querySelector('.editable-overtime-shift');
+        if (shiftCell) {
+            if (parsedShift.start) {
+                shiftCell.dataset.startTime = parsedShift.start;
+            }
+            if (parsedShift.end) {
+                shiftCell.dataset.endTime = parsedShift.end;
+            }
+        }
         overtimeBody.appendChild(tr);
     });
     sections.overtime = overtimeTable;
@@ -2670,6 +2772,7 @@ function clearSectionAssignments(sectionType, courthouse = "") {
             pendingNotes = {};
             pendingJudges = {};
             pendingCourtroomMeta = {};
+            pendingShiftTimes = {};
             updateSaveStatusBadge();
             search();
             loadRoster();
@@ -2708,6 +2811,7 @@ function clearDailyAssignments() {
             pendingNotes = {};
             pendingJudges = {};
             pendingCourtroomMeta = {};
+            pendingShiftTimes = {};
             updateSaveStatusBadge();
             search();
             loadRoster();
@@ -2789,6 +2893,75 @@ window.onload = function() {
     search();
 };
 document.addEventListener("click", function(e) {
+
+    const shiftCell = e.target.closest('.editable-overtime-shift');
+    if (shiftCell) {
+        if (shiftCell.querySelector('select')) return;
+
+        const currentStart = shiftCell.dataset.startTime || '';
+        const currentEnd = shiftCell.dataset.endTime || '';
+
+        const editor = document.createElement('div');
+        editor.style.display = 'flex';
+        editor.style.gap = '6px';
+
+        const startSelect = document.createElement('select');
+        const endSelect = document.createElement('select');
+        startSelect.innerHTML = `<option value="">Start</option>${buildTimeOptionsHtml(currentStart)}`;
+        endSelect.innerHTML = `<option value="">End</option>${buildTimeOptionsHtml(currentEnd)}`;
+
+        editor.appendChild(startSelect);
+        editor.appendChild(endSelect);
+
+        shiftCell.innerHTML = '';
+        shiftCell.appendChild(editor);
+        startSelect.focus();
+
+        const commit = () => {
+            const start = startSelect.value;
+            const end = endSelect.value;
+            const display = buildOvertimeShiftDisplayValue(start, end);
+
+            if (start && end && display) {
+                shiftCell.dataset.startTime = start;
+                shiftCell.dataset.endTime = end;
+                shiftCell.dataset.shift = display;
+                shiftCell.textContent = display;
+
+                const memberCell = shiftCell.parentElement?.querySelector('.editable[data-type="Overtime"]');
+                if (memberCell) {
+                    memberCell.dataset.shift = display;
+                }
+
+                queueOvertimeShiftUpdate({
+                    assignment_date: shiftCell.dataset.date,
+                    courthouse: shiftCell.dataset.courthouse,
+                    assignment_type: shiftCell.dataset.type,
+                    location_detail: shiftCell.dataset.room,
+                    part: shiftCell.dataset.part || '',
+                    shift_time: display
+                });
+                return;
+            }
+
+            shiftCell.textContent = shiftCell.dataset.shift || '';
+        };
+
+        startSelect.addEventListener('change', commit);
+        endSelect.addEventListener('change', commit);
+
+        [startSelect, endSelect].forEach(select => {
+            select.addEventListener('blur', () => {
+                setTimeout(() => {
+                    if (!shiftCell.contains(document.activeElement) && shiftCell.querySelector('select')) {
+                        commit();
+                    }
+                }, 0);
+            });
+        });
+
+        return;
+    }
 
     const cell = e.target.closest(".editable-judge");
     if (!cell) return;
@@ -2929,12 +3102,26 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         })
     );
 
-    Promise.all([...assignmentRequests, ...notesRequests, ...judgeRequests, ...courtroomMetaRequests])
+    const shiftTimeRequests = Object.values(pendingShiftTimes)
+        .filter(payload => payload.assignment_date && payload.courthouse && payload.location_detail)
+        .map(payload =>
+        fetch("/api/update-shift-time", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(res => {
+            if (!res.ok) throw new Error("Failed to save overtime shift");
+            return res.json();
+        })
+    );
+
+    Promise.all([...assignmentRequests, ...notesRequests, ...judgeRequests, ...courtroomMetaRequests, ...shiftTimeRequests])
         .then(() => {
             pendingAssignments = {};
             pendingNotes = {};
             pendingJudges = {};
             pendingCourtroomMeta = {};
+            pendingShiftTimes = {};
             if (saveStatus) {
                 saveStatus.className = "counts-inline metric-green";
                 saveStatus.textContent = "Saved";
@@ -2976,8 +3163,9 @@ window.addEventListener("beforeunload", function (e) {
     const totalChanges =
         Object.keys(pendingAssignments).length +
         Object.keys(pendingNotes).length +
-            Object.keys(pendingJudges).length +
-            Object.keys(pendingCourtroomMeta).length;
+        Object.keys(pendingJudges).length +
+        Object.keys(pendingCourtroomMeta).length +
+        Object.keys(pendingShiftTimes).length;
 
     if (totalChanges > 0) {
         e.preventDefault();
