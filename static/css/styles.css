@@ -220,9 +220,11 @@ th, td {
 }
 
 #rosterList.roster-two-column {
-    display: flex;
-    gap: 4px;
-    align-items: flex-start;
+    display: block;
+}
+
+#rosterList.roster-two-column .roster-column + .roster-column {
+    margin-top: 12px;
 }
 
 .roster-column {

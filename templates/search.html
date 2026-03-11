@@ -843,6 +843,10 @@ function getIneligibleAssignmentMessage(cell) {
         return 'Primary court slot: Deputy or Court Trained CSO/SPO-A. Secondary allows CSO/SPO: Court Trained(FT).';
     }
 
+    if (category === 'security' && requiresK9SecurityRole(cell.dataset.courthouse, cell.dataset.room)) {
+        return 'This post only allows K9 capability.';
+    }
+
     return 'Primary door slot: Deputy or CSO/SPO-A capability.';
 }
 
@@ -1202,6 +1206,18 @@ function requiresPrimarySecurityRole(courthouse, post, shift) {
     return true;
 }
 
+function isK9Capability(role) {
+    const normalizedRole = normalizeRoleValue(role);
+    return normalizedRole === 'K9' || normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9';
+}
+
+function requiresK9SecurityRole(courthouse, post) {
+    const normalizedCourthouse = (courthouse || '').trim().toLowerCase();
+    const normalizedPost = (post || '').trim().toLowerCase();
+
+    return normalizedCourthouse === 'mitchell' && normalizedPost === 'rover';
+}
+
 function isArmedByName(name) {
     const chipWithRole = document.querySelector(`.assignment-chip[data-name="${CSS.escape((name || '').trim())}"][data-role]`);
     const chipRole = (chipWithRole?.dataset?.role || '').trim().toUpperCase();
@@ -1316,13 +1332,17 @@ function isEligibleForCell(cell, role) {
     }
 
     if (category === 'security') {
-        if (existingAssignments === 0) {
-            return isDoorPrimaryCapability(role);
-        }
-
         const post = (cell.dataset.room || '').trim();
         const courthouse = (cell.dataset.courthouse || '').trim();
         const shift = (cell.dataset.shift || '').trim();
+
+        if (requiresK9SecurityRole(courthouse, post)) {
+            return isK9Capability(role);
+        }
+
+        if (existingAssignments === 0) {
+            return isDoorPrimaryCapability(role);
+        }
 
         if ((courthouse || '').trim().toLowerCase() === 'cummings' && post.trim().toLowerCase() === 'family court') {
             return true;
