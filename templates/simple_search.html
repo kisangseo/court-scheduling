@@ -551,11 +551,11 @@ function effectiveStatusForSearchDate(deputy) {
 function isDeputyAvailable(deputy) {
     const status = effectiveStatusForSearchDate(deputy);
     if (!status) return true;
-    return !status.includes('leave')
-        && !status.includes('sick')
-        && !status.includes('light duty')
+    return !status.includes('scheduled leave')
+        && !status.includes('unscheduled leave')
         && !status.includes('unscheduled')
-        && !status.includes('unavailable');
+        && !status.includes('unavailable')
+        && !status.includes('training');
 }
 
 function renderRoster() {
