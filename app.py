@@ -115,6 +115,25 @@ def _effective_status_for_date(status_text, target_date):
     return payload.get("legacy")
 
 
+def _is_off_for_assignment(status_text, target_date):
+    effective_status = _effective_status_for_date(status_text, target_date)
+    if not effective_status:
+        return False
+
+    normalized = effective_status.strip().lower()
+    off_indicators = [
+        "sick",
+        "leave",
+        "unscheduled",
+        "unavailable",
+        "vacation",
+        "pto",
+        "fmla",
+        "holiday",
+    ]
+    return any(indicator in normalized for indicator in off_indicators)
+
+
 def _serialize_status_payload(payload):
     if not payload.get("ranges") and not payload.get("legacy") and not payload.get("weekly_unavailable"):
         return None
@@ -1718,78 +1737,142 @@ def import_previous_weekday():
     cursor = conn.cursor()
 
     cursor.execute("""
-        UPDATE t
-        SET
-            t.assigned_member = s.assigned_member,
-            t.assignment_notes = s.assignment_notes,
-            t.shift_time = COALESCE(NULLIF(t.shift_time, ''), s.shift_time)
-        FROM dbo.court_assignments t
-        INNER JOIN dbo.court_assignments s
-            ON t.courthouse = s.courthouse
-           AND t.assignment_type = s.assignment_type
-           AND ISNULL(t.location_group,'') = ISNULL(s.location_group,'')
-           AND ISNULL(t.location_detail,'') = ISNULL(s.location_detail,'')
-           AND ISNULL(t.part,'') = ISNULL(s.part,'')
-        WHERE t.assignment_date = ?
-          AND s.assignment_date = ?
-          AND ISNULL(t.assigned_member,'') = ''
-          AND ISNULL(s.assigned_member,'') <> ''
-          AND NOT EXISTS (
-              SELECT 1
-              FROM dbo.court_assignments t_populated
-              WHERE t_populated.assignment_date = t.assignment_date
-                AND t_populated.courthouse = t.courthouse
-                AND t_populated.assignment_type = t.assignment_type
-                AND ISNULL(t_populated.location_group,'') = ISNULL(t.location_group,'')
-                AND ISNULL(t_populated.location_detail,'') = ISNULL(t.location_detail,'')
-                AND ISNULL(t_populated.part,'') = ISNULL(t.part,'')
-                AND ISNULL(t_populated.assigned_member,'') <> ''
-          )
-    """, (target_date_str, source_date_str))
+        SELECT full_name, current_status
+        FROM dbo.deputies
+    """)
+    unavailable_names = {
+        (row[0] or "").strip().lower()
+        for row in cursor.fetchall()
+        if row[0] and _is_off_for_assignment(row[1], target_date_str)
+    }
 
-    updated_count = cursor.rowcount if cursor.rowcount != -1 else 0
+    def _slot_key(row):
+        return (
+            (row["courthouse"] or "").strip(),
+            (row["assignment_type"] or "").strip(),
+            (row["location_group"] or "").strip(),
+            (row["location_detail"] or "").strip(),
+            (row["part"] or "").strip(),
+        )
 
     cursor.execute("""
-        INSERT INTO dbo.court_assignments (
-            assignment_date,
-            courthouse,
-            assignment_type,
-            location_group,
-            location_detail,
-            part,
-            judge_name,
-            shift_time,
-            assigned_member,
-            assignment_notes,
-            created_at
-        )
-        SELECT
-            ?,
-            s.courthouse,
-            s.assignment_type,
-            s.location_group,
-            s.location_detail,
-            s.part,
-            s.judge_name,
-            s.shift_time,
-            s.assigned_member,
-            s.assignment_notes,
-            GETDATE()
-        FROM dbo.court_assignments s
-        WHERE s.assignment_date = ?
-          AND NOT EXISTS (
-              SELECT 1
-              FROM dbo.court_assignments t
-              WHERE t.assignment_date = ?
-                AND t.courthouse = s.courthouse
-                AND t.assignment_type = s.assignment_type
-                AND ISNULL(t.location_group,'') = ISNULL(s.location_group,'')
-                AND ISNULL(t.location_detail,'') = ISNULL(s.location_detail,'')
-                AND ISNULL(t.part,'') = ISNULL(s.part,'')
-          )
-    """, (target_date_str, source_date_str, target_date_str))
+        SELECT courthouse, assignment_type, location_group, location_detail, part, assigned_member
+        FROM dbo.court_assignments
+        WHERE assignment_date = ?
+    """, (target_date_str,))
+    target_rows = [
+        {
+            "courthouse": row[0],
+            "assignment_type": row[1],
+            "location_group": row[2],
+            "location_detail": row[3],
+            "part": row[4],
+            "assigned_member": row[5],
+        }
+        for row in cursor.fetchall()
+    ]
 
-    inserted_count = cursor.rowcount if cursor.rowcount != -1 else 0
+    target_slot_keys = {_slot_key(row) for row in target_rows}
+    populated_slot_keys = {
+        _slot_key(row)
+        for row in target_rows
+        if (row.get("assigned_member") or "").strip()
+    }
+
+    cursor.execute("""
+        SELECT courthouse, assignment_type, location_group, location_detail, part,
+               judge_name, shift_time, assigned_member, assignment_notes
+        FROM dbo.court_assignments
+        WHERE assignment_date = ?
+          AND ISNULL(assigned_member, '') <> ''
+    """, (source_date_str,))
+    source_rows = [
+        {
+            "courthouse": row[0],
+            "assignment_type": row[1],
+            "location_group": row[2],
+            "location_detail": row[3],
+            "part": row[4],
+            "judge_name": row[5],
+            "shift_time": row[6],
+            "assigned_member": row[7],
+            "assignment_notes": row[8],
+        }
+        for row in cursor.fetchall()
+    ]
+
+    updated_count = 0
+    inserted_count = 0
+
+    for source_row in source_rows:
+        assigned_member = (source_row.get("assigned_member") or "").strip()
+        if assigned_member.lower() in unavailable_names:
+            continue
+
+        slot_key = _slot_key(source_row)
+
+        if slot_key in target_slot_keys:
+            if slot_key in populated_slot_keys:
+                continue
+
+            cursor.execute("""
+                UPDATE dbo.court_assignments
+                SET assigned_member = ?,
+                    assignment_notes = ?,
+                    shift_time = COALESCE(NULLIF(shift_time, ''), ?)
+                WHERE assignment_date = ?
+                  AND courthouse = ?
+                  AND assignment_type = ?
+                  AND ISNULL(location_group,'') = ?
+                  AND ISNULL(location_detail,'') = ?
+                  AND ISNULL(part,'') = ?
+                  AND ISNULL(assigned_member,'') = ''
+            """, (
+                assigned_member,
+                source_row.get("assignment_notes"),
+                source_row.get("shift_time"),
+                target_date_str,
+                source_row.get("courthouse"),
+                source_row.get("assignment_type"),
+                (source_row.get("location_group") or ""),
+                (source_row.get("location_detail") or ""),
+                (source_row.get("part") or ""),
+            ))
+            if cursor.rowcount and cursor.rowcount > 0:
+                updated_count += cursor.rowcount
+                populated_slot_keys.add(slot_key)
+            continue
+
+        cursor.execute("""
+            INSERT INTO dbo.court_assignments (
+                assignment_date,
+                courthouse,
+                assignment_type,
+                location_group,
+                location_detail,
+                part,
+                judge_name,
+                shift_time,
+                assigned_member,
+                assignment_notes,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())
+        """, (
+            target_date_str,
+            source_row.get("courthouse"),
+            source_row.get("assignment_type"),
+            source_row.get("location_group"),
+            source_row.get("location_detail"),
+            source_row.get("part"),
+            source_row.get("judge_name"),
+            source_row.get("shift_time"),
+            assigned_member,
+            source_row.get("assignment_notes"),
+        ))
+        inserted_count += 1
+        target_slot_keys.add(slot_key)
+        populated_slot_keys.add(slot_key)
     imported_count = updated_count + inserted_count
     conn.commit()
     conn.close()
