@@ -2055,6 +2055,8 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
     }
 
     if (includeFlags.includeJuvenile) {
+        combinedRows.push({ __isJuvenileHeader: true, __courthouse: "Juvenile" });
+
         const juvenileRows = (grouped["Juvenile"] || [])
             .filter(r => r.assignment_type === "Courtroom")
             .filter(r => {
@@ -2064,24 +2066,19 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
                 return !(room === "329C" && (part === "2" || judge === "LEWIS"));
             });
         const juvenileExpected = [
-            { building: "JCC", room: "329C", part: "C-1", judge: "Blomquist" },
-            { building: "Cummings", room: "", part: "16", judge: "Vittoria" },
-            { building: "Mitchell", room: "", part: "81", judge: "Storm" },
-            { building: "Mitchell", room: "428M", part: "22", judge: "R. Rafferty" },
-            { building: "Mitchell", room: "428M", part: "82", judge: "M. Phinnett" },
-            { building: "Mitchell", room: "428M", part: "85", judge: "Silkworth" },
-            { building: "Mitchell", room: "428M", part: "87", judge: "Rasin" },
-            { building: "Mitchell", room: "428M", part: "86", judge: "P. Jackson" },
-            { building: "Mitchell", room: "428M", part: "84", judge: "Peters" },
-            { building: "Mitchell", room: "428M", part: "91", judge: "Murdock" },
-            { building: "Mitchell", room: "406M", part: "92", judge: "Howard" },
-            { building: "Mitchell", room: "406M", part: "93", judge: "Doory" },
-            { building: "Mitchell", room: "406M", part: "94", judge: "L. Daniels" },
-            { building: "Mitchell", room: "406M", part: "95", judge: "Welch" },
-            { building: "Mitchell", room: "406M", part: "89", judge: "Sampson" },
-            { building: "Mitchell", room: "406M", part: "98", judge: "V. Brown" },
-            { building: "Mitchell", room: "406M", part: "26", judge: "Fletcher-Hill" },
-            { building: "Mitchell", room: "406M", part: "88", judge: "White" }
+            { building: "Juvenile", room: "C-1", part: "12", judge: "Blomquist" },
+            { building: "Juvenile", room: "C-2", part: "11", judge: "Schiffer" },
+            { building: "Juvenile", room: "C-3", part: "10", judge: "Schrieber" },
+            { building: "Juvenile", room: "H-1", part: "4", judge: "VACANT" },
+            { building: "Juvenile", room: "H-2", part: "5", judge: "Peacock" },
+            { building: "Juvenile", room: "H-3", part: "2", judge: "Brown" },
+            { building: "Juvenile", room: "H-4", part: "9", judge: "Kataria" },
+            { building: "Juvenile", room: "H-5", part: "1", judge: "Grove" },
+            { building: "Juvenile", room: "H-6", part: "8", judge: "Gyauch" },
+            { building: "Juvenile", room: "H-7", part: "9", judge: "Addison" },
+            { building: "Juvenile", room: "H-8", part: "27", judge: "McKeithen" },
+            { building: "Juvenile", room: "H-9", part: "6", judge: "Bonner" },
+            { building: "Juvenile", room: "H-10", part: "", judge: "" }
         ];
 
         const remaining = [...juvenileRows];
@@ -2114,10 +2111,12 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
     }
 
     combinedRows.forEach(row => {
-        if (row.__isFamilyHeader) {
+        if (row.__isFamilyHeader || row.__isJuvenileHeader) {
             const groupTr = document.createElement("tr");
-            groupTr.className = "courtroom-group-row family-group-row";
-            groupTr.innerHTML = `<td colspan="9">Family</td>`;
+            groupTr.className = row.__isFamilyHeader
+                ? "courtroom-group-row family-group-row"
+                : "courtroom-group-row juvenile-group-row";
+            groupTr.innerHTML = `<td colspan="9">${row.__isFamilyHeader ? "Family" : "Juvenile"}</td>`;
             body.appendChild(groupTr);
             return;
         }
@@ -2133,6 +2132,9 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         tr.classList.add("courtroom-meta-row");
         if (courthouse === "Family") {
             tr.classList.add("family-courtroom-row");
+        }
+        if (courthouse === "Juvenile") {
+            tr.classList.add("juvenile-courtroom-row");
         }
         tr.dataset.date = selectedDate;
         tr.dataset.courthouse = courthouse;
