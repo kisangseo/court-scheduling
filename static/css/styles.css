@@ -128,8 +128,8 @@ th, td {
 }
 
 #rosterPanel {
-    flex: 0 0 320px;
-    width: 320px;
+    flex: 0 0 380px;
+    width: 380px;
     max-height: 80vh;
     overflow-y: auto;
     position: sticky;
@@ -406,6 +406,29 @@ h4 {
 
 #resultsGrid h4 {
     font-size: 1em;
+}
+
+#resultsGrid th.deputy-column,
+#resultsGrid td.deputy-column-cell {
+    width: 18%;
+    max-width: 240px;
+}
+
+#resultsGrid .security-post-table {
+    table-layout: fixed;
+}
+
+#resultsGrid .security-post-table th:nth-child(1),
+#resultsGrid .security-post-table td:nth-child(1),
+#resultsGrid .security-post-table th:nth-child(2),
+#resultsGrid .security-post-table td:nth-child(2) {
+    width: 25%;
+}
+
+#resultsGrid .security-post-table th:nth-child(3),
+#resultsGrid .security-post-table td:nth-child(3) {
+    width: 50%;
+    max-width: none;
 }
 
 .courtroom-time-header,
