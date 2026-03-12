@@ -1893,7 +1893,7 @@ function orderCourtroomRows(courthouse, rows) {
         } else {
             const defaultRoomMeta = defaults[room] || null;
             orderedRows.push(defaultRoomMeta
-                ? { location_detail: room, part: defaultRoomMeta.part, judge_name: defaultRoomMeta.judge_name }
+                ? { location_detail: rawRoom, part: defaultRoomMeta.part, judge_name: defaultRoomMeta.judge_name }
                 : { location_detail: room }
             );
         }
@@ -2204,7 +2204,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
                     assignment_date: selectedDate,
                     courthouse,
                     assignment_type: 'Courtroom',
-                    location_detail: room,
+                    location_detail: rawRoom,
                     part: effectivePart,
                     assignment_notes: assignmentSelect.value
                 });
