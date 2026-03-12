@@ -1390,11 +1390,13 @@ function getUnmetArmedFixedPostSlots() {
 function updateFixedPostArmedWarnings() {
     document.querySelectorAll('.editable[data-type="Fixed Post"]').forEach(cell => {
         cell.querySelectorAll('.armed-warning').forEach(el => el.remove());
+        cell.classList.remove('armed-required-unmet');
 
         if (!cellRequiresArmedFixedPost(cell) || isArmedRequirementSatisfied(cell)) {
             return;
         }
 
+        cell.classList.add('armed-required-unmet');
         const warning = document.createElement('div');
         warning.className = 'armed-warning';
         warning.style.color = '#b42318';
@@ -3294,15 +3296,6 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
     const changedCourtroomMeta = Array.from(changedRows)
         .map(key => pendingCourtroomMeta[key])
         .filter(payload => payload && payload.assignment_date && payload.courthouse && payload.location_detail);
-
-    const armedPostViolations = getSingleArmedAcrossPostViolations();
-    if (armedPostViolations.length > 0) {
-        const message = armedPostViolations
-            .map(v => `${v.courthouse} - ${v.post}`)
-            .join(', ');
-        alert(`Save blocked: These posts require at least one armed deputy before saving: ${message}.`);
-        return;
-    }
 
     const saveStatus = document.getElementById("saveStatus");
     if (saveStatus) {
