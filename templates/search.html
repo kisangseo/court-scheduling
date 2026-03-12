@@ -210,6 +210,8 @@ function getCanonicalRole(role) {
     if (normalizedRole === 'SPO' || normalizedRole === 'ARMED' || normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9' || normalizedRole === 'K9') return 'CSO/SPO-A: (FT)';
     if (normalizedRole === 'SPO-UA' || normalizedRole === 'SPOUA' || normalizedRole === 'NOSPO' || normalizedRole === 'NO-SPO' || normalizedRole === 'CSO' || normalizedRole === 'BASIC') return 'CSO: Non-SPO/CR';
     if (normalizedRole === 'CADET') return 'Cadet';
+    const aliasKey = rawRole.toUpperCase().replace(/[^A-Z0-9():\/-]/g, '');
+    if (canonicalRoleAliases[aliasKey]) return canonicalRoleAliases[aliasKey];
     return rawRole || normalizedRole;
 }
 
