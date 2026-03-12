@@ -745,6 +745,19 @@ function updateAssignmentCountBadges() {
             post: cell.dataset.room || '',
             part: cell.dataset.part || ''
         });
+        if ((cell.dataset.courthouse || '') === 'Juvenile') {
+            console.log({
+                courthouse: cell.dataset.courthouse,
+                type: cell.dataset.type,
+                room: cell.dataset.room,
+                part: cell.dataset.part,
+                textContent: cell.textContent.trim(),
+                assignedNames: getAssignedNamesFromCell(cell),
+                parsedTextNames: parseAssignedMemberValue(cell.textContent),
+                assignmentLabel,
+                slotState
+            });
+        }
 
         setVacantRowHighlight(cell, slotState);
 
