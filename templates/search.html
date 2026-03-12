@@ -638,8 +638,9 @@ function parseOvertimeShiftRange(value) {
 function buildOvertimeShiftDisplayValue(startValue, endValue) {
     const start = formatTimeValueToAmPm(startValue);
     const end = formatTimeValueToAmPm(endValue);
-    if (!start || !end) return '';
-    return `${start} - ${end}`;
+    if (start && end) return `${start} - ${end}`;
+    if (start) return start;
+    return '';
 }
 
 function queueOvertimeShiftUpdate(payload) {
