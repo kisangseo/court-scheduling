@@ -2499,20 +2499,21 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
     const overtimeBody = overtimeTable.querySelector("tbody");
     overtimeRows.forEach(row => {
         const parsedShift = parseOvertimeShiftRange(row.shift_time || '');
+        const overtimeSlot = row.location_detail || row.location_group || "";
         const tr = document.createElement("tr");
         tr.innerHTML = `
-            <td>${row.location_detail || ""}</td>
+            <td>${overtimeSlot}</td>
             <td class="editable-overtime-shift"
                 data-date="${selectedDate}"
                 data-courthouse="${courthouse}"
                 data-type="Overtime"
-                data-room="${row.location_detail || ""}"
+                data-room="${overtimeSlot}"
                 data-part="${row.part || ""}"
                 data-shift="${row.shift_time || ""}">
                 ${row.shift_time || ""}
             </td>
-            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${row.location_detail}" data-shift="${row.shift_time || ""}" data-part="">${row.assigned_member || ""}</td>
-            <td class="editable-assignment" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${row.location_detail || ""}" data-part="${row.assigned_member || ""}">${row.assignment_notes || ""}</td>
+            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${overtimeSlot}" data-shift="${row.shift_time || ""}" data-part="${row.part || ""}">${row.assigned_member || ""}</td>
+            <td class="editable-assignment" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${overtimeSlot}" data-part="${row.part || ""}">${row.assignment_notes || ""}</td>
         `;
 
         const shiftCell = tr.querySelector('.editable-overtime-shift');
@@ -3182,6 +3183,7 @@ document.addEventListener("click", function(e) {
                     courthouse: shiftCell.dataset.courthouse,
                     assignment_type: shiftCell.dataset.type,
                     location_detail: shiftCell.dataset.room,
+                    location_group: shiftCell.dataset.room,
                     part: shiftCell.dataset.part || '',
                     shift_time: display
                 });
@@ -3352,7 +3354,7 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
     );
 
     const shiftTimeRequests = Object.values(pendingShiftTimes)
-        .filter(payload => payload.assignment_date && payload.courthouse && payload.location_detail)
+        .filter(payload => payload.assignment_date && payload.courthouse && (payload.location_detail || payload.location_group))
         .map(payload =>
         fetch("/api/update-shift-time", {
             method: "POST",
