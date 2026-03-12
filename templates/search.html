@@ -184,12 +184,22 @@ function isCourtSecurityDeputy(deputy) {
 
 }
 
+function normalizeLegacyCourtSecurityTag(value) {
+    const text = (value || "").trim();
+    if (!text) return "";
+
+    const normalized = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (normalized === "CSONONSPOCR") return "CSO";
+
+    return text;
+}
+
 function getDeputyRole(deputy) {
-    return (deputy.role || deputy.capacity_tag || "").trim();
+    return normalizeLegacyCourtSecurityTag(deputy.role || deputy.capacity_tag || "");
 }
 
 function getDeputyCapacityTag(deputy) {
-    return (deputy.capacity_tag || "").trim();
+    return normalizeLegacyCourtSecurityTag(deputy.capacity_tag || "");
 }
 
 function normalizeRoleValue(role) {

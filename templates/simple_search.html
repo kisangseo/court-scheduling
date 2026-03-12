@@ -507,6 +507,16 @@ function normalizeRoleValue(role) {
     return (role || '').toUpperCase().replace(/\s+/g, '').replace(/_/g, '-');
 }
 
+function normalizeLegacyCourtSecurityTag(value) {
+    const text = (value || '').trim();
+    if (!text) return '';
+
+    const normalized = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (normalized === 'CSONONSPOCR') return 'CSO';
+
+    return text;
+}
+
 const courtSecurityRoleOrder = [
     'DEPUTY',
     'CSO/SPO-A: Court Trained (FT)',
@@ -524,7 +534,7 @@ const courtSecurityRoleOrderNormalized = courtSecurityRoleOrder.map(normalizeRol
 
 
 function getCourtSecuritySortRank(deputy) {
-    const role = (deputy.capacity_tag || deputy.role || '').trim();
+    const role = normalizeLegacyCourtSecurityTag(deputy.capacity_tag || deputy.role || '');
     const roleIndex = courtSecurityRoleOrderNormalized.indexOf(normalizeRoleValue(role));
     if (roleIndex !== -1) return roleIndex;
     return courtSecurityRoleOrder.length;
@@ -674,13 +684,13 @@ function renderRoster() {
     const courtSecurityAvailable = courtSecurityAll
         .filter(isDeputyAvailable)
         .sort((a, b) => getCourtSecuritySortRank(a) - getCourtSecuritySortRank(b)
-            || (a.capacity_tag || a.role || '').localeCompare(b.capacity_tag || b.role || '')
+            || normalizeLegacyCourtSecurityTag(a.capacity_tag || a.role || '').localeCompare(normalizeLegacyCourtSecurityTag(b.capacity_tag || b.role || ''))
             || (a.full_name || '').localeCompare(b.full_name || ''));
     courtSecurityAvailable.forEach(dep => {
         const item = document.createElement('div');
         item.className = 'roster-item';
         const name = (dep.full_name || '').trim();
-        item.textContent = `${name} (${(dep.capacity_tag || dep.role || '').trim()})`;
+        item.textContent = `${name} (${normalizeLegacyCourtSecurityTag(dep.capacity_tag || dep.role || '')})`;
         if (postedNames.has(name)) item.classList.add('assigned');
         courtList.appendChild(item);
     });
@@ -721,7 +731,7 @@ function renderRoster() {
             const item = document.createElement('div');
             item.className = 'roster-item';
             const name = (dep.full_name || '').trim();
-            item.textContent = `${name} (${(dep.capacity_tag || dep.role || '').trim()})`;
+            item.textContent = `${name} (${normalizeLegacyCourtSecurityTag(dep.capacity_tag || dep.role || '')})`;
             if (postedNames.has(name)) item.classList.add('assigned');
             fullList.appendChild(item);
         });
