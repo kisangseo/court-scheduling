@@ -2288,6 +2288,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
     if (courthouse === "Mitchell" || courthouse === "Cummings" || courthouse === "Juvenile") {
         const postsType = typeGroups["Fixed Post"] || [];
         const postsTable = document.createElement("table");
+        postsTable.className = "security-post-table";
         postsTable.border = "1";
         postsTable.innerHTML = `
             <thead>

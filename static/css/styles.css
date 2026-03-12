@@ -414,6 +414,23 @@ h4 {
     max-width: 240px;
 }
 
+#resultsGrid .security-post-table {
+    table-layout: fixed;
+}
+
+#resultsGrid .security-post-table th:nth-child(1),
+#resultsGrid .security-post-table td:nth-child(1),
+#resultsGrid .security-post-table th:nth-child(2),
+#resultsGrid .security-post-table td:nth-child(2) {
+    width: 25%;
+}
+
+#resultsGrid .security-post-table th:nth-child(3),
+#resultsGrid .security-post-table td:nth-child(3) {
+    width: 50%;
+    max-width: none;
+}
+
 .courtroom-time-header,
 .courtroom-time-cell,
 .courtroom-down-cell,
