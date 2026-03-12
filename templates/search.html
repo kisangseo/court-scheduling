@@ -3095,7 +3095,7 @@ document.addEventListener("click", function(e) {
             const end = endSelect.value;
             const display = buildShiftDisplayValue(start, end);
 
-            if (start && display) {
+            if (start && end && display) {
                 fixedShiftCell.dataset.startTime = start;
                 fixedShiftCell.dataset.endTime = end;
                 fixedShiftCell.dataset.shift = display;
@@ -3181,7 +3181,6 @@ document.addEventListener("click", function(e) {
                     courthouse: shiftCell.dataset.courthouse,
                     assignment_type: shiftCell.dataset.type,
                     location_detail: shiftCell.dataset.room,
-                    location_group: shiftCell.dataset.room,
                     part: shiftCell.dataset.part || '',
                     shift_time: display
                 });
@@ -3352,7 +3351,7 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
     );
 
     const shiftTimeRequests = Object.values(pendingShiftTimes)
-        .filter(payload => payload.assignment_date && payload.courthouse && (payload.location_detail || payload.location_group))
+        .filter(payload => payload.assignment_date && payload.courthouse && payload.location_detail)
         .map(payload =>
         fetch("/api/update-shift-time", {
             method: "POST",
