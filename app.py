@@ -177,6 +177,49 @@ def _build_baltimore_email(full_name):
     return f"{first_name}.{last_name}@baltimorecity.gov"
 
 
+def _normalize_capacity_tag_key(value):
+    return "".join(ch for ch in (value or "").upper() if ch.isalnum())
+
+
+def _canonical_capacity_tag(value):
+    raw = (value or "").strip()
+    if not raw:
+        return None
+
+    normalized_key = _normalize_capacity_tag_key(raw)
+
+    direct_options = {
+        _normalize_capacity_tag_key("DEPUTY"): "DEPUTY",
+        _normalize_capacity_tag_key("CSO/SPO-A: Court Trained (FT)"): "CSO/SPO-A: Court Trained (FT)",
+        _normalize_capacity_tag_key("CSO/SPO-A: Court Trained (contractor)"): "CSO/SPO-A: Court Trained (contractor)",
+        _normalize_capacity_tag_key("CSO/SPO-A: (FT)"): "CSO/SPO-A: (FT)",
+        _normalize_capacity_tag_key("CSO/SPO-A: (contractor)"): "CSO/SPO-A: (contractor)",
+        _normalize_capacity_tag_key("CSO/SPO: Court Trained(FT)"): "CSO/SPO: Court Trained(FT)",
+        _normalize_capacity_tag_key("CSO/SPO Court Trained (contractor)"): "CSO/SPO Court Trained (contractor)",
+        _normalize_capacity_tag_key("CSO: Non-SPO/CR"): "CSO: Non-SPO/CR",
+        _normalize_capacity_tag_key("Cadet"): "Cadet",
+    }
+
+    if normalized_key in direct_options:
+        return direct_options[normalized_key]
+
+    synonym_options = {
+        "DEP": "DEPUTY",
+        "F": "DEPUTY",
+        "COURT": "DEPUTY",
+        "SPO": "CSO/SPO-A: (FT)",
+        "ARMED": "CSO/SPO-A: (FT)",
+        "DEPK9": "CSO/SPO-A: (FT)",
+        "K9": "CSO/SPO-A: (FT)",
+        "SPOUA": "CSO: Non-SPO/CR",
+        "NOSPO": "CSO: Non-SPO/CR",
+        "CSO": "CSO: Non-SPO/CR",
+        "BASIC": "CSO: Non-SPO/CR",
+    }
+
+    return synonym_options.get(normalized_key, raw)
+
+
 def _ensure_deputy_transfers_table(cursor):
     cursor.execute("""
         IF OBJECT_ID('dbo.deputy_transfers', 'U') IS NULL
@@ -647,6 +690,7 @@ def upsert_deputy():
     data = request.json or {}
     original_full_name = data.get("original_full_name")
     full_name = data.get("full_name")
+    canonical_capacity_tag = _canonical_capacity_tag(data.get("capacity_tag"))
 
     if not full_name:
         return jsonify({"status": "error", "message": "full_name is required"}), 400
@@ -667,42 +711,42 @@ def upsert_deputy():
                 UPDATE dbo.deputies
                 SET full_name = ?, email = ?, division = ?, rank = ?, capacity_tag = ?
                 WHERE full_name = ?
-            """, (full_name, email, data.get("division"), data.get("rank"), data.get("capacity_tag"), original_full_name)),
+            """, (full_name, email, data.get("division"), data.get("rank"), canonical_capacity_tag, original_full_name)),
             ("""
                 UPDATE dbo.deputies
                 SET full_name = ?, email = ?, division = ?, capacity_tag = ?
                 WHERE full_name = ?
-            """, (full_name, email, data.get("division"), data.get("capacity_tag"), original_full_name)),
+            """, (full_name, email, data.get("division"), canonical_capacity_tag, original_full_name)),
             ("""
                 UPDATE dbo.deputies
                 SET full_name = ?, division = ?, rank = ?, capacity_tag = ?
                 WHERE full_name = ?
-            """, (full_name, data.get("division"), data.get("rank"), data.get("capacity_tag"), original_full_name)),
+            """, (full_name, data.get("division"), data.get("rank"), canonical_capacity_tag, original_full_name)),
             ("""
                 UPDATE dbo.deputies
                 SET full_name = ?, division = ?, capacity_tag = ?
                 WHERE full_name = ?
-            """, (full_name, data.get("division"), data.get("capacity_tag"), original_full_name)),
+            """, (full_name, data.get("division"), canonical_capacity_tag, original_full_name)),
             ("""
                 UPDATE dbo.deputies
                 SET full_name = ?, email = ?, rank = ?, capacity_tag = ?
                 WHERE full_name = ?
-            """, (full_name, email, data.get("rank"), data.get("capacity_tag"), original_full_name)),
+            """, (full_name, email, data.get("rank"), canonical_capacity_tag, original_full_name)),
             ("""
                 UPDATE dbo.deputies
                 SET full_name = ?, rank = ?, capacity_tag = ?
                 WHERE full_name = ?
-            """, (full_name, data.get("rank"), data.get("capacity_tag"), original_full_name)),
+            """, (full_name, data.get("rank"), canonical_capacity_tag, original_full_name)),
             ("""
                 UPDATE dbo.deputies
                 SET full_name = ?, email = ?, capacity_tag = ?
                 WHERE full_name = ?
-            """, (full_name, email, data.get("capacity_tag"), original_full_name)),
+            """, (full_name, email, canonical_capacity_tag, original_full_name)),
             ("""
                 UPDATE dbo.deputies
                 SET full_name = ?, capacity_tag = ?
                 WHERE full_name = ?
-            """, (full_name, data.get("capacity_tag"), original_full_name)),
+            """, (full_name, canonical_capacity_tag, original_full_name)),
         ]
 
         for query, params in update_queries:
@@ -716,35 +760,35 @@ def upsert_deputy():
             ("""
                 INSERT INTO dbo.deputies (full_name, email, division, rank, capacity_tag, current_status)
                 VALUES (?, ?, ?, ?, ?, NULL)
-            """, (full_name, email, data.get("division"), data.get("rank"), data.get("capacity_tag"))),
+            """, (full_name, email, data.get("division"), data.get("rank"), canonical_capacity_tag)),
             ("""
                 INSERT INTO dbo.deputies (full_name, email, division, capacity_tag, current_status)
                 VALUES (?, ?, ?, ?, NULL)
-            """, (full_name, email, data.get("division"), data.get("capacity_tag"))),
+            """, (full_name, email, data.get("division"), canonical_capacity_tag)),
             ("""
                 INSERT INTO dbo.deputies (full_name, email, rank, capacity_tag, current_status)
                 VALUES (?, ?, ?, ?, NULL)
-            """, (full_name, email, data.get("rank"), data.get("capacity_tag"))),
+            """, (full_name, email, data.get("rank"), canonical_capacity_tag)),
             ("""
                 INSERT INTO dbo.deputies (full_name, email, capacity_tag, current_status)
                 VALUES (?, ?, ?, NULL)
-            """, (full_name, email, data.get("capacity_tag"))),
+            """, (full_name, email, canonical_capacity_tag)),
             ("""
                 INSERT INTO dbo.deputies (full_name, division, rank, capacity_tag, current_status)
                 VALUES (?, ?, ?, ?, NULL)
-            """, (full_name, data.get("division"), data.get("rank"), data.get("capacity_tag"))),
+            """, (full_name, data.get("division"), data.get("rank"), canonical_capacity_tag)),
             ("""
                 INSERT INTO dbo.deputies (full_name, division, capacity_tag, current_status)
                 VALUES (?, ?, ?, NULL)
-            """, (full_name, data.get("division"), data.get("capacity_tag"))),
+            """, (full_name, data.get("division"), canonical_capacity_tag)),
             ("""
                 INSERT INTO dbo.deputies (full_name, rank, capacity_tag, current_status)
                 VALUES (?, ?, ?, NULL)
-            """, (full_name, data.get("rank"), data.get("capacity_tag"))),
+            """, (full_name, data.get("rank"), canonical_capacity_tag)),
             ("""
                 INSERT INTO dbo.deputies (full_name, capacity_tag, current_status)
                 VALUES (?, ?, NULL)
-            """, (full_name, data.get("capacity_tag"))),
+            """, (full_name, canonical_capacity_tag)),
         ]
 
         for query, params in insert_queries:
