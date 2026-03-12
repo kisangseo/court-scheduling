@@ -2714,14 +2714,28 @@ function search() {
                     : createEmptySectionCell()
             );
 
-            postsRow.appendChild(
-                includeCummings
-                    ? createSectionCell("Cummings", cummings.posts, "Cummings", "main", "Security Post", {
+            const rightPostsColumn = document.createElement("div");
+            rightPostsColumn.className = "stacked-posts-column";
+
+            if (includeCummings) {
+                rightPostsColumn.appendChild(
+                    createSectionCell("Cummings", cummings.posts, "Cummings", "main", "Security Post", {
                         clearButtonLabel: "Clear",
                         onClear: () => clearSectionAssignments("fixed_post", "Cummings")
                     })
-                    : createEmptySectionCell()
-            );
+                );
+            }
+
+            if (includeJuvenile) {
+                rightPostsColumn.appendChild(
+                    createSectionCell("Juvenile", juvenile.posts, "Juvenile", "main", "Security Post", {
+                        clearButtonLabel: "Clear",
+                        onClear: () => clearSectionAssignments("fixed_post", "Juvenile")
+                    })
+                );
+            }
+
+            postsRow.appendChild(rightPostsColumn.childElementCount ? rightPostsColumn : createEmptySectionCell());
 
             juvRow.appendChild(createEmptySectionCell());
             juvRow.appendChild(
