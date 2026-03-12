@@ -1927,14 +1927,33 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
 
     const body = table.querySelector("tbody");
     const combinedRows = [];
+    const normalizePart = (value) => (value || "").toString().trim().toUpperCase().replace(/^PART\s+/, "");
+    const normalizeRoom = (value) => (value || "").trim().toUpperCase();
+    const getJuvenileBuildingLabel = (roomValue) => {
+        const room = normalizeRoom(roomValue);
+        if (room.endsWith("C")) return "Cummings";
+        if (room.endsWith("M")) return "Mitchell";
+        return "Juvenile";
+    };
+
+    const juvenileCourtroomRows = (grouped["Juvenile"] || [])
+        .filter(r => r.assignment_type === "Courtroom")
+        .filter(r => {
+            const room = normalizeRoom(r.location_detail);
+            const part = normalizePart(r.part);
+            const judge = normalizeRoom(r.judge_name);
+            return !(room === "329C" && (part === "2" || judge === "LEWIS"));
+        });
+
     const addRowsByExpectedOrder = (courthouse, expectedRows) => {
-        const normalizePart = (value) => (value || "").toString().trim().toUpperCase().replace(/^PART\s+/, "");
         let rows = (grouped[courthouse] || []).filter(r => r.assignment_type === "Courtroom");
+
+
         if (courthouse === "Cummings") {
             rows = rows.filter(row => {
-                const room = (row.location_detail || "").trim().toUpperCase();
+                const room = normalizeRoom(row.location_detail);
                 const part = normalizePart(row.part);
-                const judge = (row.judge_name || "").trim().toUpperCase();
+                const judge = normalizeRoom(row.judge_name);
                 if (judge === "H. TIPTON" && room === "223C" && part === "6") return false;
                 if (judge === "LAZEROW" && room === "113C" && part === "04") return false;
                 return true;
@@ -1942,9 +1961,9 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
 
             let seenBryant230C5 = false;
             rows = rows.filter(row => {
-                const room = (row.location_detail || "").trim().toUpperCase();
+                const room = normalizeRoom(row.location_detail);
                 const part = normalizePart(row.part);
-                const judge = (row.judge_name || "").trim().toUpperCase();
+                const judge = normalizeRoom(row.judge_name);
                 if (judge === "Y. BRYANT" && room === "230C" && part === "5") {
                     if (seenBryant230C5) return false;
                     seenBryant230C5 = true;
@@ -2056,15 +2075,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
 
     if (includeFlags.includeJuvenile) {
         combinedRows.push({ __isJuvenileHeader: true, __courthouse: "Juvenile" });
-
-        const juvenileRows = (grouped["Juvenile"] || [])
-            .filter(r => r.assignment_type === "Courtroom")
-            .filter(r => {
-                const room = (r.location_detail || "").trim().toUpperCase();
-                const part = (r.part || "").toString().trim().toUpperCase().replace(/^PART\s+/, "");
-                const judge = (r.judge_name || "").trim().toUpperCase();
-                return !(room === "329C" && (part === "2" || judge === "LEWIS"));
-            });
+        const juvenileRows = juvenileCourtroomRows;
         const juvenileExpected = [
             { building: "Juvenile", room: "C-1", part: "12", judge: "Blomquist" },
             { building: "Juvenile", room: "C-2", part: "11", judge: "Schiffer" },
@@ -2107,7 +2118,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
                 if (roomCompare !== 0) return roomCompare;
                 return (a.part || "").localeCompare(b.part || "");
             })
-            .forEach(row => combinedRows.push({ ...row, __building: "Juvenile", __courthouse: "Juvenile" }));
+            .forEach(row => combinedRows.push({ ...row, __building: getJuvenileBuildingLabel(row.location_detail), __courthouse: "Juvenile" }));
     }
 
     combinedRows.forEach(row => {
