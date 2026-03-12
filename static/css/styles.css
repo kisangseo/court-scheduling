@@ -346,6 +346,11 @@ th, td {
 }
 
 
+
+.armed-required-unmet {
+    background-color: #fef3f2;
+}
+
 .cell-warning {
     color: #b42318;
     font-size: 12px;
