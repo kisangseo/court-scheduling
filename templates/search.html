@@ -1929,6 +1929,10 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
     const combinedRows = [];
     const normalizePart = (value) => (value || "").toString().trim().toUpperCase().replace(/^PART\s+/, "");
     const normalizeRoom = (value) => (value || "").trim().toUpperCase();
+    const hasPartOnlyDisplay = (judgeValue) => {
+        const judge = normalizeRoom(judgeValue);
+        return judge === "VITTORIA" || judge === "STORM";
+    };
     const getJuvenileBuildingLabel = (roomValue) => {
         const room = normalizeRoom(roomValue);
         if (room.endsWith("C")) return "Cummings";
@@ -1956,6 +1960,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
                 const judge = normalizeRoom(row.judge_name);
                 if (judge === "H. TIPTON" && room === "223C" && part === "6") return false;
                 if (judge === "LAZEROW" && room === "113C" && part === "04") return false;
+                if (judge === "BLOMQUIST" && room === "329C" && part === "C-1") return false;
                 return true;
             });
 
@@ -2029,6 +2034,22 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
             { courthouse: "Mitchell", building: "Mitchell", room: "203M", part: "32", judge: "J. Schiffer" },
             { courthouse: "Mitchell", building: "Mitchell", room: "451M", part: "25", judge: "M. Schreiber" },
             { courthouse: "Mitchell", building: "Mitchell", room: "438M", part: "21", judge: "Y. Tanner" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "428M", part: "81", judge: "Storm" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "428M", part: "22", judge: "R. Taylor" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "428M", part: "82", judge: "M. Phinn" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "428M", part: "85", judge: "Silkworth" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "428M", part: "87", judge: "Rasin" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "428M", part: "86", judge: "P. Jackson" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "428M", part: "84", judge: "Peters" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "428M", part: "91", judge: "Murdock" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "406M", part: "92", judge: "Howard" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "406M", part: "93", judge: "Doory" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "406M", part: "94", judge: "L. Daniels" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "406M", part: "95", judge: "Welch" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "406M", part: "89", judge: "Sampson" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "406M", part: "98", judge: "V. Brown" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "406M", part: "26", judge: "Fletcher-Hill" },
+            { courthouse: "Mitchell", building: "Mitchell", room: "406M", part: "88", judge: "White" },
             { courthouse: "Cummings", building: "Cummings", room: "528C", part: "31", judge: "B. Williams" },
             { courthouse: "Cummings", building: "Cummings", room: "103,105", part: "1st FL", judge: "Magistrates" },
             { courthouse: "Cummings", building: "Cummings", room: "317,327 & 339, 303", part: "3rd FL", judge: "Magistrates" }
@@ -2133,11 +2154,12 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         }
 
         const courthouse = row.__courthouse;
-        const room = row.location_detail || "";
+        const rawRoom = row.location_detail || "";
         const defaults = getCourtroomDefaults(courthouse);
-        const roomDefaults = defaults[room] || null;
+        const roomDefaults = defaults[rawRoom] || null;
         const effectivePart = row.part || (roomDefaults ? roomDefaults.part : "");
         const effectiveJudge = row.judge_name || (roomDefaults ? roomDefaults.judge_name : "");
+        const displayRoom = hasPartOnlyDisplay(effectiveJudge) ? "" : rawRoom;
 
         const tr = document.createElement("tr");
         tr.classList.add("courtroom-meta-row");
@@ -2149,26 +2171,26 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         }
         tr.dataset.date = selectedDate;
         tr.dataset.courthouse = courthouse;
-        tr.dataset.room = room;
+        tr.dataset.room = displayRoom;
         tr.dataset.part = effectivePart;
         tr.innerHTML = `
             <td>${row.__building || courthouse}</td>
-            <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}">${effectiveJudge}</td>
-            <td>${room}${effectivePart ? "/" + effectivePart : ""}</td>
+            <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${displayRoom}" data-part="${effectivePart}">${effectiveJudge}</td>
+            <td>${displayRoom}${effectivePart ? "/" + effectivePart : ""}</td>
             <td class="courtroom-assignment-cell">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                    <select class="courtroom-assignment-select" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" style="width:50%; min-width:120px;">
+                    <select class="courtroom-assignment-select" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${displayRoom}" data-part="${effectivePart}" style="width:50%; min-width:120px;">
                         <option value=""></option>
                         ${getCourtroomAssignmentOptionsHtml(row.assignment_notes || "")}
                     </select>
-                    <label style="display:flex; align-items:center; gap:4px; width:50%; justify-content:flex-end;"><input type="checkbox" class="courtroom-high-profile-checkbox" aria-label="${courthouse} ${room} high profile"> High Profile</label>
+                    <label style="display:flex; align-items:center; gap:4px; width:50%; justify-content:flex-end;"><input type="checkbox" class="courtroom-high-profile-checkbox" aria-label="${courthouse} ${displayRoom} high profile"> High Profile</label>
                 </div>
             </td>
-            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" data-assigned="${row.assigned_member || ""}">${row.assigned_member || ""}</td>
-            <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="start_time" aria-label="${courthouse} ${room} start time"></td>
-            <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="restart_time" aria-label="${courthouse} ${room} restart time"></td>
-            <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="adjourned_time" aria-label="${courthouse} ${room} adjourned time"></td>
-            <td class="courtroom-down-cell"><input type="checkbox" class="courtroom-down-checkbox" aria-label="${courthouse} ${room} down"></td>
+            <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${displayRoom}" data-part="${effectivePart}" data-assigned="${row.assigned_member || ""}">${row.assigned_member || ""}</td>
+            <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="start_time" aria-label="${courthouse} ${displayRoom} start time"></td>
+            <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="restart_time" aria-label="${courthouse} ${displayRoom} restart time"></td>
+            <td class="courtroom-time-cell"><input type="text" list="courtroomTimeOptions" class="courtroom-time-input" data-field="adjourned_time" aria-label="${courthouse} ${displayRoom} adjourned time"></td>
+            <td class="courtroom-down-cell"><input type="checkbox" class="courtroom-down-checkbox" aria-label="${courthouse} ${displayRoom} down"></td>
         `;
 
         tr.querySelectorAll('.courtroom-time-input, .courtroom-down-checkbox, .courtroom-high-profile-checkbox').forEach(inputEl => {
@@ -2354,7 +2376,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                         <option value=""></option>
                         ${getCourtroomAssignmentOptionsHtml(row ? (row.assignment_notes || "") : "")}
                     </select>
-                    <label style="display:flex; align-items:center; gap:4px; width:50%; justify-content:flex-end;"><input type="checkbox" class="courtroom-high-profile-checkbox" aria-label="${courthouse} ${room} high profile"> High Profile</label>
+                    <label style="display:flex; align-items:center; gap:4px; width:50%; justify-content:flex-end;"><input type="checkbox" class="courtroom-high-profile-checkbox" aria-label="${courthouse} ${displayRoom} high profile"> High Profile</label>
                 </div>
             </td>
             <td class="editable" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" data-assigned="${row ? (row.assigned_member || "") : ""}">${row ? (row.assigned_member || "") : ""}</td>
