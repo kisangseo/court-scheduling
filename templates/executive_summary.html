@@ -249,6 +249,41 @@ function normalizeCapacityTag(deputy) {
     return (deputy.capacity_tag || deputy.capability_tag || '').toString().trim().toUpperCase();
 }
 
+function getCapacityTagLabel(deputy) {
+    return (deputy.capacity_tag || deputy.capability_tag || '').toString().trim() || 'UNSPECIFIED';
+}
+
+function getAvailableCategoryFromTag(deputy) {
+    const tag = normalizeCapacityTag(deputy);
+    if (!tag) return 'basic';
+    if (tag === 'DEPUTY' || tag.includes('COURT TRAINED')) return 'court';
+    if (tag === 'DEPUTY' || tag.includes('-A')) return 'armed';
+    return 'basic';
+}
+
+function summarizeAvailableDeputies(availableDeputies) {
+    const summary = {
+        total: 0,
+        categories: {
+            court: 0,
+            armed: 0,
+            basic: 0
+        },
+        byCapacityTag: {}
+    };
+
+    (availableDeputies || []).forEach(dep => {
+        summary.total += 1;
+        const category = getAvailableCategoryFromTag(dep);
+        summary.categories[category] = (summary.categories[category] || 0) + 1;
+
+        const tagLabel = getCapacityTagLabel(dep);
+        summary.byCapacityTag[tagLabel] = (summary.byCapacityTag[tagLabel] || 0) + 1;
+    });
+
+    return summary;
+}
+
 function isCourtCapable(deputy) {
     const tag = normalizeCapacityTag(deputy);
     return tag === 'COURT' || tag === 'K9' || tag === 'F' || tag === 'DEP' || tag === 'DEP-K9' || tag === 'DEPK9';
@@ -469,10 +504,7 @@ async function loadSummary() {
                 return totals;
             }, { sick: 0, unavailable: 0, leave: 0, callout: 0 });
             const availableCourtSecurity = courtSecurityDeputies.filter(dep => !isOutStatus(dep.current_status));
-            const availableCount = availableCourtSecurity.length;
-            const availableCourtCapableCount = availableCourtSecurity.filter(isCourtCapable).length;
-            const availableArmedCount = availableCourtCapableCount;
-            const availableUnarmedCount = Math.max(availableCount - availableArmedCount, 0);
+            const availableSummary = summarizeAvailableDeputies(availableCourtSecurity);
             const borrowedCount = countBorrowedDeputies(assignments, deputies);
             const neededBreakdown = getNeededBreakdownFromAssignments(assignments);
             const assignmentTotals = getAssignmentTotals(assignments);
@@ -483,10 +515,11 @@ async function loadSummary() {
                 needed: neededBreakdown.total,
                 neededCourts: neededBreakdown.courts,
                 neededPosts: neededBreakdown.posts,
-                available: availableCount,
-                availableCourts: availableCourtCapableCount,
-                availablePostsArmed: availableArmedCount,
-                availablePostsUnarmed: availableUnarmedCount,
+                available: availableSummary.total,
+                availableCourt: availableSummary.categories.court,
+                availableArmed: availableSummary.categories.armed,
+                availableBasic: availableSummary.categories.basic,
+                availableByCapacityTag: availableSummary.byCapacityTag,
                 assignmentTotals,
                 highProfileCases: highProfileCaseCount,
                 openCourts: openCourtsCount,
@@ -510,8 +543,14 @@ function renderSummary(dayResults) {
         ? dayResults.map(day => `<td><span class="metric-brown">Court: ${day.neededCourts || 0}</span> / <span class="metric-green">Posts: ${day.neededPosts || 0}</span> <span class="metric-blue">Total: ${day.needed || 0}</span></td>`).join('')
         : dayResults.map(day => `<td><span class="metric-blue">Total: ${day.needed || 0}</span></td>`).join('');
     const availableCells = showSummaryDetail
-        ? dayResults.map(day => `<td><span class="metric-brown">Court: ${day.availableCourts || 0}</span> / <span class="metric-green">Posts: ${day.availablePostsArmed || 0}(a), ${day.availablePostsUnarmed || 0}(ua)</span> <span class="metric-blue">Total: ${day.available || 0}</span></td>`).join('')
-        : dayResults.map(day => `<td><span class="metric-blue">Total: ${day.available || 0}</span></td>`).join('');
+        ? dayResults.map(day => {
+            const detailTags = Object.entries(day.availableByCapacityTag || {})
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([tag, count]) => `${tag}: ${count}`)
+                .join('<br>');
+            return `<td>${detailTags || 'None'}</td>`;
+        }).join('')
+        : dayResults.map(day => `<td><span class="metric-brown">Court: ${day.availableCourt || 0}</span> / <span class="metric-green">Armed: ${day.availableArmed || 0}</span> / <span class="metric-blue">Basic: ${day.availableBasic || 0}</span> <br><span class="metric-blue">Total: ${day.available || 0}</span></td>`).join('');
     const assignmentCounterCells = dayResults.map(day =>
   `<td><span class="metric-red">Vacant ${day.assignmentTotals?.vacant || 0}</span> / ` +
   `<span class="metric-green">Filled ${day.assignmentTotals?.filled || 0}</span> / ` +
