@@ -482,6 +482,16 @@ h4 {
     background: #eff6ff;
 }
 
+.juvenile-group-row td {
+    background: #fef08a;
+    color: #713f12;
+    font-weight: 700;
+}
+
+.juvenile-courtroom-row td {
+    background: #fef9c3;
+}
+
 @media print {
     #rosterPanel,
     .add-deputy-btn,
