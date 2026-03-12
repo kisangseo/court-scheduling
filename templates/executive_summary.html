@@ -523,12 +523,12 @@ async function loadSummary() {
             const courtSecurityDeputies = deputies.filter(isCourtSecurity);
             const unavailableBreakdown = courtSecurityDeputies.reduce((totals, dep) => {
                 const breakdown = getUnavailableBreakdown(dep.current_status);
-                totals.sick += breakdown.sick;
+                totals.scheduled_leave += breakdown.scheduled_leave;
+                totals.unscheduled_leave += breakdown.unscheduled_leave;
                 totals.unavailable += breakdown.unavailable;
-                totals.leave += breakdown.leave;
-                totals.callout += breakdown.callout;
+                totals.training += breakdown.training;
                 return totals;
-            }, { sick: 0, unavailable: 0, leave: 0, callout: 0 });
+            }, { scheduled_leave: 0, unscheduled_leave: 0, unavailable: 0, training: 0 });
             const availableCourtSecurity = courtSecurityDeputies.filter(dep => !isOutStatus(dep.current_status));
             const availableSummary = summarizeAvailableDeputies(availableCourtSecurity);
             const borrowedCount = countBorrowedDeputies(assignments, deputies);
