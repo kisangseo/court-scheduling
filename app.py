@@ -197,7 +197,8 @@ def _canonical_capacity_tag(value):
         _normalize_capacity_tag_key("CSO/SPO-A: (contractor)"): "CSO/SPO-A: (contractor)",
         _normalize_capacity_tag_key("CSO/SPO: Court Trained(FT)"): "CSO/SPO: Court Trained(FT)",
         _normalize_capacity_tag_key("CSO/SPO Court Trained (contractor)"): "CSO/SPO Court Trained (contractor)",
-        _normalize_capacity_tag_key("CSO: Non-SPO/CR"): "CSO: Non-SPO/CR",
+        _normalize_capacity_tag_key("CSO: Non-SPO/CR"): "CSO",
+        _normalize_capacity_tag_key("CSO"): "CSO",
         _normalize_capacity_tag_key("Cadet"): "Cadet",
     }
 
