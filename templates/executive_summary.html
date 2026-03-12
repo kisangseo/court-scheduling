@@ -249,6 +249,67 @@ function normalizeCapacityTag(deputy) {
     return (deputy.capacity_tag || deputy.capability_tag || '').toString().trim().toUpperCase();
 }
 
+const courtSecurityRoleOrder = [
+    'DEPUTY',
+    'CSO/SPO-A: Court Trained (FT)',
+    'CSO/SPO-A: Court Trained (contractor)',
+    'CSO/SPO-A: (FT)',
+    'CSO/SPO-A: (contractor)',
+    'CSO/SPO: Court Trained(FT)',
+    'CSO/SPO Court Trained (contractor)',
+    'CSO: Non-SPO/CR',
+    'Cadet'
+];
+
+function normalizeCapacitySortKey(value) {
+    return (value || '').toString().toUpperCase().replace(/\s+/g, '').replace(/_/g, '-');
+}
+
+const courtSecurityRoleOrderNormalized = courtSecurityRoleOrder.map(normalizeCapacitySortKey);
+
+function getCapacityTagSortRank(tag) {
+    const idx = courtSecurityRoleOrderNormalized.indexOf(normalizeCapacitySortKey(tag));
+    return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+}
+
+function getCapacityTagLabel(deputy) {
+    return (deputy.capacity_tag || deputy.capability_tag || '').toString().trim() || 'UNSPECIFIED';
+}
+
+function isCourtCategoryTag(tag) {
+    return tag === 'DEPUTY' || tag.includes('COURT TRAINED');
+}
+
+function isArmedCategoryTag(tag) {
+    return tag === 'DEPUTY' || tag.includes('-A');
+}
+
+function summarizeAvailableDeputies(availableDeputies) {
+    const summary = {
+        total: 0,
+        categories: {
+            court: 0,
+            armed: 0,
+            basic: 0
+        },
+        byCapacityTag: {}
+    };
+
+    (availableDeputies || []).forEach(dep => {
+        summary.total += 1;
+        const tag = normalizeCapacityTag(dep);
+
+        if (isCourtCategoryTag(tag)) summary.categories.court += 1;
+        if (isArmedCategoryTag(tag)) summary.categories.armed += 1;
+        if (!isCourtCategoryTag(tag) && !isArmedCategoryTag(tag)) summary.categories.basic += 1;
+
+        const tagLabel = getCapacityTagLabel(dep);
+        summary.byCapacityTag[tagLabel] = (summary.byCapacityTag[tagLabel] || 0) + 1;
+    });
+
+    return summary;
+}
+
 function isCourtCapable(deputy) {
     const tag = normalizeCapacityTag(deputy);
     return tag === 'COURT' || tag === 'K9' || tag === 'F' || tag === 'DEP' || tag === 'DEP-K9' || tag === 'DEPK9';
@@ -469,10 +530,7 @@ async function loadSummary() {
                 return totals;
             }, { sick: 0, unavailable: 0, leave: 0, callout: 0 });
             const availableCourtSecurity = courtSecurityDeputies.filter(dep => !isOutStatus(dep.current_status));
-            const availableCount = availableCourtSecurity.length;
-            const availableCourtCapableCount = availableCourtSecurity.filter(isCourtCapable).length;
-            const availableArmedCount = availableCourtCapableCount;
-            const availableUnarmedCount = Math.max(availableCount - availableArmedCount, 0);
+            const availableSummary = summarizeAvailableDeputies(availableCourtSecurity);
             const borrowedCount = countBorrowedDeputies(assignments, deputies);
             const neededBreakdown = getNeededBreakdownFromAssignments(assignments);
             const assignmentTotals = getAssignmentTotals(assignments);
@@ -483,10 +541,11 @@ async function loadSummary() {
                 needed: neededBreakdown.total,
                 neededCourts: neededBreakdown.courts,
                 neededPosts: neededBreakdown.posts,
-                available: availableCount,
-                availableCourts: availableCourtCapableCount,
-                availablePostsArmed: availableArmedCount,
-                availablePostsUnarmed: availableUnarmedCount,
+                available: availableSummary.total,
+                availableCourt: availableSummary.categories.court,
+                availableArmed: availableSummary.categories.armed,
+                availableBasic: availableSummary.categories.basic,
+                availableByCapacityTag: availableSummary.byCapacityTag,
                 assignmentTotals,
                 highProfileCases: highProfileCaseCount,
                 openCourts: openCourtsCount,
@@ -510,8 +569,18 @@ function renderSummary(dayResults) {
         ? dayResults.map(day => `<td><span class="metric-brown">Court: ${day.neededCourts || 0}</span> / <span class="metric-green">Posts: ${day.neededPosts || 0}</span> <span class="metric-blue">Total: ${day.needed || 0}</span></td>`).join('')
         : dayResults.map(day => `<td><span class="metric-blue">Total: ${day.needed || 0}</span></td>`).join('');
     const availableCells = showSummaryDetail
-        ? dayResults.map(day => `<td><span class="metric-brown">Court: ${day.availableCourts || 0}</span> / <span class="metric-green">Posts: ${day.availablePostsArmed || 0}(a), ${day.availablePostsUnarmed || 0}(ua)</span> <span class="metric-blue">Total: ${day.available || 0}</span></td>`).join('')
-        : dayResults.map(day => `<td><span class="metric-blue">Total: ${day.available || 0}</span></td>`).join('');
+        ? dayResults.map(day => {
+            const detailTags = Object.entries(day.availableByCapacityTag || {})
+                .sort((a, b) => {
+                    const rankCompare = getCapacityTagSortRank(a[0]) - getCapacityTagSortRank(b[0]);
+                    if (rankCompare !== 0) return rankCompare;
+                    return a[0].localeCompare(b[0]);
+                })
+                .map(([tag, count]) => `${tag}: ${count}`)
+                .join('<br>');
+            return `<td>${detailTags || 'None'}</td>`;
+        }).join('')
+        : dayResults.map(day => `<td><span class="metric-brown">Court: ${day.availableCourt || 0}</span> / <span class="metric-green">Armed: ${day.availableArmed || 0}</span> / <span class="metric-blue">Basic: ${day.availableBasic || 0}</span> <br><span class="metric-blue">Total: ${day.available || 0}</span></td>`).join('');
     const assignmentCounterCells = dayResults.map(day =>
   `<td><span class="metric-red">Vacant ${day.assignmentTotals?.vacant || 0}</span> / ` +
   `<span class="metric-green">Filled ${day.assignmentTotals?.filled || 0}</span> / ` +
