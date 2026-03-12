@@ -644,12 +644,18 @@ def update_unavailability():
 
 @app.route("/api/upsert-deputy", methods=["POST"])
 def upsert_deputy():
-    data = request.json
+    data = request.json or {}
     original_full_name = data.get("original_full_name")
     full_name = data.get("full_name")
 
-    email = data.get("email") or _build_baltimore_email(full_name)
-    if not email:
+    if not full_name:
+        return jsonify({"status": "error", "message": "full_name is required"}), 400
+
+    provided_email = (data.get("email") or "").strip() or None
+    generated_email = _build_baltimore_email(full_name)
+    email = provided_email or generated_email
+
+    if not original_full_name and not email:
         return jsonify({"status": "error", "message": "full_name must be in 'Last name, First name' format"}), 400
 
     conn = get_conn()

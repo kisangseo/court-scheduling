@@ -425,7 +425,16 @@ function createDeputyRow(dep, includeDivision) {
                 rank: rankSelect.value,
                 capacity_tag: capabilitySelect.value
             })
-        }).then(() => loadRoster());
+        })
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to save deputy updates");
+                return res.json();
+            })
+            .then(() => loadRoster())
+            .catch(err => {
+                console.error(err);
+                alert("Failed to save deputy updates.");
+            });
     });
 
     const removeBtn = document.createElement("button");
