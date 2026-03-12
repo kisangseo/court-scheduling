@@ -6,21 +6,25 @@
 </head>
 <body>
 <div class="top-controls">
-    <h2>Court Assignments <span id="overallAssignmentCounts" class="counts-inline"></span> <label class="simple-view-toggle"><input type="checkbox" id="simpleViewToggle" checked> Simple View</label></h2>
+    <div class="assignment-header-box">
+        <h2>Court Assignments <span id="overallAssignmentCounts" class="counts-inline"></span> <label class="simple-view-toggle"><input type="checkbox" id="simpleViewToggle" checked> Simple View</label></h2>
+    </div>
 
-    <input type="text" id="name" placeholder="Search by Name">
-    <input type="date" id="date">
+    <div class="assignment-action-controls">
+        <input type="text" id="name" placeholder="Search by Name">
+        <input type="date" id="date">
 
-    <select id="courthouse">
-        <option value="">All Courthouses</option>
-        <option value="Mitchell">Mitchell</option>
-        <option value="Cummings">Cummings</option>
-        <option value="Juvenile">Juvenile</option>
-        <option value="Family">Family</option>
-    </select>
+        <select id="courthouse">
+            <option value="">All Courthouses</option>
+            <option value="Mitchell">Mitchell</option>
+            <option value="Cummings">Cummings</option>
+            <option value="Juvenile">Juvenile</option>
+            <option value="Family">Family</option>
+        </select>
 
-    <button onclick="searchSimple()">Search</button>
-    <button onclick="window.location.href='/'">Main View</button>
+        <button onclick="searchSimple()">Search</button>
+        <button onclick="window.location.href='/'">Main View</button>
+    </div>
 </div>
 
 <br><br>
@@ -82,7 +86,21 @@ const CUMMINGS_POSTS = [
 
 const MITCHELL_ROOMS = ["600M", "636M","231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"];
 const CUMMINGS_ROOMS = ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C","103,105","317,327 & 339, 303"];
-const JUVENILE_ROOMS = ["329C","428M","406M"];
+const JUVENILE_EXPECTED = [
+    { room: "C-1", part: "12", judge_name: "Blomquist" },
+    { room: "C-2", part: "11", judge_name: "Schiffer" },
+    { room: "C-3", part: "10", judge_name: "Schrieber" },
+    { room: "H-1", part: "4", judge_name: "VACANT" },
+    { room: "H-2", part: "5", judge_name: "Peacock" },
+    { room: "H-3", part: "2", judge_name: "Brown" },
+    { room: "H-4", part: "9", judge_name: "Kataria" },
+    { room: "H-5", part: "1", judge_name: "Grove" },
+    { room: "H-6", part: "8", judge_name: "Gyauch" },
+    { room: "H-7", part: "9", judge_name: "Addison" },
+    { room: "H-8", part: "27", judge_name: "McKeithen" },
+    { room: "H-9", part: "6", judge_name: "Bonner" },
+    { room: "H-10", part: "", judge_name: "" }
+];
 const FAMILY_ROOMS = ["126", "120", "122", "124"];
 const CUMMINGS_ROOM_DEFAULTS = {
     "103,105": { part: "1st FL", judge_name: "Magistrates" },
@@ -252,9 +270,7 @@ function renderCourtroomTable(courthouse, rows) {
         ? MITCHELL_ROOMS
         : courthouse === 'Cummings'
             ? CUMMINGS_ROOMS
-            : courthouse === 'Juvenile'
-                ? JUVENILE_ROOMS
-                : FAMILY_ROOMS;
+            : FAMILY_ROOMS;
     const normalizePart = (value) => (value || '').toString().trim().toUpperCase().replace(/^PART\s+/, '');
     let courtRows = rows.filter(r => r.assignment_type === 'Courtroom');
 
@@ -291,7 +307,34 @@ function renderCourtroomTable(courthouse, rows) {
         return (a.part || '').localeCompare(b.part || '');
     });
 
-    if (courthouse !== 'Juvenile') {
+    if (courthouse === 'Juvenile') {
+        const remaining = [...rowsToRender];
+        const juvenileOrdered = [];
+        JUVENILE_EXPECTED.forEach(expected => {
+            const matchIndex = remaining.findIndex(row =>
+                (row.location_detail || '').trim().toUpperCase() === expected.room.toUpperCase()
+                && normalizePart(row.part) === normalizePart(expected.part)
+            );
+            const matched = matchIndex >= 0 ? remaining.splice(matchIndex, 1)[0] : null;
+            juvenileOrdered.push({
+                ...(matched || {}),
+                location_detail: matched?.location_detail || expected.room,
+                part: matched?.part || expected.part,
+                judge_name: matched?.judge_name || expected.judge_name
+            });
+        });
+
+        remaining
+            .sort((a, b) => {
+                const roomCompare = (a.location_detail || '').localeCompare(b.location_detail || '');
+                if (roomCompare !== 0) return roomCompare;
+                return (a.part || '').localeCompare(b.part || '');
+            })
+            .forEach(row => juvenileOrdered.push(row));
+
+        rowsToRender.length = 0;
+        rowsToRender.push(...juvenileOrdered);
+    } else {
         const rowsByRoom = new Map();
         rowsToRender.forEach(row => {
             const key = row.location_detail || '';
@@ -420,20 +463,26 @@ function normalizeRoleValue(role) {
 }
 
 function getCanonicalRole(role) {
-    const normalizedRole = normalizeRoleValue(role);
-    if (normalizedRole === 'DEP' || normalizedRole === 'F' || normalizedRole === 'COURT') return 'COURT';
-    if (normalizedRole === 'SPO' || normalizedRole === 'ARMED') return 'ARMED';
-    if (normalizedRole === 'SPO-UA' || normalizedRole === 'SPOUA' || normalizedRole === 'NOSPO' || normalizedRole === 'NO-SPO' || normalizedRole === 'CSO' || normalizedRole === 'BASIC') return 'BASIC';
-    if (normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9' || normalizedRole === 'K9') return 'K9';
-    return normalizedRole;
+    const rawRole = (role || '').trim();
+    const normalizedRole = normalizeRoleValue(rawRole);
+    if (normalizedRole === 'DEP' || normalizedRole === 'F' || normalizedRole === 'COURT') return 'DEPUTY';
+    if (normalizedRole === 'SPO' || normalizedRole === 'ARMED' || normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9' || normalizedRole === 'K9') return 'CSO/SPO-A: (FT)';
+    if (normalizedRole === 'SPO-UA' || normalizedRole === 'SPOUA' || normalizedRole === 'NOSPO' || normalizedRole === 'NO-SPO' || normalizedRole === 'CSO' || normalizedRole === 'BASIC') return 'CSO: Non-SPO/CR';
+    if (normalizedRole === 'CADET') return 'Cadet';
+    return rawRole || normalizedRole;
 }
 
 function getCourtSecuritySortRank(deputy) {
     const role = getCanonicalRole(deputy.capacity_tag || deputy.role || '');
-    if (role === 'COURT') return 0;
-    if (role === 'ARMED') return 1;
-    if (role === 'K9') return 2;
-    if (role === 'BASIC') return 3;
+    if (role === 'DEPUTY') return 0;
+    if (role === 'CSO/SPO-A: Court Trained (FT)') return 1;
+    if (role === 'CSO/SPO-A: Court Trained (contractor)') return 2;
+    if (role === 'CSO/SPO-A: (FT)') return 3;
+    if (role === 'CSO/SPO-A: (contractor)') return 4;
+    if (role === 'CSO/SPO: Court Trained(FT)') return 5;
+    if (role === 'CSO/SPO Court Trained (contractor)') return 6;
+    if (role === 'CSO: Non-SPO/CR') return 7;
+    if (role === 'Cadet') return 8;
     return 6;
 }
 
@@ -564,10 +613,10 @@ function renderRoster() {
     rosterList.classList.toggle('roster-two-column', showFullRoster);
 
     const courtColumn = document.createElement('div');
-    courtColumn.className = 'roster-column';
+    courtColumn.className = 'roster-column roster-column-court';
 
     const courtHeading = document.createElement('h4');
-    courtHeading.className = 'roster-section-title';
+    courtHeading.className = 'roster-section-title roster-section-title-court';
 
     const courtSecurityAll = allDeputies.filter(isCourtSecurityDeputy);
     const outCount = courtSecurityAll.filter(dep => !isDeputyAvailable(dep)).length;
@@ -596,10 +645,10 @@ function renderRoster() {
 
     if (showFullRoster) {
         const fullColumn = document.createElement('div');
-        fullColumn.className = 'roster-column';
+        fullColumn.className = 'roster-column roster-column-full';
 
         const fullHeading = document.createElement('h4');
-        fullHeading.className = 'roster-section-title';
+        fullHeading.className = 'roster-section-title roster-section-title-full';
         fullHeading.textContent = 'Full Roster';
         fullColumn.appendChild(fullHeading);
 
@@ -618,7 +667,7 @@ function renderRoster() {
             const division = (dep.division || 'Unassigned Division').trim() || 'Unassigned Division';
             if (division !== currentDivision) {
                 const h = document.createElement('h5');
-                h.className = 'roster-section-title';
+                h.className = 'roster-section-title roster-section-title-full';
                 const divisionPosted = nonCourt.filter(d => ((d.division || 'Unassigned Division').trim() || 'Unassigned Division') === division && postedNames.has((d.full_name || '').trim())).length;
                 h.innerHTML = `${division} <span class="counts-inline metric-blue">Posted ${divisionPosted}</span>`;
                 fullList.appendChild(h);
