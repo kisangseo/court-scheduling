@@ -202,11 +202,6 @@ const courtSecurityRoleOrder = [
     'Cadet'
 ];
 
-const canonicalRoleAliases = {
-    'CSO/SPO:COURTTRAINED(FT)': 'CSO/SPO: Court Trained(FT)',
-    'CSO/SPO:COURTTRAINED(CONTRACTOR)': 'CSO/SPO Court Trained (contractor)',
-    'CSO/SPOCOURTTRAINED(CONTRACTOR)': 'CSO/SPO Court Trained (contractor)'
-};
 
 function getCanonicalRole(role) {
     const rawRole = (role || '').trim();
@@ -1096,7 +1091,7 @@ function renderRoster() {
     const courtSecurityDeputies = allDeputies
         .filter(isCourtSecurityDeputy)
         .sort((a, b) => getCourtSecuritySortRank(a) - getCourtSecuritySortRank(b)
-            || getDeputyRole(a).localeCompare(getDeputyRole(b))
+            || getCanonicalRole(getDeputyRole(a)).localeCompare(getCanonicalRole(getDeputyRole(b)))
             || (a.full_name || "").localeCompare(b.full_name || ""));
     courtSecurityDeputies.forEach(deputy => {
         courtList.appendChild(createRosterItem(deputy, { showDivision: false }));
