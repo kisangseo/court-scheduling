@@ -101,7 +101,7 @@ const capabilityOptions = [
     "CSO/SPO-A: (contractor)",
     "CSO/SPO: Court Trained(FT)",
     "CSO/SPO Court Trained (contractor)",
-    "CSO: Non-SPO/CR",
+    "CSO",
     "Cadet"
 ];
 
@@ -110,6 +110,8 @@ function normalizeCapabilityTag(value) {
     if (!text) return "";
 
     const normalized = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (normalized === "CSONONSPOCR") return "CSO";
+
     const matched = capabilityOptions.find(option =>
         option.toUpperCase().replace(/[^A-Z0-9]/g, "") === normalized
     );
