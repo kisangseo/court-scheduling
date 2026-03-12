@@ -46,9 +46,9 @@
     <div id="assignmentsPanel">
         <div id="resultsGrid">
             <div id="postsRow" class="section-row"></div>
+            <div id="juvRow" class="section-row"></div>
             <div id="courtroomsRow" class="section-row-single"></div>
             <div id="overtimeRow" class="section-row"></div>
-            <div id="juvRow" class="section-row"></div>
             <div id="juvBottomRow" class="section-row"></div>
         </div>
     </div>
@@ -2234,7 +2234,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
 
     const sections = { posts: null, courtrooms: null, overtime: null };
 
-    if (courthouse === "Mitchell" || courthouse === "Cummings") {
+    if (courthouse === "Mitchell" || courthouse === "Cummings" || courthouse === "Juvenile") {
         const postsType = typeGroups["Fixed Post"] || [];
         const postsTable = document.createElement("table");
         postsTable.border = "1";
@@ -2268,7 +2268,8 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 { post: "Rover", detail: "7:00 AM", part: "0700" },
                 { post: "Judges O/T", detail: "7:00 AM", part: "0700" }
             ]
-            : [
+            : courthouse === "Cummings"
+            ? [
                 { post: "Cummings", detail: "8:00 AM", part: "0800" },
                 { post: "Cummings", detail: "8:30 AM", part: "0830-1" },
                 { post: "Cummings", detail: "8:30 AM", part: "0830-2" },
@@ -2281,6 +2282,13 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 { post: "Garage", detail: "4:30 PM - 9:00 PM", part: "1600" },
                 
                 { post: "Transportation", detail: "", part: "" }
+            ]
+            : [
+                { post: "Office", detail: "8:30 AM - 5:00 PM", part: "0830-1700" },
+                { post: "Lobby", detail: "8:30 AM - 4:30 PM", part: "0830-1630-1" },
+                { post: "Lobby", detail: "8:30 AM - 4:30 PM", part: "0830-1630-2" },
+                { post: "Lobby", detail: "8:30 AM - 4:30 PM", part: "0830-1630-3" },
+                { post: "Lockup", detail: "", part: "" }
             ];
 
         const postsBody = postsTable.querySelector("tbody");
@@ -2706,14 +2714,28 @@ function search() {
                     : createEmptySectionCell()
             );
 
-            postsRow.appendChild(
-                includeCummings
-                    ? createSectionCell("Cummings", cummings.posts, "Cummings", "main", "Security Post", {
+            const rightPostsColumn = document.createElement("div");
+            rightPostsColumn.className = "stacked-posts-column";
+
+            if (includeCummings) {
+                rightPostsColumn.appendChild(
+                    createSectionCell("Cummings", cummings.posts, "Cummings", "main", "Security Post", {
                         clearButtonLabel: "Clear",
                         onClear: () => clearSectionAssignments("fixed_post", "Cummings")
                     })
-                    : createEmptySectionCell()
-            );
+                );
+            }
+
+            if (includeJuvenile) {
+                rightPostsColumn.appendChild(
+                    createSectionCell("Juvenile", juvenile.posts, "Juvenile", "main", "Security Post", {
+                        clearButtonLabel: "Clear",
+                        onClear: () => clearSectionAssignments("fixed_post", "Juvenile")
+                    })
+                );
+            }
+
+            postsRow.appendChild(rightPostsColumn.childElementCount ? rightPostsColumn : createEmptySectionCell());
 
             // COURTROOMS (single combined table in requested order)
             const combinedCourtrooms = buildCombinedCourtroomsTable(grouped, date, {
@@ -2733,8 +2755,6 @@ function search() {
             courtroomsCell.style.gridColumn = "1 / span 2";
             courtroomsRow.appendChild(courtroomsCell);
 
-            // Not used anymore for juvenile courtrooms
-            juvRow.innerHTML = "";
             juvBottomRow.innerHTML = "";
 
             // =========================

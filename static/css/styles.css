@@ -108,6 +108,12 @@ th, td {
     align-items: start;
 }
 
+.stacked-posts-column {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
 .section-row > div {
     min-width: 0;
 }
