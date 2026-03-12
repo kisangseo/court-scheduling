@@ -3092,7 +3092,7 @@ document.addEventListener("click", function(e) {
         fixedShiftCell.appendChild(editor);
         startSelect.focus();
 
-        const commit = () => {
+        const commit = ({ forceClose = false } = {}) => {
             const start = startSelect.value;
             const end = endSelect.value;
             const display = buildShiftDisplayValue(start, end);
@@ -3120,17 +3120,21 @@ document.addEventListener("click", function(e) {
                 return;
             }
 
+            if (!forceClose) {
+                return;
+            }
+
             fixedShiftCell.textContent = fixedShiftCell.dataset.shift || '';
         };
 
-        startSelect.addEventListener('change', commit);
-        endSelect.addEventListener('change', commit);
+        startSelect.addEventListener('change', () => commit());
+        endSelect.addEventListener('change', () => commit());
 
         [startSelect, endSelect].forEach(select => {
             select.addEventListener('blur', () => {
                 setTimeout(() => {
                     if (!fixedShiftCell.contains(document.activeElement) && fixedShiftCell.querySelector('select')) {
-                        commit();
+                        commit({ forceClose: true });
                     }
                 }, 0);
             });
@@ -3162,7 +3166,7 @@ document.addEventListener("click", function(e) {
         shiftCell.appendChild(editor);
         startSelect.focus();
 
-        const commit = () => {
+        const commit = ({ forceClose = false } = {}) => {
             const start = startSelect.value;
             const end = endSelect.value;
             const display = buildOvertimeShiftDisplayValue(start, end);
@@ -3190,17 +3194,21 @@ document.addEventListener("click", function(e) {
                 return;
             }
 
+            if (!forceClose) {
+                return;
+            }
+
             shiftCell.textContent = shiftCell.dataset.shift || '';
         };
 
-        startSelect.addEventListener('change', commit);
-        endSelect.addEventListener('change', commit);
+        startSelect.addEventListener('change', () => commit());
+        endSelect.addEventListener('change', () => commit());
 
         [startSelect, endSelect].forEach(select => {
             select.addEventListener('blur', () => {
                 setTimeout(() => {
                     if (!shiftCell.contains(document.activeElement) && shiftCell.querySelector('select')) {
-                        commit();
+                        commit({ forceClose: true });
                     }
                 }, 0);
             });
