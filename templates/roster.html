@@ -541,6 +541,8 @@ function updateCourtSecurityStatusCounts(deputies, totalNeeded) {
     const cs = deputies.filter(isCourtSecurityDeputy);
     const scheduledLeave = cs.filter(dep => statusIncludes(dep, "Scheduled Leave")).length;
     const unscheduledLeave = cs.filter(dep => statusIncludes(dep, "Unscheduled Leave")).length;
+    const unavailable = cs.filter(dep => statusIncludes(dep, "Unavailable")).length;
+    const training = cs.filter(dep => statusIncludes(dep, "Training")).length;
 
     const out = cs.filter(dep =>
         statusIncludes(dep, "Scheduled Leave") ||
@@ -555,7 +557,9 @@ function updateCourtSecurityStatusCounts(deputies, totalNeeded) {
         `<span class="status-blue">Total Needed ${totalNeeded}</span>`,
         `<span class="status-green">Available ${available}</span>`,
         `<span class="status-red">Scheduled Leave ${scheduledLeave}</span>`,
-        `<span class="status-orange">Unscheduled Leave ${unscheduledLeave}</span>`
+        `<span class="status-orange">Unscheduled Leave ${unscheduledLeave}</span>`,
+        `<span class="status-red">Unavailable ${unavailable}</span>`,
+        `<span class="status-orange">Training ${training}</span>`
     ].join(' / ');
 }
 
