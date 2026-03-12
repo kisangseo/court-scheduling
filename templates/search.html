@@ -561,6 +561,16 @@ function getTimeOptionValues() {
     return values;
 }
 
+function getHalfHourTimeOptionValues() {
+    const values = [];
+    for (let hour = 0; hour < 24; hour++) {
+        for (let minute = 0; minute < 60; minute += 30) {
+            values.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+        }
+    }
+    return values;
+}
+
 function buildTimeOptionsHtml(selectedValue) {
     return getTimeOptionValues().map(value => {
         const selectedAttr = value === selectedValue ? ' selected' : '';
@@ -568,33 +578,61 @@ function buildTimeOptionsHtml(selectedValue) {
     }).join('');
 }
 
-function parseOvertimeShiftRange(value) {
-    const text = (value || '').trim();
-    const match = text.match(/^(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)$/i);
-    if (!match) {
-        return { start: '', end: '' };
+function buildHalfHourTimeOptionsHtml(selectedValue) {
+    return getHalfHourTimeOptionValues().map(value => {
+        const selectedAttr = value === selectedValue ? ' selected' : '';
+        return `<option value="${value}"${selectedAttr}>${formatTimeValueToAmPm(value)}</option>`;
+    }).join('');
+}
+
+function parseDisplayTimeTo24Hour(value) {
+    const text = (value || '').trim().toUpperCase();
+    const match = text.match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/);
+    if (!match) return '';
+
+    let hour = parseInt(match[1], 10);
+    const minute = match[2];
+    const meridiem = match[3];
+    if (meridiem === 'AM') {
+        if (hour === 12) hour = 0;
+    } else if (hour !== 12) {
+        hour += 12;
     }
 
-    const to24Hour = (display) => {
-        const m = display.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/);
-        if (!m) return '';
+    return `${String(hour).padStart(2, '0')}:${minute}`;
+}
 
-        let h = parseInt(m[1], 10);
-        const min = m[2];
-        const meridiem = m[3];
-        if (meridiem === 'AM') {
-            if (h === 12) h = 0;
-        } else if (h !== 12) {
-            h += 12;
-        }
+function parseShiftTimeDisplayValue(value) {
+    const text = (value || '').trim();
+    const rangeMatch = text.match(/^(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)$/i);
+    if (rangeMatch) {
+        return {
+            start: parseDisplayTimeTo24Hour(rangeMatch[1]),
+            end: parseDisplayTimeTo24Hour(rangeMatch[2])
+        };
+    }
 
-        return `${String(h).padStart(2, '0')}:${min}`;
-    };
+    const singleMatch = text.match(/^(\d{1,2}:\d{2}\s*[AP]M)$/i);
+    if (singleMatch) {
+        return {
+            start: parseDisplayTimeTo24Hour(singleMatch[1]),
+            end: ''
+        };
+    }
 
-    return {
-        start: to24Hour(match[1]),
-        end: to24Hour(match[2])
-    };
+    return { start: '', end: '' };
+}
+
+function buildShiftDisplayValue(startValue, endValue) {
+    const start = formatTimeValueToAmPm(startValue);
+    const end = formatTimeValueToAmPm(endValue);
+    if (start && end) return `${start} - ${end}`;
+    if (start) return start;
+    return '';
+}
+
+function parseOvertimeShiftRange(value) {
+    return parseShiftTimeDisplayValue(value);
 }
 
 function buildOvertimeShiftDisplayValue(startValue, endValue) {
@@ -2315,19 +2353,29 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
             const fallbackMatches = postsType.filter(r => r.location_group === slot.post && !r.part && !r.location_detail);
             const pickPreferredRow = (rowList) => rowList.find(r => (r.assigned_member || '').trim()) || rowList[0] || null;
             const assigned = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
+            const effectiveShift = (assigned && (assigned.shift_time || '').trim()) || slot.detail || 'General';
+            const parsedFixedShift = parseShiftTimeDisplayValue(effectiveShift);
 
             const tr = document.createElement("tr");
             const showPost = index === 0 || posts[index - 1].post !== slot.post;
             tr.innerHTML = `
                 <td>${showPost ? slot.post : ""}</td>
-                <td>${slot.detail || "General"}</td>
+                <td class="editable-fixed-shift"
+                    data-date="${selectedDate}"
+                    data-courthouse="${courthouse}"
+                    data-type="Fixed Post"
+                    data-room="${slot.post}"
+                    data-part="${slot.part || ""}"
+                    data-shift="${effectiveShift}"
+                    data-start-time="${parsedFixedShift.start || ''}"
+                    data-end-time="${parsedFixedShift.end || ''}">${effectiveShift}</td>
                 <td class="editable"
                     data-date="${selectedDate}"
                     data-courthouse="${courthouse}"
                     data-assigned="${assigned ? (assigned.assigned_member || "") : ""}"
                     data-type="Fixed Post"
                     data-room="${slot.post}"
-                    data-shift="${slot.detail || "General"}"
+                    data-shift="${effectiveShift}"
                     data-slot-index="${index}"
                     data-part="${slot.part || ""}">
                     ${assigned ? (assigned.assigned_member || "") : ""}
@@ -3018,6 +3066,76 @@ window.onload = function() {
     search();
 };
 document.addEventListener("click", function(e) {
+
+    const fixedShiftCell = e.target.closest('.editable-fixed-shift');
+    if (fixedShiftCell) {
+        if (fixedShiftCell.querySelector('select')) return;
+
+        const currentStart = fixedShiftCell.dataset.startTime || '';
+        const currentEnd = fixedShiftCell.dataset.endTime || '';
+
+        const editor = document.createElement('div');
+        editor.style.display = 'flex';
+        editor.style.gap = '6px';
+
+        const startSelect = document.createElement('select');
+        const endSelect = document.createElement('select');
+        startSelect.innerHTML = `<option value="">Start</option>${buildHalfHourTimeOptionsHtml(currentStart)}`;
+        endSelect.innerHTML = `<option value="">Finish</option>${buildHalfHourTimeOptionsHtml(currentEnd)}`;
+
+        editor.appendChild(startSelect);
+        editor.appendChild(endSelect);
+
+        fixedShiftCell.innerHTML = '';
+        fixedShiftCell.appendChild(editor);
+        startSelect.focus();
+
+        const commit = () => {
+            const start = startSelect.value;
+            const end = endSelect.value;
+            const display = buildShiftDisplayValue(start, end);
+
+            if (start && display) {
+                fixedShiftCell.dataset.startTime = start;
+                fixedShiftCell.dataset.endTime = end;
+                fixedShiftCell.dataset.shift = display;
+                fixedShiftCell.textContent = display;
+
+                const memberCell = fixedShiftCell.parentElement?.querySelector('.editable[data-type="Fixed Post"]');
+                if (memberCell) {
+                    memberCell.dataset.shift = display;
+                }
+
+                queueOvertimeShiftUpdate({
+                    assignment_date: fixedShiftCell.dataset.date,
+                    courthouse: fixedShiftCell.dataset.courthouse,
+                    assignment_type: fixedShiftCell.dataset.type,
+                    location_detail: fixedShiftCell.dataset.room,
+                    location_group: fixedShiftCell.dataset.room,
+                    part: fixedShiftCell.dataset.part || '',
+                    shift_time: display
+                });
+                return;
+            }
+
+            fixedShiftCell.textContent = fixedShiftCell.dataset.shift || '';
+        };
+
+        startSelect.addEventListener('change', commit);
+        endSelect.addEventListener('change', commit);
+
+        [startSelect, endSelect].forEach(select => {
+            select.addEventListener('blur', () => {
+                setTimeout(() => {
+                    if (!fixedShiftCell.contains(document.activeElement) && fixedShiftCell.querySelector('select')) {
+                        commit();
+                    }
+                }, 0);
+            });
+        });
+
+        return;
+    }
 
     const shiftCell = e.target.closest('.editable-overtime-shift');
     if (shiftCell) {

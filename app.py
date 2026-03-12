@@ -1097,51 +1097,95 @@ def update_judge_name():
 @app.route("/api/update-shift-time", methods=["POST"])
 def update_shift_time():
     data = request.json or {}
+    assignment_type = data.get("assignment_type")
 
     conn = get_conn()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        UPDATE dbo.court_assignments
-        SET shift_time = ?
-        WHERE assignment_date = ?
-          AND courthouse = ?
-          AND assignment_type = ?
-          AND ISNULL(location_detail, '') = ISNULL(?, '')
-          AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
-    """, (
-        data.get("shift_time"),
-        data.get("assignment_date"),
-        data.get("courthouse"),
-        data.get("assignment_type"),
-        data.get("location_detail"),
-        data.get("part")
-    ))
-
-    if cursor.rowcount == 0:
+    if assignment_type == "Fixed Post":
         cursor.execute("""
-            INSERT INTO dbo.court_assignments (
-                assignment_date,
-                courthouse,
-                assignment_type,
-                location_group,
-                location_detail,
-                part,
-                judge_name,
-                shift_time,
-                assigned_member,
-                assignment_notes,
-                created_at
-            )
-            VALUES (?, ?, ?, NULL, ?, ?, NULL, ?, NULL, NULL, GETDATE())
+            UPDATE dbo.court_assignments
+            SET shift_time = ?
+            WHERE assignment_date = ?
+              AND courthouse = ?
+              AND assignment_type = ?
+              AND ISNULL(location_group, '') = ISNULL(?, '')
+              AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
         """, (
+            data.get("shift_time"),
             data.get("assignment_date"),
             data.get("courthouse"),
-            data.get("assignment_type"),
-            data.get("location_detail"),
-            data.get("part"),
-            data.get("shift_time")
+            assignment_type,
+            data.get("location_group") or data.get("location_detail"),
+            data.get("part")
         ))
+    else:
+        cursor.execute("""
+            UPDATE dbo.court_assignments
+            SET shift_time = ?
+            WHERE assignment_date = ?
+              AND courthouse = ?
+              AND assignment_type = ?
+              AND ISNULL(location_detail, '') = ISNULL(?, '')
+              AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
+        """, (
+            data.get("shift_time"),
+            data.get("assignment_date"),
+            data.get("courthouse"),
+            assignment_type,
+            data.get("location_detail"),
+            data.get("part")
+        ))
+
+    if cursor.rowcount == 0:
+        if assignment_type == "Fixed Post":
+            cursor.execute("""
+                INSERT INTO dbo.court_assignments (
+                    assignment_date,
+                    courthouse,
+                    assignment_type,
+                    location_group,
+                    location_detail,
+                    part,
+                    judge_name,
+                    shift_time,
+                    assigned_member,
+                    assignment_notes,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, NULL, ?, NULL, ?, NULL, NULL, GETDATE())
+            """, (
+                data.get("assignment_date"),
+                data.get("courthouse"),
+                assignment_type,
+                data.get("location_group") or data.get("location_detail"),
+                data.get("part"),
+                data.get("shift_time")
+            ))
+        else:
+            cursor.execute("""
+                INSERT INTO dbo.court_assignments (
+                    assignment_date,
+                    courthouse,
+                    assignment_type,
+                    location_group,
+                    location_detail,
+                    part,
+                    judge_name,
+                    shift_time,
+                    assigned_member,
+                    assignment_notes,
+                    created_at
+                )
+                VALUES (?, ?, ?, NULL, ?, ?, NULL, ?, NULL, NULL, GETDATE())
+            """, (
+                data.get("assignment_date"),
+                data.get("courthouse"),
+                assignment_type,
+                data.get("location_detail"),
+                data.get("part"),
+                data.get("shift_time")
+            ))
 
     conn.commit()
     conn.close()
@@ -1886,33 +1930,58 @@ def import_previous_weekday():
             if slot_key in populated_slot_keys:
                 continue
 
-            cursor.execute("""
-                UPDATE dbo.court_assignments
-                SET assigned_member = ?,
-                    assignment_notes = ?,
-                    shift_time = COALESCE(NULLIF(shift_time, ''), ?)
-                WHERE assignment_date = ?
-                  AND courthouse = ?
-                  AND assignment_type = ?
-                  AND ISNULL(location_group,'') = ?
-                  AND ISNULL(location_detail,'') = ?
-                  AND ISNULL(part,'') = ?
-                  AND ISNULL(assigned_member,'') = ''
-            """, (
-                assigned_member,
-                source_row.get("assignment_notes"),
-                source_row.get("shift_time"),
-                target_date_str,
-                source_row.get("courthouse"),
-                source_row.get("assignment_type"),
-                (source_row.get("location_group") or ""),
-                (source_row.get("location_detail") or ""),
-                (source_row.get("part") or ""),
-            ))
+            if source_row.get("assignment_type") == "Fixed Post":
+                cursor.execute("""
+                    UPDATE dbo.court_assignments
+                    SET assigned_member = ?,
+                        assignment_notes = ?
+                    WHERE assignment_date = ?
+                      AND courthouse = ?
+                      AND assignment_type = ?
+                      AND ISNULL(location_group,'') = ?
+                      AND ISNULL(location_detail,'') = ?
+                      AND ISNULL(part,'') = ?
+                      AND ISNULL(assigned_member,'') = ''
+                """, (
+                    assigned_member,
+                    source_row.get("assignment_notes"),
+                    target_date_str,
+                    source_row.get("courthouse"),
+                    source_row.get("assignment_type"),
+                    (source_row.get("location_group") or ""),
+                    (source_row.get("location_detail") or ""),
+                    (source_row.get("part") or ""),
+                ))
+            else:
+                cursor.execute("""
+                    UPDATE dbo.court_assignments
+                    SET assigned_member = ?,
+                        assignment_notes = ?,
+                        shift_time = COALESCE(NULLIF(shift_time, ''), ?)
+                    WHERE assignment_date = ?
+                      AND courthouse = ?
+                      AND assignment_type = ?
+                      AND ISNULL(location_group,'') = ?
+                      AND ISNULL(location_detail,'') = ?
+                      AND ISNULL(part,'') = ?
+                      AND ISNULL(assigned_member,'') = ''
+                """, (
+                    assigned_member,
+                    source_row.get("assignment_notes"),
+                    source_row.get("shift_time"),
+                    target_date_str,
+                    source_row.get("courthouse"),
+                    source_row.get("assignment_type"),
+                    (source_row.get("location_group") or ""),
+                    (source_row.get("location_detail") or ""),
+                    (source_row.get("part") or ""),
+                ))
             if cursor.rowcount and cursor.rowcount > 0:
                 updated_count += cursor.rowcount
                 populated_slot_keys.add(slot_key)
             continue
+
+        shift_time_to_insert = None if source_row.get("assignment_type") == "Fixed Post" else source_row.get("shift_time")
 
         cursor.execute("""
             INSERT INTO dbo.court_assignments (
@@ -1937,7 +2006,7 @@ def import_previous_weekday():
             source_row.get("location_detail"),
             source_row.get("part"),
             source_row.get("judge_name"),
-            source_row.get("shift_time"),
+            shift_time_to_insert,
             assigned_member,
             source_row.get("assignment_notes"),
         ))
