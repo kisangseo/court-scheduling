@@ -74,7 +74,7 @@ let rawDeputies = [];
 let selectedDeputy = null;
 let globalAssignmentTotals = { vacant: 0, filled: 0, open: 0 };
 let globalPostedNames = new Set();
-let hidePosted = false;
+let hidePosted = localStorage.getItem("searchHidePosted") === "1";
 
 const COURTROOM_ASSIGNMENT_OPTIONS = [
     "Firearm", "DNS", "Open", "Carjacking", "PT46/47", "Robbery", "ATT MUR", "CDS",
@@ -120,6 +120,7 @@ function queueAssignmentNoteUpdate(payload) {
 function buildHidePostedToggle() {
     const label = document.createElement("label");
     label.className = "hide-posted-toggle";
+    label.title = "Hide deputies already posted in assignments";
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
@@ -127,7 +128,9 @@ function buildHidePostedToggle() {
     checkbox.checked = hidePosted;
 
     label.appendChild(checkbox);
-    label.appendChild(document.createTextNode(" Hide Posted"));
+    const labelText = document.createElement("span");
+    labelText.textContent = "Hide Posted";
+    label.appendChild(labelText);
     return label;
 }
 
@@ -3048,6 +3051,7 @@ window.onload = function() {
     document.addEventListener('change', function(e) {
         if (!e.target.classList.contains('hide-posted-checkbox')) return;
         hidePosted = e.target.checked;
+        localStorage.setItem("searchHidePosted", hidePosted ? "1" : "0");
         document.querySelectorAll('.hide-posted-checkbox').forEach(toggle => {
             if (toggle !== e.target) {
                 toggle.checked = hidePosted;

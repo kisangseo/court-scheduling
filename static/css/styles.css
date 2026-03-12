@@ -254,8 +254,11 @@ th, td {
 }
 
 .hide-posted-toggle {
-    display: block;
-    margin-bottom: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    margin: 0 0 8px;
 }
 
 .roster-item.hide-posted {
