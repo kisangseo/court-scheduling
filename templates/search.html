@@ -69,6 +69,7 @@ let pendingNotes = {};
 let pendingJudges = {};
 let pendingCourtroomMeta = {};
 let pendingShiftTimes = {};
+let changedRows = new Set();
 let allDeputies = [];
 let rawDeputies = [];
 let selectedDeputy = null;
@@ -636,6 +637,21 @@ function setPendingCourtroomMetaFromRow(rowEl) {
     const key = [payload.assignment_date, payload.courthouse, payload.location_detail, payload.part].join('|');
     pendingCourtroomMeta[key] = payload;
     updateSaveStatusBadge();
+}
+
+function getCourtroomRowKey(rowEl) {
+    return [
+        (rowEl.dataset.date || '').trim(),
+        (rowEl.dataset.courthouse || '').trim(),
+        (rowEl.dataset.room || '').trim(),
+        rowEl.dataset.part || ''
+    ].join('|');
+}
+
+function markCourtroomRowChanged(rowEl) {
+    const key = getCourtroomRowKey(rowEl);
+    if (!key || key === '|||') return;
+    changedRows.add(key);
 }
 
 function fetchGlobalAssignmentTotals(dateValue) {
@@ -2174,7 +2190,10 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         `;
 
         tr.querySelectorAll('.courtroom-time-input, .courtroom-down-checkbox, .courtroom-high-profile-checkbox').forEach(inputEl => {
-            inputEl.addEventListener('change', () => setPendingCourtroomMetaFromRow(tr));
+            inputEl.addEventListener('change', () => {
+                markCourtroomRowChanged(tr);
+                setPendingCourtroomMetaFromRow(tr);
+            });
         });
 
         const assignmentSelect = tr.querySelector('.courtroom-assignment-select');
@@ -3071,6 +3090,10 @@ document.addEventListener("click", function(e) {
         ].join("|");
 
         pendingJudges[key] = payload;
+        const rowEl = cell.closest('.courtroom-meta-row');
+        if (rowEl) {
+            markCourtroomRowChanged(rowEl);
+        }
         cell.textContent = input.value;
 
         updateSaveStatusBadge();
@@ -3114,7 +3137,9 @@ document.addEventListener("click", function(e) {
 
 document.getElementById("saveAssignments").addEventListener("click", function() {
 
-    document.querySelectorAll('.courtroom-meta-row').forEach(rowEl => setPendingCourtroomMetaFromRow(rowEl));
+    const changedCourtroomMeta = Array.from(changedRows)
+        .map(key => pendingCourtroomMeta[key])
+        .filter(payload => payload && payload.assignment_date && payload.courthouse && payload.location_detail);
 
     const armedPostViolations = getSingleArmedAcrossPostViolations();
     if (armedPostViolations.length > 0) {
@@ -3164,8 +3189,7 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         })
     );
 
-    const courtroomMetaRequests = Object.values(pendingCourtroomMeta)
-        .filter(payload => payload.assignment_date && payload.courthouse && payload.location_detail)
+    const courtroomMetaRequests = changedCourtroomMeta
         .map(payload =>
         fetch("/api/update-courtroom-meta", {
             method: "POST",
@@ -3197,6 +3221,7 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
             pendingJudges = {};
             pendingCourtroomMeta = {};
             pendingShiftTimes = {};
+            changedRows.clear();
             if (saveStatus) {
                 saveStatus.className = "counts-inline metric-green";
                 saveStatus.textContent = "Saved";
