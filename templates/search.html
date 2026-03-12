@@ -3181,6 +3181,7 @@ document.addEventListener("click", function(e) {
                     courthouse: shiftCell.dataset.courthouse,
                     assignment_type: shiftCell.dataset.type,
                     location_detail: shiftCell.dataset.room,
+                    location_group: shiftCell.dataset.room,
                     part: shiftCell.dataset.part || '',
                     shift_time: display
                 });
@@ -3351,7 +3352,7 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
     );
 
     const shiftTimeRequests = Object.values(pendingShiftTimes)
-        .filter(payload => payload.assignment_date && payload.courthouse && payload.location_detail)
+        .filter(payload => payload.assignment_date && payload.courthouse && (payload.location_detail || payload.location_group))
         .map(payload =>
         fetch("/api/update-shift-time", {
             method: "POST",

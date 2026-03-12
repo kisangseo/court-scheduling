@@ -1126,16 +1126,40 @@ def update_shift_time():
             WHERE assignment_date = ?
               AND courthouse = ?
               AND assignment_type = ?
-              AND ISNULL(location_detail, '') = ISNULL(?, '')
+              AND (
+                    ISNULL(location_group, '') = ISNULL(?, '')
+                    OR ISNULL(location_detail, '') = ISNULL(?, '')
+                  )
               AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
         """, (
             data.get("shift_time"),
             data.get("assignment_date"),
             data.get("courthouse"),
             assignment_type,
+            data.get("location_group") or data.get("location_detail"),
             data.get("location_detail"),
             data.get("part")
         ))
+
+        if cursor.rowcount == 0:
+            cursor.execute("""
+                UPDATE dbo.court_assignments
+                SET shift_time = ?
+                WHERE assignment_date = ?
+                  AND courthouse = ?
+                  AND assignment_type = ?
+                  AND (
+                        ISNULL(location_group, '') = ISNULL(?, '')
+                        OR ISNULL(location_detail, '') = ISNULL(?, '')
+                      )
+            """, (
+                data.get("shift_time"),
+                data.get("assignment_date"),
+                data.get("courthouse"),
+                assignment_type,
+                data.get("location_group") or data.get("location_detail"),
+                data.get("location_detail")
+            ))
 
     if cursor.rowcount == 0:
         if assignment_type == "Fixed Post":
@@ -1177,11 +1201,12 @@ def update_shift_time():
                     assignment_notes,
                     created_at
                 )
-                VALUES (?, ?, ?, NULL, ?, ?, NULL, ?, NULL, NULL, GETDATE())
+                VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL, GETDATE())
             """, (
                 data.get("assignment_date"),
                 data.get("courthouse"),
                 assignment_type,
+                data.get("location_group") if data.get("location_group") else None,
                 data.get("location_detail"),
                 data.get("part"),
                 data.get("shift_time")
