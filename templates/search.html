@@ -2144,7 +2144,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         if (courthouse === "Family") {
             tr.classList.add("family-courtroom-row");
         }
-        if (courthouse === "Juvenile") {
+        if (courthouse === "Juvenile" && (row.__building || courthouse) === "Juvenile") {
             tr.classList.add("juvenile-courtroom-row");
         }
         tr.dataset.date = selectedDate;
