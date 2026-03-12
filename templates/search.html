@@ -179,7 +179,7 @@ function isCourtSecurityDeputy(deputy) {
 }
 
 function getDeputyRole(deputy) {
-    return (deputy.role || deputy.capacity_tag || "").trim().toUpperCase();
+    return (deputy.role || deputy.capacity_tag || "").trim();
 }
 
 function getDeputyCapacityTag(deputy) {
@@ -202,22 +202,11 @@ const courtSecurityRoleOrder = [
     'Cadet'
 ];
 
-
-function getCanonicalRole(role) {
-    const rawRole = (role || '').trim();
-    const normalizedRole = normalizeRoleValue(rawRole);
-    if (normalizedRole === 'DEP' || normalizedRole === 'F' || normalizedRole === 'COURT') return 'DEPUTY';
-    if (normalizedRole === 'SPO' || normalizedRole === 'ARMED' || normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9' || normalizedRole === 'K9') return 'CSO/SPO-A: (FT)';
-    if (normalizedRole === 'SPO-UA' || normalizedRole === 'SPOUA' || normalizedRole === 'NOSPO' || normalizedRole === 'NO-SPO' || normalizedRole === 'CSO' || normalizedRole === 'BASIC') return 'CSO: Non-SPO/CR';
-    if (normalizedRole === 'CADET') return 'Cadet';
-    const aliasKey = rawRole.toUpperCase().replace(/[^A-Z0-9():\/-]/g, '');
-    if (canonicalRoleAliases[aliasKey]) return canonicalRoleAliases[aliasKey];
-    return rawRole || normalizedRole;
-}
+const courtSecurityRoleOrderNormalized = courtSecurityRoleOrder.map(normalizeRoleValue);
 
 function getCourtSecuritySortRank(deputy) {
-    const role = getCanonicalRole(getDeputyRole(deputy));
-    const roleIndex = courtSecurityRoleOrder.indexOf(role);
+    const role = getDeputyCapacityTag(deputy) || getDeputyRole(deputy);
+    const roleIndex = courtSecurityRoleOrderNormalized.indexOf(normalizeRoleValue(role));
     if (roleIndex !== -1) return roleIndex;
     return courtSecurityRoleOrder.length;
 }
@@ -232,7 +221,7 @@ function createRosterItem(deputy, options = {}) {
     const division = (deputy.division || "Unassigned Division").trim() || "Unassigned Division";
     const capacityTag = getDeputyCapacityTag(deputy);
 
-    const displayCapacityTag = getCanonicalRole(capacityTag);
+    const displayCapacityTag = capacityTag;
 
     deputyRow.textContent = showDivision
         ? `${deputy.full_name}${displayCapacityTag ? ` (${displayCapacityTag})` : ""} - ${division}`
@@ -1091,7 +1080,7 @@ function renderRoster() {
     const courtSecurityDeputies = allDeputies
         .filter(isCourtSecurityDeputy)
         .sort((a, b) => getCourtSecuritySortRank(a) - getCourtSecuritySortRank(b)
-            || getCanonicalRole(getDeputyRole(a)).localeCompare(getCanonicalRole(getDeputyRole(b)))
+            || (getDeputyCapacityTag(a) || getDeputyRole(a)).localeCompare(getDeputyCapacityTag(b) || getDeputyRole(b))
             || (a.full_name || "").localeCompare(b.full_name || ""));
     courtSecurityDeputies.forEach(deputy => {
         courtList.appendChild(createRosterItem(deputy, { showDivision: false }));
@@ -1228,25 +1217,31 @@ function getCellAssignmentCategory(cell) {
     return 'overtime';
 }
 
+function hasCapability(role, expectedCapabilities) {
+    const normalizedRole = normalizeRoleValue(role);
+    return expectedCapabilities.some(capability => normalizeRoleValue(capability) === normalizedRole);
+}
+
 function isCourtPrimaryCapability(role) {
-    const capability = getCanonicalRole(role);
-    return capability === 'DEPUTY'
-        || capability === 'CSO/SPO-A: Court Trained (FT)'
-        || capability === 'CSO/SPO-A: Court Trained (contractor)';
+    return hasCapability(role, [
+        'DEPUTY',
+        'CSO/SPO-A: Court Trained (FT)',
+        'CSO/SPO-A: Court Trained (contractor)'
+    ]);
 }
 
 function isCourtSecondaryCapability(role) {
-    const capability = getCanonicalRole(role);
-    return isCourtPrimaryCapability(capability) || capability === 'CSO/SPO: Court Trained(FT)';
+    return isCourtPrimaryCapability(role) || hasCapability(role, ['CSO/SPO: Court Trained(FT)']);
 }
 
 function isDoorPrimaryCapability(role) {
-    const capability = getCanonicalRole(role);
-    return capability === 'DEPUTY'
-        || capability === 'CSO/SPO-A: Court Trained (FT)'
-        || capability === 'CSO/SPO-A: Court Trained (contractor)'
-        || capability === 'CSO/SPO-A: (FT)'
-        || capability === 'CSO/SPO-A: (contractor)';
+    return hasCapability(role, [
+        'DEPUTY',
+        'CSO/SPO-A: Court Trained (FT)',
+        'CSO/SPO-A: Court Trained (contractor)',
+        'CSO/SPO-A: (FT)',
+        'CSO/SPO-A: (contractor)'
+    ]);
 }
 
 function isNoGunFixedPost(courthouse, post) {
@@ -1756,7 +1751,7 @@ function createAssignmentTypeahead(cell) {
             option.style.background = 'transparent';
             option.style.padding = '8px 10px';
             option.style.cursor = 'pointer';
-            option.textContent = `${dep.full_name || ''} (${getCanonicalRole(getDeputyRole(dep || {})) || ''})`;
+            option.textContent = `${dep.full_name || ''} (${getDeputyCapacityTag(dep || {}) || getDeputyRole(dep || {}) || ''})`;
             option.addEventListener('mousedown', (evt) => {
                 evt.preventDefault();
                 applySelection(dep);
