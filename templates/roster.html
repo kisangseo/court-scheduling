@@ -107,13 +107,14 @@ const capabilityOptions = [
 
 function normalizeCapabilityTag(value) {
     const text = (value || "").trim();
-    const normalized = text.toUpperCase().replace(/\s+/g, "").replace(/_/g, "-");
-    if (["DEP", "F", "COURT"].includes(normalized)) return "DEPUTY";
-    if (["SPO", "ARMED", "DEP-K9", "DEPK9", "K9"].includes(normalized)) return "CSO/SPO-A: (FT)";
-    if (["SPO-UA", "SPOUA", "NOSPO", "NO-SPO", "CSO", "BASIC"].includes(normalized)) return "CSO: Non-SPO/CR";
-    if (normalized === "CADET") return "Cadet";
-    if (capabilityOptions.includes(text)) return text;
-    return value || "";
+    if (!text) return "";
+
+    const normalized = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const matched = capabilityOptions.find(option =>
+        option.toUpperCase().replace(/[^A-Z0-9]/g, "") === normalized
+    );
+
+    return matched || text;
 }
 
 function buildOptions(selectEl, values, selectedValue = "") {
