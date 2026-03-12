@@ -249,16 +249,39 @@ function normalizeCapacityTag(deputy) {
     return (deputy.capacity_tag || deputy.capability_tag || '').toString().trim().toUpperCase();
 }
 
+const courtSecurityRoleOrder = [
+    'DEPUTY',
+    'CSO/SPO-A: Court Trained (FT)',
+    'CSO/SPO-A: Court Trained (contractor)',
+    'CSO/SPO-A: (FT)',
+    'CSO/SPO-A: (contractor)',
+    'CSO/SPO: Court Trained(FT)',
+    'CSO/SPO Court Trained (contractor)',
+    'CSO: Non-SPO/CR',
+    'Cadet'
+];
+
+function normalizeCapacitySortKey(value) {
+    return (value || '').toString().toUpperCase().replace(/\s+/g, '').replace(/_/g, '-');
+}
+
+const courtSecurityRoleOrderNormalized = courtSecurityRoleOrder.map(normalizeCapacitySortKey);
+
+function getCapacityTagSortRank(tag) {
+    const idx = courtSecurityRoleOrderNormalized.indexOf(normalizeCapacitySortKey(tag));
+    return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+}
+
 function getCapacityTagLabel(deputy) {
     return (deputy.capacity_tag || deputy.capability_tag || '').toString().trim() || 'UNSPECIFIED';
 }
 
-function getAvailableCategoryFromTag(deputy) {
-    const tag = normalizeCapacityTag(deputy);
-    if (!tag) return 'basic';
-    if (tag === 'DEPUTY' || tag.includes('COURT TRAINED')) return 'court';
-    if (tag === 'DEPUTY' || tag.includes('-A')) return 'armed';
-    return 'basic';
+function isCourtCategoryTag(tag) {
+    return tag === 'DEPUTY' || tag.includes('COURT TRAINED');
+}
+
+function isArmedCategoryTag(tag) {
+    return tag === 'DEPUTY' || tag.includes('-A');
 }
 
 function summarizeAvailableDeputies(availableDeputies) {
@@ -274,8 +297,11 @@ function summarizeAvailableDeputies(availableDeputies) {
 
     (availableDeputies || []).forEach(dep => {
         summary.total += 1;
-        const category = getAvailableCategoryFromTag(dep);
-        summary.categories[category] = (summary.categories[category] || 0) + 1;
+        const tag = normalizeCapacityTag(dep);
+
+        if (isCourtCategoryTag(tag)) summary.categories.court += 1;
+        if (isArmedCategoryTag(tag)) summary.categories.armed += 1;
+        if (!isCourtCategoryTag(tag) && !isArmedCategoryTag(tag)) summary.categories.basic += 1;
 
         const tagLabel = getCapacityTagLabel(dep);
         summary.byCapacityTag[tagLabel] = (summary.byCapacityTag[tagLabel] || 0) + 1;
@@ -545,7 +571,11 @@ function renderSummary(dayResults) {
     const availableCells = showSummaryDetail
         ? dayResults.map(day => {
             const detailTags = Object.entries(day.availableByCapacityTag || {})
-                .sort((a, b) => a[0].localeCompare(b[0]))
+                .sort((a, b) => {
+                    const rankCompare = getCapacityTagSortRank(a[0]) - getCapacityTagSortRank(b[0]);
+                    if (rankCompare !== 0) return rankCompare;
+                    return a[0].localeCompare(b[0]);
+                })
                 .map(([tag, count]) => `${tag}: ${count}`)
                 .join('<br>');
             return `<td>${detailTags || 'None'}</td>`;
