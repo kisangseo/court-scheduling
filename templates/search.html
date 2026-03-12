@@ -49,7 +49,6 @@
             <div id="juvRow" class="section-row"></div>
             <div id="courtroomsRow" class="section-row-single"></div>
             <div id="overtimeRow" class="section-row"></div>
-            <div id="juvBottomRow" class="section-row"></div>
         </div>
     </div>
     <div id="rosterPanel">
@@ -2665,17 +2664,15 @@ function search() {
             const postsRow = document.getElementById("postsRow");
             const courtroomsRow = document.getElementById("courtroomsRow");
             const overtimeRow = document.getElementById("overtimeRow");
-            const juvRow = document.getElementById("juvRow");
-            const juvBottomRow = document.getElementById("juvBottomRow");
 
             // Panels that already exist in the DOM (move them into the right column later)
             const borrowedPanel = document.getElementById("borrowedDeputiesPanel");
 
-            [postsRow, courtroomsRow, overtimeRow, juvRow, juvBottomRow]
+            [postsRow, courtroomsRow, overtimeRow]
                 .filter(Boolean)
                 .forEach(row => row.innerHTML = "");
 
-            if (!postsRow || !courtroomsRow || !overtimeRow || !juvRow || !juvBottomRow) {
+            if (!postsRow || !courtroomsRow || !overtimeRow) {
                 console.warn("Search layout row missing; skipping render to avoid runtime crash.");
                 return;
             }
@@ -2727,8 +2724,9 @@ function search() {
             }
 
             if (includeJuvenile) {
+                const juvenilePostsContent = juvenile.posts || buildCourthouseSections("Juvenile", [], date).posts;
                 rightPostsColumn.appendChild(
-                    createSectionCell("Juvenile", juvenile.posts, "Juvenile", "main", "Security Post", {
+                    createSectionCell("Juvenile", juvenilePostsContent, "Juvenile", "main", "Security Post", {
                         clearButtonLabel: "Clear",
                         onClear: () => clearSectionAssignments("fixed_post", "Juvenile")
                     })
@@ -2736,16 +2734,6 @@ function search() {
             }
 
             postsRow.appendChild(rightPostsColumn.childElementCount ? rightPostsColumn : createEmptySectionCell());
-
-            juvRow.appendChild(createEmptySectionCell());
-            juvRow.appendChild(
-                includeJuvenile
-                    ? createSectionCell("Juvenile", juvenile.posts, "Juvenile", "main", "Security Post", {
-                        clearButtonLabel: "Clear",
-                        onClear: () => clearSectionAssignments("fixed_post", "Juvenile")
-                    })
-                    : createEmptySectionCell()
-            );
 
             // COURTROOMS (single combined table in requested order)
             const combinedCourtrooms = buildCombinedCourtroomsTable(grouped, date, {
@@ -2765,7 +2753,6 @@ function search() {
             courtroomsCell.style.gridColumn = "1 / span 2";
             courtroomsRow.appendChild(courtroomsCell);
 
-            juvBottomRow.innerHTML = "";
 
             // =========================
             // OVERTIME LEFT + DETAILS RIGHT
