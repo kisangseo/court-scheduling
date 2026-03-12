@@ -477,6 +477,18 @@ const courtSecurityRoleOrder = [
 
 const courtSecurityRoleOrderNormalized = courtSecurityRoleOrder.map(normalizeRoleValue);
 
+const courtSecurityRoleOrder = [
+    'DEPUTY',
+    'CSO/SPO-A: Court Trained (FT)',
+    'CSO/SPO-A: Court Trained (contractor)',
+    'CSO/SPO-A: (FT)',
+    'CSO/SPO-A: (contractor)',
+    'CSO/SPO: Court Trained(FT)',
+    'CSO/SPO Court Trained (contractor)',
+    'CSO: Non-SPO/CR',
+    'Cadet'
+];
+
 function getCourtSecuritySortRank(deputy) {
     const role = (deputy.capacity_tag || deputy.role || '').trim();
     const roleIndex = courtSecurityRoleOrderNormalized.indexOf(normalizeRoleValue(role));
