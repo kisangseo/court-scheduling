@@ -1389,14 +1389,17 @@ function getUnmetArmedFixedPostSlots() {
 
 function updateFixedPostArmedWarnings() {
     document.querySelectorAll('.editable[data-type="Fixed Post"]').forEach(cell => {
+        const row = cell.closest('tr');
         cell.querySelectorAll('.armed-warning').forEach(el => el.remove());
         cell.classList.remove('armed-required-unmet');
+        row?.classList.remove('assignment-armed-unmet-row');
 
         if (!cellRequiresArmedFixedPost(cell) || isArmedRequirementSatisfied(cell)) {
             return;
         }
 
         cell.classList.add('armed-required-unmet');
+        row?.classList.add('assignment-armed-unmet-row');
         const warning = document.createElement('div');
         warning.className = 'armed-warning';
         warning.style.color = '#b42318';
