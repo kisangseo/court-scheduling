@@ -106,34 +106,48 @@ function isInactiveCourtLabel(value) {
     ].includes(normalized);
 }
 
-function shouldCountFixedPostSlot(slotMeta = {}) {
-    const courthouse = (slotMeta.courthouse || '').trim().toLowerCase();
-    const post = (slotMeta.post || '').trim().toLowerCase();
-    const part = (slotMeta.part || '').trim().toLowerCase();
+function getRequiredDeputiesForCourtroomLabel(value) {
+    const normalized = normalizeAssignmentLabel(value);
+    if (!normalized) return 0;
 
-    if (courthouse === 'mitchell' && post === 'calvert' && part === '0800-3') return false;
-    if (courthouse === 'cummings' && post === 'cummings' && part === '0830-2') return false;
-    if (post === 'transportation') return false;
-    return true;
+    if ([
+        'DNS',
+        'F/T',
+        'FT',
+        'NON-HEARING MOTIONS',
+        'NON-HEARING MOTIONS, CIVIL',
+        'CLOSED',
+        'NO DEPUTY',
+        'NO DEPUTIES',
+        'CIVIL - NO DEPUTIES'
+    ].includes(normalized)) {
+        return 0;
+    }
+
+    if (normalized === 'NEED 2 DEPUTIES') return 2;
+
+    return 1;
 }
 
-function getSlotState(assignmentType, assignmentLabel, hasAssignedMember, slotMeta = {}) {
-    const type = (assignmentType || '').trim();
+function getFixedPostRequirementGroup(slotMeta = {}) {
+    const courthouse = (slotMeta.courthouse || '').trim().toLowerCase();
+    const post = (slotMeta.post || '').trim().toLowerCase();
+    const detail = (slotMeta.detail || '').trim().toLowerCase();
+    const part = (slotMeta.part || '').trim().toLowerCase();
 
-    if (type === 'Fixed Post') {
-        if (!shouldCountFixedPostSlot(slotMeta)) return 'inactive';
-        return hasAssignedMember ? 'filled' : 'vacant';
+    if (post === 'transportation') return null;
+    if (courthouse === 'mitchell' && post === 'calvert' && part === '0800-3') return null;
+
+    if (courthouse === 'mitchell' && (post === 'jury room' || post === 'st. paul')) {
+        return `${courthouse}|jury-stpaul-combined`;
     }
 
-    if (type === 'Courtroom') {
-        const normalized = normalizeAssignmentLabel(assignmentLabel);
-        if (isInactiveCourtLabel(normalized)) return 'inactive';
-        const assignedMember = normalizeAssignmentLabel(slotMeta.assignedMember || '');
-        if (normalized === 'OPEN' || normalized.startsWith('OPEN-') || assignedMember === 'OPEN' || assignedMember.startsWith('OPEN-')) return 'open';
-        return hasAssignedMember ? 'filled' : 'vacant';
+    if (courthouse === 'cummings' && post === 'cummings') {
+        if (part === '0800') return `${courthouse}|cummings-0800`;
+        if (part.startsWith('0830')) return null;
     }
 
-    return 'inactive';
+    return [courthouse, post, detail, part].join('|');
 }
 
 
@@ -339,11 +353,11 @@ function countHighProfileCases(courtroomMetaRows) {
 }
 
 function countAssignedCourts(assignments) {
-    return (assignments || []).filter(row => {
-        if ((row.assignment_type || '').trim() !== 'Courtroom') return false;
+    return (assignments || []).reduce((total, row) => {
+        if ((row.assignment_type || '').trim() !== 'Courtroom') return total;
         const assignmentLabel = normalizeAssignmentLabel(row.assignment_notes || '');
-        return !isInactiveCourtLabel(assignmentLabel);
-    }).length;
+        return total + getRequiredDeputiesForCourtroomLabel(assignmentLabel);
+    }, 0);
 }
 
 function getSearchPageCourtroomRowsForCounts(assignments) {
@@ -444,19 +458,45 @@ function getAssignmentTotals(assignments) {
     ];
 
     const totals = { vacant: 0, filled: 0, open: 0 };
+    const fixedPostGroups = new Map();
 
     relevantRows.forEach(row => {
-        const hasAssignedMember = (row.assigned_member || '').trim().length > 0;
-        const slotState = getSlotState(row.assignment_type, row.assignment_notes || '', hasAssignedMember, {
-            courthouse: row.courthouse,
-            post: row.location_group,
-            part: row.part,
-            assignedMember: row.assigned_member || ''
-        });
+        const type = (row.assignment_type || '').trim();
+        const assignedCount = parseAssignedMemberValue(row.assigned_member || '').length;
 
-        if (slotState === 'vacant') totals.vacant += 1;
-        else if (slotState === 'filled') totals.filled += 1;
-        else if (slotState === 'open') totals.open += 1;
+        if (type === 'Fixed Post') {
+            const groupKey = getFixedPostRequirementGroup({
+                courthouse: row.courthouse,
+                post: row.location_group,
+                detail: row.location_detail,
+                part: row.part
+            });
+            if (!groupKey) return;
+
+            const existingCount = fixedPostGroups.get(groupKey) || 0;
+            if (assignedCount > existingCount) fixedPostGroups.set(groupKey, assignedCount);
+            return;
+        }
+
+        if (type !== 'Courtroom') return;
+
+        const normalized = normalizeAssignmentLabel(row.assignment_notes || '');
+        const assignedMember = normalizeAssignmentLabel(row.assigned_member || '');
+        if (normalized === 'OPEN' || normalized.startsWith('OPEN-') || assignedMember === 'OPEN' || assignedMember.startsWith('OPEN-')) {
+            totals.open += 1;
+            return;
+        }
+
+        const requiredDeputies = getRequiredDeputiesForCourtroomLabel(normalized);
+        if (requiredDeputies <= 0) return;
+
+        totals.filled += Math.min(assignedCount, requiredDeputies);
+        totals.vacant += Math.max(requiredDeputies - assignedCount, 0);
+    });
+
+    fixedPostGroups.forEach((assignedCount) => {
+        if (assignedCount > 0) totals.filled += 1;
+        else totals.vacant += 1;
     });
 
     return totals;

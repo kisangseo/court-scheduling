@@ -1517,6 +1517,40 @@ def _required_deputies_for_courtroom_label(label):
     return 1
 
 
+def _fixed_post_requirement_group(row):
+    courthouse = (row.get("courthouse") or "").strip().lower()
+    post = (row.get("location_group") or "").strip().lower()
+    part = (row.get("part") or "").strip().lower()
+
+    # Transportation is informational only and should never count toward staffing totals.
+    if post == "transportation":
+        return None
+
+    # Mitchell Calvert includes an optional third slot.
+    if courthouse == "mitchell" and post == "calvert" and part == "0800-3":
+        return None
+
+    # Armed requirement rules:
+    # - Jury Room + St. Paul are treated as one combined armed post.
+    if courthouse == "mitchell" and post in {"jury room", "st. paul"}:
+        return f"{courthouse}|jury-stpaul-combined"
+
+    # - Cummings has one armed requirement at 8:00; 8:30 slots are optional for armed coverage.
+    if courthouse == "cummings" and post == "cummings":
+        if part == "0800":
+            return f"{courthouse}|cummings-0800"
+        if part.startswith("0830"):
+            return None
+
+    # Default: each fixed post slot counts independently.
+    return "|".join([
+        courthouse,
+        post,
+        (row.get("location_detail") or "").strip().lower(),
+        part,
+    ])
+
+
 @app.route("/api/assignment-totals")
 def assignment_totals():
     date = request.args.get("date")
@@ -1568,8 +1602,9 @@ def assignment_totals():
 
     rows = list(deduped.values())
 
-    # COUNT using your stated rules
+    # COUNT using staffing requirement rules
     vacant = filled = 0
+    fixed_post_groups = {}
 
     for r in rows:
         typ = (r.get("assignment_type") or "").strip()
@@ -1581,26 +1616,13 @@ def assignment_totals():
         label = (r.get("assignment_notes") or "").strip().upper()
 
         if typ == "Fixed Post":
-            courthouse = (r.get("courthouse") or "").strip().lower()
-            post = (r.get("location_group") or "").strip().lower()
-            part = (r.get("part") or "").strip().lower()
-
-            # Mitchell Calvert has a 3rd optional slot that should not count toward totals.
-            if courthouse == "mitchell" and post == "calvert" and part == "0800-3":
+            group_key = _fixed_post_requirement_group(r)
+            if not group_key:
                 continue
 
-            # Cummings 8:30 AM has one optional second slot that should not count toward totals.
-            if courthouse == "cummings" and post == "cummings" and part == "0830-2":
-                continue
-
-            # Transportation is informational only and should not count toward totals.
-            if post == "transportation":
-                continue
-
-            if assigned_count > 0:
-                filled += 1
-            else:
-                vacant += 1
+            existing_assigned = fixed_post_groups.get(group_key, 0)
+            if assigned_count > existing_assigned:
+                fixed_post_groups[group_key] = assigned_count
             continue
 
         # Courtroom:
@@ -1611,7 +1633,11 @@ def assignment_totals():
         if label == "OPEN" or label.startswith("OPEN-"):
             continue
 
-        if assigned_count >= required_deputies:
+        filled += min(assigned_count, required_deputies)
+        vacant += max(required_deputies - assigned_count, 0)
+
+    for assigned_count in fixed_post_groups.values():
+        if assigned_count > 0:
             filled += 1
         else:
             vacant += 1
