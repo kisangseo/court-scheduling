@@ -190,6 +190,24 @@ function normalizeRoleValue(role) {
     return (role || "").toUpperCase().replace(/\s+/g, "").replace(/_/g, "-");
 }
 
+const courtSecurityRoleOrder = [
+    'DEPUTY',
+    'CSO/SPO-A: Court Trained (FT)',
+    'CSO/SPO-A: Court Trained (contractor)',
+    'CSO/SPO-A: (FT)',
+    'CSO/SPO-A: (contractor)',
+    'CSO/SPO: Court Trained(FT)',
+    'CSO/SPO Court Trained (contractor)',
+    'CSO: Non-SPO/CR',
+    'Cadet'
+];
+
+const canonicalRoleAliases = {
+    'CSO/SPO:COURTTRAINED(FT)': 'CSO/SPO: Court Trained(FT)',
+    'CSO/SPO:COURTTRAINED(CONTRACTOR)': 'CSO/SPO Court Trained (contractor)',
+    'CSO/SPOCOURTTRAINED(CONTRACTOR)': 'CSO/SPO Court Trained (contractor)'
+};
+
 function getCanonicalRole(role) {
     const rawRole = (role || '').trim();
     const normalizedRole = normalizeRoleValue(rawRole);
@@ -197,21 +215,16 @@ function getCanonicalRole(role) {
     if (normalizedRole === 'SPO' || normalizedRole === 'ARMED' || normalizedRole === 'DEP-K9' || normalizedRole === 'DEPK9' || normalizedRole === 'K9') return 'CSO/SPO-A: (FT)';
     if (normalizedRole === 'SPO-UA' || normalizedRole === 'SPOUA' || normalizedRole === 'NOSPO' || normalizedRole === 'NO-SPO' || normalizedRole === 'CSO' || normalizedRole === 'BASIC') return 'CSO: Non-SPO/CR';
     if (normalizedRole === 'CADET') return 'Cadet';
+    const aliasKey = rawRole.toUpperCase().replace(/[^A-Z0-9():\/-]/g, '');
+    if (canonicalRoleAliases[aliasKey]) return canonicalRoleAliases[aliasKey];
     return rawRole || normalizedRole;
 }
 
 function getCourtSecuritySortRank(deputy) {
     const role = getCanonicalRole(getDeputyRole(deputy));
-    if (role === 'DEPUTY') return 0;
-    if (role === 'CSO/SPO-A: Court Trained (FT)') return 1;
-    if (role === 'CSO/SPO-A: Court Trained (contractor)') return 2;
-    if (role === 'CSO/SPO-A: (FT)') return 3;
-    if (role === 'CSO/SPO-A: (contractor)') return 4;
-    if (role === 'CSO/SPO: Court Trained(FT)') return 5;
-    if (role === 'CSO/SPO Court Trained (contractor)') return 6;
-    if (role === 'CSO: Non-SPO/CR') return 7;
-    if (role === 'Cadet') return 8;
-    return 6;
+    const roleIndex = courtSecurityRoleOrder.indexOf(role);
+    if (roleIndex !== -1) return roleIndex;
+    return courtSecurityRoleOrder.length;
 }
 
 function createRosterItem(deputy, options = {}) {
