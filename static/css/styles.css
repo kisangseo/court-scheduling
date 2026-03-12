@@ -267,6 +267,10 @@ th, td {
     background: #fef3f2;
 }
 
+.assignment-armed-unmet-row td {
+    background: #fef3f2;
+}
+
 .editable {
     min-height: 28px;
 }
