@@ -3,6 +3,7 @@ from db_connect import get_conn
 import pyodbc
 import os
 import json
+import re
 from datetime import datetime, timedelta
 
 
@@ -1483,6 +1484,39 @@ def get_courtroom_meta():
 
     conn.close()
     return jsonify(rows)
+
+
+def _parse_assigned_member_names(value):
+    text = (value or "").strip()
+    if not text:
+        return []
+
+    if "||" in text:
+        return [name.strip() for name in re.split(r"\s*\|\|\s*", text) if name.strip()]
+
+    if "\n" in text:
+        return [name.strip() for name in re.split(r"\n+", text) if name.strip()]
+
+    return [text]
+
+
+def _required_deputies_for_courtroom_label(label):
+    normalized = (label or "").strip().upper()
+    if not normalized:
+        return 0
+
+    if normalized in {"CLOSED", "NO DEPUTY", "NO DEPUTIES", "CIVIL - NO DEPUTIES"}:
+        return 0
+
+    if normalized == "NEED 2 DEPUTIES":
+        return 2
+
+    if normalized in {"NEED 1 DEPUTY", "CIVIL - 1 DEPUTY", "JUVENILE", "FAMILY", "WAITING TO RECEIVE CASE", "OPEN"} or normalized.startswith("OPEN-"):
+        return 1
+
+    return 1
+
+
 @app.route("/api/assignment-totals")
 def assignment_totals():
     date = request.args.get("date")
@@ -1542,7 +1576,8 @@ def assignment_totals():
         if typ not in ("Courtroom", "Fixed Post"):
             continue
 
-        assigned = (r.get("assigned_member") or "").strip()
+        assigned_names = _parse_assigned_member_names(r.get("assigned_member"))
+        assigned_count = len(assigned_names)
         label = (r.get("assignment_notes") or "").strip().upper()
 
         if typ == "Fixed Post":
@@ -1562,16 +1597,21 @@ def assignment_totals():
             if post == "transportation":
                 continue
 
-            if assigned:
+            if assigned_count > 0:
                 filled += 1
             else:
                 vacant += 1
             continue
 
         # Courtroom:
-        if not label or label == "DNS":
+        required_deputies = _required_deputies_for_courtroom_label(label)
+        if required_deputies == 0:
             continue
-        if assigned:
+
+        if label == "OPEN" or label.startswith("OPEN-"):
+            continue
+
+        if assigned_count >= required_deputies:
             filled += 1
         else:
             vacant += 1
