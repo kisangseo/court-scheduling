@@ -77,9 +77,15 @@ let globalPostedNames = new Set();
 let hidePosted = false;
 
 const COURTROOM_ASSIGNMENT_OPTIONS = [
-    "Firearm", "DNS", "Open", "Carjacking", "PT46/47", "Robbery", "ATT MUR", "CDS",
-    "Child Abuse", "Murder", "Manslaughter", "F/T", "Civil", "Motions", "NON-HEARING MOTIONS", "MIS", "Juvenile",
-    "Assault", "FIP", "PWID", "Criminal", "Family", "FDTX"
+    "Closed",
+    "No deputy",
+    "Need 1 Deputy",
+    "Need 2 Deputies",
+    "Civil - 1 Deputy",
+    "Civil - No Deputies",
+    "Juvenile",
+    "Family",
+    "Waiting to Receive Case"
 ];
 
 function escapeHtml(value) {
@@ -398,14 +404,41 @@ function isOpenCourtLabel(value) {
 
 function isInactiveCourtLabel(value) {
     const normalized = normalizeCourtroomAssignmentLabel(value);
-    return !normalized || [
-        'DNS',
-        'CIVIL',
-        'F/T',
-        'FT',
-        'NON-HEARING MOTIONS',
-        'NON-HEARING MOTIONS, CIVIL'
-    ].includes(normalized);
+    return getRequiredDeputiesForCourtroomLabel(normalized) === 0;
+}
+
+function getRequiredDeputiesForCourtroomLabel(value) {
+    const normalized = normalizeCourtroomAssignmentLabel(value);
+    if (!normalized) return 0;
+
+    if ([
+        'CLOSED',
+        'NO DEPUTY',
+        'NO DEPUTIES',
+        'CIVIL - NO DEPUTIES'
+    ].includes(normalized)) {
+        return 0;
+    }
+
+    if ([
+        'NEED 2 DEPUTIES'
+    ].includes(normalized)) {
+        return 2;
+    }
+
+    if ([
+        'NEED 1 DEPUTY',
+        'CIVIL - 1 DEPUTY',
+        'JUVENILE',
+        'FAMILY',
+        'WAITING TO RECEIVE CASE',
+        'OPEN'
+    ].includes(normalized) || normalized.startsWith('OPEN-')) {
+        return 1;
+    }
+
+    // Keep older labels usable by treating non-empty, non-open labels as 1 required deputy.
+    return 1;
 }
 
 function shouldCountFixedPostSlot(slotMeta = {}) {
@@ -428,19 +461,20 @@ function shouldCountFixedPostSlot(slotMeta = {}) {
     return true;
 }
 
-function getSlotState(assignmentType, assignmentLabel, hasAssignedMember, slotMeta = {}) {
+function getSlotState(assignmentType, assignmentLabel, assignedCount, slotMeta = {}) {
     const type = (assignmentType || '').trim();
 
     if (type === 'Fixed Post') {
         if (!shouldCountFixedPostSlot(slotMeta)) return 'inactive';
-        return hasAssignedMember ? 'filled' : 'vacant';
+        return assignedCount > 0 ? 'filled' : 'vacant';
     }
 
     if (type === 'Courtroom') {
         const normalized = normalizeCourtroomAssignmentLabel(assignmentLabel);
         if (isInactiveCourtLabel(normalized)) return 'inactive';
         if (isOpenCourtLabel(normalized)) return 'open';
-        return hasAssignedMember ? 'filled' : 'vacant';
+        const requiredDeputies = getRequiredDeputiesForCourtroomLabel(normalized);
+        return assignedCount >= requiredDeputies ? 'filled' : 'vacant';
     }
 
     return 'inactive';
@@ -707,8 +741,8 @@ function fetchGlobalAssignmentTotals(dateValue) {
             let open = 0;
 
             relevantRows.forEach(row => {
-                const hasAssignedMember = (row.assigned_member || '').trim().length > 0;
-                const slotState = getSlotState(row.assignment_type, row.assignment_notes || '', hasAssignedMember, {
+                const assignedCount = parseAssignedMemberValue(row.assigned_member || '').length;
+                const slotState = getSlotState(row.assignment_type, row.assignment_notes || '', assignedCount, {
                     courthouse: row.courthouse || '',
                     post: row.location_group || '',
                     part: row.part || ''
@@ -768,7 +802,7 @@ function updateAssignmentCountBadges() {
 
         const assignedNames = getAssignedNamesFromCell(cell);
         const parsedTextNames = parseAssignedMemberValue(cell.textContent);
-        const hasAssignedMember = assignedNames.length > 0 || parsedTextNames.length > 0;
+        const assignedCount = assignedNames.length > 0 ? assignedNames.length : parsedTextNames.length;
 
         let assignmentLabel = '';
         if (sectionType === 'Courtroom') {
@@ -776,7 +810,7 @@ function updateAssignmentCountBadges() {
             assignmentLabel = rowEl?.querySelector('.courtroom-assignment-select')?.value || '';
         }
 
-        const slotState = getSlotState(sectionType, assignmentLabel, hasAssignedMember, {
+        const slotState = getSlotState(sectionType, assignmentLabel, assignedCount, {
             courthouse: cell.dataset.courthouse || '',
             post: cell.dataset.room || '',
             part: cell.dataset.part || ''
