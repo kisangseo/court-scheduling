@@ -1425,6 +1425,11 @@ function isEligibleForCell(cell, role) {
         const post = (cell.dataset.room || '').trim();
         const courthouse = (cell.dataset.courthouse || '').trim();
         const shift = (cell.dataset.shift || '').trim();
+        const slotPart = (cell.dataset.part || '').trim();
+
+        if (!requiresArmedFixedPostSlot(courthouse, post, slotPart)) {
+            return true;
+        }
 
         if (requiresK9SecurityRole(courthouse, post)) {
             return isK9Capability(role);
@@ -1453,7 +1458,6 @@ function isEligibleForCell(cell, role) {
             return (candidate.dataset.shift || '').trim() === shift;
         });
 
-        const slotPart = (cell.dataset.part || '').trim();
         if (requiresArmedFixedPostSlot(courthouse, post, slotPart) && !isDoorPrimaryCapability(role)) {
             return false;
         }
