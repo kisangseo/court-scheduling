@@ -2062,6 +2062,31 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
     const combinedRows = [];
     const normalizePart = (value) => (value || "").toString().trim().toUpperCase().replace(/^PART\s+/, "");
     const normalizeRoom = (value) => (value || "").trim().toUpperCase();
+    const normalizeJudge = (value) => normalizeRoom(value).replace(/[\s.\-]+/g, "");
+    const retiredJudgeNames = new Set([
+        "VITTORIA",
+        "STORM",
+        "FLETCHERHILL",
+        "WHITE",
+        "SAMPSON",
+        "HOWARD",
+        "DOARY",
+        "DOXXY",
+        "LDANIELS",
+        "WELCH",
+        "VBROWN",
+        "RTAYLOR",
+        "MPHINN",
+        "MPHINNETT",
+        "PETERS",
+        "SILKWORTH",
+        "PJACKSON",
+        "RASIN",
+        "MURDOCK"
+    ]);
+
+    const isRetiredJudgeRow = (row) => retiredJudgeNames.has(normalizeJudge(row.judge_name));
+
     const getJuvenileBuildingLabel = (roomValue) => {
         const room = normalizeRoom(roomValue);
         if (room.endsWith("C")) return "Cummings";
@@ -2082,6 +2107,10 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
 
     const addRowsByExpectedOrder = (courthouse, expectedRows) => {
         let rows = (grouped[courthouse] || []).filter(r => r.assignment_type === "Courtroom");
+
+        if (courthouse === "Cummings" || courthouse === "Mitchell") {
+            rows = rows.filter(row => !isRetiredJudgeRow(row));
+        }
 
 
         if (courthouse === "Cummings") {
