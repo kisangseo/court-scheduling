@@ -779,13 +779,26 @@ function fetchGlobalAssignmentTotals(dateValue) {
 }
 
 function updateAssignmentCountBadges() {
+    const getCountCourthouse = (cell) => {
+        const courthouse = cell.dataset.courthouse || '';
+        const building = (cell.closest('.courtroom-meta-row')?.querySelector('td')?.textContent || '').trim();
+
+        // Retired judges are rendered under Juvenile but physically sit in Cummings/Mitchell rooms.
+        // Count those rows toward the matching building's V/F/O badge.
+        if (courthouse === 'Juvenile' && (building === 'Cummings' || building === 'Mitchell')) {
+            return building;
+        }
+
+        return courthouse;
+    };
+
     const statsBySection = {};
     let overallVacant = 0;
     let overallFilled = 0;
     let overallOpen = 0;
 
     document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"], .editable[data-type="Overtime"]').forEach(cell => {
-        const courthouse = cell.dataset.courthouse || '';
+        const courthouse = getCountCourthouse(cell);
         const sectionType = cell.dataset.type || '';
         const key = `${courthouse}|${sectionType}`;
         if (!statsBySection[key]) {
