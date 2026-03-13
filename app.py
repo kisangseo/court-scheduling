@@ -1556,13 +1556,13 @@ def _required_deputies_for_courtroom_label(label):
     if not normalized:
         return 0
 
-    if normalized in {"CLOSED", "NO DEPUTY", "NO DEPUTIES", "CIVIL - NO DEPUTIES"}:
+    if normalized in {"CLOSED", "NO DEPUTY", "NO DEPUTIES", "CIVIL - NO DEPUTIES", "ON LEAVE"}:
         return 0
 
     if normalized == "NEED 2 DEPUTIES":
         return 2
 
-    if normalized in {"NEED 1 DEPUTY", "CIVIL - 1 DEPUTY", "JUVENILE", "FAMILY", "WAITING TO RECEIVE CASE", "OPEN"} or normalized.startswith("OPEN-"):
+    if normalized in {"NEED 1 DEPUTY", "CIVIL - 1 DEPUTY", "JUVENILE", "FAMILY", "OPEN"} or normalized.startswith("OPEN-"):
         return 1
 
     return 1
@@ -1681,7 +1681,7 @@ def assignment_totals():
         if required_deputies == 0:
             continue
 
-        if label == "OPEN" or label.startswith("OPEN-"):
+        if label == "OPEN" or label.startswith("OPEN-") or label == "WAITING TO RECEIVE CASE":
             continue
 
         filled += min(assigned_count, required_deputies)
