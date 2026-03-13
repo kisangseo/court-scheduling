@@ -62,7 +62,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="{{ url_for('static', filename='js/search_shared.js') }}"></script>
 <script>
+const SharedSearchLogic = window.AssignmentSearchShared;
 let pendingAssignments = {};
 let pendingNotes = {};
 let pendingJudges = {};
@@ -391,75 +393,32 @@ function getAssignedNamesAcrossGrid() {
 }
 
 function formatCountMetrics(vacant, filled, open, colorFilled = 'metric-green') {
-    return `<span class="metric-red">Vacant ${vacant}</span> / <span class="${colorFilled}">Filled ${filled}</span> / <span class="metric-blue">Open ${open}</span>`;
+    return SharedSearchLogic.formatCountMetrics(vacant, filled, open, colorFilled);
 }
 
 function normalizeCourtroomAssignmentLabel(value) {
-    return (value || '').trim().toUpperCase();
+    return SharedSearchLogic.normalizeCourtroomAssignmentLabel(value);
 }
 
 function isOpenCourtLabel(value) {
-    const normalized = normalizeCourtroomAssignmentLabel(value);
-    return normalized === 'OPEN' || normalized.startsWith('OPEN-');
+    return SharedSearchLogic.isOpenCourtLabel(value);
 }
 
 function isInactiveCourtLabel(value) {
-    const normalized = normalizeCourtroomAssignmentLabel(value);
-    return getRequiredDeputiesForCourtroomLabel(normalized) === 0;
+    return SharedSearchLogic.isInactiveCourtLabel(value);
 }
 
 function getRequiredDeputiesForCourtroomLabel(value) {
-    const normalized = normalizeCourtroomAssignmentLabel(value);
-    if (!normalized) return 0;
-
-    if ([
-        'CLOSED',
-        'NO DEPUTY',
-        'NO DEPUTIES',
-        'CIVIL - NO DEPUTIES'
-    ].includes(normalized)) {
-        return 0;
-    }
-
-    if ([
-        'NEED 2 DEPUTIES'
-    ].includes(normalized)) {
-        return 2;
-    }
-
-    if ([
-        'NEED 1 DEPUTY',
-        'CIVIL - 1 DEPUTY',
-        'JUVENILE',
-        'FAMILY',
-        'WAITING TO RECEIVE CASE',
-        'OPEN'
-    ].includes(normalized) || normalized.startsWith('OPEN-')) {
-        return 1;
-    }
-
-    // Keep older labels usable by treating non-empty, non-open labels as 1 required deputy.
-    return 1;
+    return SharedSearchLogic.getRequiredDeputiesForCourtroomLabel(value);
 }
 
 function shouldCountFixedPostSlot(slotMeta = {}) {
-    const courthouse = (slotMeta.courthouse || '').trim().toLowerCase();
-    const post = (slotMeta.post || '').trim().toLowerCase();
-    const part = (slotMeta.part || '').trim().toLowerCase();
-
-    if (courthouse === 'mitchell' && post === 'calvert' && part === '0800-3') {
-        return false;
-    }
-
-    if (courthouse === 'cummings' && post === 'cummings' && part === '0830-2') {
-        return false;
-    }
-
-    if (courthouse === 'cummings' && post === 'transportation') {
-        return false;
-    }
-
-    return true;
+    return !!SharedSearchLogic.getFixedPostRequirementGroup({
+        courthouse: slotMeta.courthouse,
+        post: slotMeta.post,
+        detail: slotMeta.detail,
+        part: slotMeta.part,
+    });
 }
 
 function getSlotState(assignmentType, assignmentLabel, assignedCount, slotMeta = {}) {
@@ -2403,7 +2362,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 )
             );
             const fallbackMatches = postsType.filter(r => r.location_group === slot.post && !r.part && !r.location_detail);
-            const pickPreferredRow = (rowList) => rowList.find(r => (r.assigned_member || '').trim()) || rowList[0] || null;
+            const pickPreferredRow = SharedSearchLogic.pickPreferredRow;
             const assigned = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
             const effectiveShift = (assigned && (assigned.shift_time || '').trim()) || slot.detail || 'General';
             const parsedFixedShift = parseShiftTimeDisplayValue(effectiveShift);
