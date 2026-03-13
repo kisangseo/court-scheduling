@@ -249,13 +249,19 @@ function isSecurityPostAssignmentType(value) {
     return normalized === 'fixed post' || normalized === 'security post';
 }
 
+function isPlaceholderAssignment(value) {
+    const normalized = (value || '').trim().toUpperCase();
+    return normalized === 'OPEN' || normalized.startsWith('OPEN-') || ['VACANT', 'UNASSIGNED', 'TBD'].includes(normalized);
+}
+
 function parseAssignedNames(value) {
     const text = (value || '').trim();
-    if (!text) return [];
-    if (text.includes('||')) return text.split(/\s*\|\|\s*/).filter(Boolean);
-    if (text.includes('\n')) return text.split(/\n+/).map(v => v.trim()).filter(Boolean);
+    if (!text || isPlaceholderAssignment(text)) return [];
+    if (text.includes('||')) return text.split(/\s*\|\|\s*/).map(v => v.trim()).filter(v => v && !isPlaceholderAssignment(v));
+    if (text.includes('\n')) return text.split(/\n+/).map(v => v.trim()).filter(v => v && !isPlaceholderAssignment(v));
     return [text];
 }
+
 
 function getStats(rows) {
     const stats = { vacant: 0, filled: 0, open: 0, total: 0 };
