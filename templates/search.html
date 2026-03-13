@@ -2145,8 +2145,29 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         "RASIN",
         "MURDOCK"
     ]);
+    const courtroomRowExclusionRules = [
+        { courthouse: "Cummings", judge: "H. TIPTON", room: "223C", parts: ["6"] },
+        { courthouse: "Mitchell", judge: "LAZEROW", room: "113M", parts: ["04", "4"] }
+    ];
 
     const isRetiredJudgeRow = (row) => retiredJudgeNames.has(normalizeJudge(row.judge_name));
+    const matchesCourtroomExclusionRule = (courthouse, row) => {
+        const normalizedCourthouse = (courthouse || "").trim().toUpperCase();
+        const normalizedRoom = normalizeRoom(row.location_detail);
+        const normalizedPart = normalizePart(row.part);
+        const normalizedJudge = normalizeRoom(row.judge_name);
+
+        return courtroomRowExclusionRules.some(rule => {
+            const ruleCourthouse = (rule.courthouse || "").trim().toUpperCase();
+            if (ruleCourthouse && ruleCourthouse !== normalizedCourthouse) return false;
+            if (rule.room && normalizeRoom(rule.room) !== normalizedRoom) return false;
+            if (rule.judge && normalizeRoom(rule.judge) !== normalizedJudge) return false;
+            if (Array.isArray(rule.parts) && rule.parts.length > 0) {
+                return rule.parts.some(part => normalizePart(part) === normalizedPart);
+            }
+            return true;
+        });
+    };
 
     const getJuvenileBuildingLabel = (roomValue) => {
         const room = normalizeRoom(roomValue);
@@ -2180,16 +2201,9 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         }
 
 
-        if (courthouse === "Cummings") {
-            rows = rows.filter(row => {
-                const room = normalizeRoom(row.location_detail);
-                const part = normalizePart(row.part);
-                const judge = normalizeRoom(row.judge_name);
-                if (judge === "H. TIPTON" && room === "223C" && part === "6") return false;
-                if (judge === "LAZEROW" && room === "113M" && (part === "04" || part === "4")) return false;
-                return true;
-            });
+        rows = rows.filter(row => !matchesCourtroomExclusionRule(courthouse, row));
 
+        if (courthouse === "Cummings") {
             let seenBryant230C5 = false;
             rows = rows.filter(row => {
                 const room = normalizeRoom(row.location_detail);
