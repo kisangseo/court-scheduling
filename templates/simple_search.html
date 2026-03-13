@@ -116,6 +116,42 @@ const FAMILY_ROOM_DEFAULTS = {
 let allDeputies = [];
 let latestRows = [];
 
+function getAssignmentDedupeKey(row = {}) {
+    const assignmentType = (row.assignment_type || '').trim();
+    const courthouse = (row.courthouse || '').trim();
+    const locationGroup = (row.location_group || '').trim();
+    const locationDetail = (row.location_detail || '').trim();
+    const part = (row.part || '').toString().trim().toUpperCase().replace(/^PART\s+/, '');
+    const shift = (row.shift_time || '').trim();
+
+    if (assignmentType === 'Courtroom') {
+        return `${courthouse}|${assignmentType}|${locationDetail}|${part}`;
+    }
+
+    return `${courthouse}|${assignmentType}|${locationGroup}|${locationDetail}|${part}|${shift}`;
+}
+
+function scoreAssignmentRow(row = {}) {
+    const assigned = (row.assigned_member || '').trim();
+    const notes = (row.assignment_notes || '').trim();
+    const highProfile = row.is_high_profile ? 1 : 0;
+    return (assigned ? 4 : 0) + (notes ? 2 : 0) + highProfile;
+}
+
+function dedupeAssignmentRows(rows = []) {
+    const byKey = new Map();
+
+    rows.forEach(row => {
+        const key = getAssignmentDedupeKey(row);
+        const existing = byKey.get(key);
+        if (!existing || scoreAssignmentRow(row) > scoreAssignmentRow(existing)) {
+            byKey.set(key, row);
+        }
+    });
+
+    return Array.from(byKey.values());
+}
+
 function formatCountMetrics(vacant, filled, open) {
     return `<span class="metric-red">Vacant ${vacant}</span> / <span class="metric-green">Filled ${filled}</span> / <span class="metric-blue">Open ${open}</span>`;
 }
@@ -749,7 +785,7 @@ function searchSimple() {
         fetch(`/api/search?name=${encodeURIComponent(name)}&date=${date}&courthouse=${courthouse}`, { cache: 'no-store' }).then(res => res.json()),
         fetch(`/api/deputies?date=${date}`, { cache: 'no-store' }).then(res => res.json())
     ]).then(([rows, deputies]) => {
-        latestRows = rows || [];
+        latestRows = dedupeAssignmentRows(rows || []);
         allDeputies = deputies || [];
 
         const grouped = {};
@@ -793,8 +829,8 @@ function searchSimple() {
             return room === '329C' && part === 'C-1' && judge === 'BLOMQUIST';
         });
 
-        const mitchellRows = [...(grouped['Mitchell'] || []), ...juvenileMovedToMitchell.map(r => ({ ...r, courthouse: 'Mitchell' }))];
-        const cummingsRows = [...(grouped['Cummings'] || []), ...juvenileMovedToCummings.map(r => ({ ...r, courthouse: 'Cummings' }))];
+        const mitchellRows = dedupeAssignmentRows([...(grouped['Mitchell'] || []), ...juvenileMovedToMitchell.map(r => ({ ...r, courthouse: 'Mitchell' }))]);
+        const cummingsRows = dedupeAssignmentRows([...(grouped['Cummings'] || []), ...juvenileMovedToCummings.map(r => ({ ...r, courthouse: 'Cummings' }))]);
         const juvenileRowsForDisplay = [...juvenileRows.filter(r => r.assignment_type !== 'Courtroom'), ...juvenileKeptAsJuvenile];
 
         const mitchellPosts = renderPostTable('Mitchell', mitchellRows);
