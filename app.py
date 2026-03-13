@@ -61,6 +61,23 @@ def _parse_date_value(value):
         return None
 
 
+def _split_status_range(existing_start, existing_end, cut_start, cut_end):
+    """Return remaining date windows after cutting out an overlapping range."""
+    segments = []
+
+    if existing_start < cut_start:
+        left_end = cut_start - timedelta(days=1)
+        if existing_start <= left_end:
+            segments.append((existing_start, left_end))
+
+    if cut_end < existing_end:
+        right_start = cut_end + timedelta(days=1)
+        if right_start <= existing_end:
+            segments.append((right_start, existing_end))
+
+    return segments
+
+
 def _previous_weekday(target_date):
     cursor_date = target_date - timedelta(days=1)
     while cursor_date.weekday() >= 5:
@@ -115,7 +132,9 @@ def _effective_status_for_date(status_text, target_date):
                     active_statuses.append("Unavailable")
 
         if active_statuses:
-            return " / ".join(active_statuses)
+            # Keep only one status active for a given date.
+            # Newer entries are appended later, so they should win.
+            return active_statuses[-1]
 
     return payload.get("legacy")
 
@@ -534,23 +553,39 @@ def update_status_range():
     remove_only = bool(data.get("remove_only"))
     new_ranges = []
 
-    target = _parse_date_value(start_date)
+    target_start = _parse_date_value(start_date)
+    target_end = _parse_date_value(end_date) or target_start
 
     for r in ranges:
         r_status = r.get("status")
         r_start = _parse_date_value(r.get("start_date"))
         r_end = _parse_date_value(r.get("end_date"))
 
-        # Remove if same status AND date falls inside that range
-        if (
-            r_status == status and
-            r_start and r_end and
-            target and
-            r_start <= target <= r_end
-        ):
+        if not (r_status and r_start and r_end):
+            new_ranges.append(r)
             continue
 
-        new_ranges.append(r)
+        applies_to_row = (
+            r_status == status if remove_only else True
+        )
+        has_overlap = (
+            target_start and
+            target_end and
+            r_start <= target_end and
+            target_start <= r_end
+        )
+
+        if not applies_to_row or not has_overlap:
+            new_ranges.append(r)
+            continue
+
+        # Preserve any non-overlapping portions of existing ranges.
+        for seg_start, seg_end in _split_status_range(r_start, r_end, target_start, target_end):
+            new_ranges.append({
+                "status": r_status,
+                "start_date": seg_start.isoformat(),
+                "end_date": seg_end.isoformat()
+            })
 
     ranges = new_ranges
     if not remove_only:
