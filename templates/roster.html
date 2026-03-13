@@ -349,19 +349,17 @@ function renderStatusControls(dep, hostTr) {
                 }
             }
             const statuses = ["Scheduled Leave", "Unscheduled Leave", "Unavailable", "Training"];
-            Promise.all(statuses
-                .filter(status => status !== dropdown.value)
-                .map(status => fetch("/api/update-status-range", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        full_name: dep.full_name,
-                        status,
-                        start_date: start.value,
-                        end_date: end.value,
-                        remove_only: true
-                    })
-                })))
+            Promise.all(statuses.map(status => fetch("/api/update-status-range", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    full_name: dep.full_name,
+                    status,
+                    start_date: start.value,
+                    end_date: end.value,
+                    remove_only: true
+                })
+            })))
                 .then(() => fetch("/api/update-status-range", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
