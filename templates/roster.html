@@ -248,14 +248,14 @@ function effectiveStatusForSelectedDate(dep) {
     return dep.current_status || "";
 }
 
-function statusIncludes(dep, value) {
-    return effectiveStatusForSelectedDate(dep).toLowerCase().includes(value.toLowerCase());
-}
-
 function getPrimaryStatus(dep) {
-    const labels = ["Scheduled Leave", "Unscheduled Leave", "Unavailable", "Training"];
+    const labels = ["Unscheduled Leave", "Scheduled Leave", "Unavailable", "Training"];
     const current = effectiveStatusForSelectedDate(dep).toLowerCase();
     return labels.find(label => current.includes(label.toLowerCase())) || "";
+}
+
+function statusIncludes(dep, value) {
+    return getPrimaryStatus(dep).toLowerCase() === value.toLowerCase();
 }
 
 function renderStatusControls(dep, hostTr) {
