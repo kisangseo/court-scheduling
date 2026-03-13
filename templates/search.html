@@ -2070,7 +2070,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         "WHITE",
         "SAMPSON",
         "HOWARD",
-        "DOARY",
+        "DOORY",
         "DOXXY",
         "LDANIELS",
         "WELCH",
@@ -2109,7 +2109,13 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         let rows = (grouped[courthouse] || []).filter(r => r.assignment_type === "Courtroom");
 
         if (courthouse === "Cummings" || courthouse === "Mitchell") {
-            rows = rows.filter(row => !isRetiredJudgeRow(row));
+            rows = rows.filter(row => {
+                const room = normalizeRoom(row.location_detail);
+                const part = normalizePart(row.part);
+                const judge = normalizeRoom(row.judge_name);
+                if (judge === "BLOMQUIST" && room === "329C" && part === "C-1") return false;
+                return !isRetiredJudgeRow(row);
+            });
         }
 
 
