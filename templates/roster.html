@@ -320,7 +320,30 @@ function renderStatusControls(dep, hostTr) {
                 alert("Start date must be on or before end date.");
                 return;
             }
+            // 🔴 Dotts / Pulley mutual availability rule
+            const name = (dep.full_name || "").trim();
+            if (name === "Dotts, Lawrence" || name === "Pulley, Clarence") {
 
+                const otherName = name === "Dotts, Lawrence"
+                    ? "Pulley, Clarence"
+                    : "Dotts, Lawrence";
+
+                const otherDeputy = window.currentDeputies?.find(d => d.full_name === otherName);
+
+                if (otherDeputy) {
+                    const otherStatus = effectiveStatusForSelectedDate(otherDeputy).toLowerCase();
+
+                    if (
+                        otherStatus.includes("scheduled leave") ||
+                        otherStatus.includes("unscheduled leave") ||
+                        otherStatus.includes("unavailable") ||
+                        otherStatus.includes("training")
+                    ) {
+                        alert(`${name} cannot be unavailable while ${otherName} is already unavailable.`);
+                        return;
+                    }
+                }
+            }
             const statuses = ["Scheduled Leave", "Unscheduled Leave", "Unavailable", "Training"];
             Promise.all(statuses
                 .filter(status => status !== dropdown.value)
@@ -572,6 +595,7 @@ function loadRoster() {
         fetch(`/api/search?date=${date}`).then(res => res.json())
     ]).then(([deputiesData, assignments]) => {
         const deputies = (deputiesData || []).sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
+        window.currentDeputies = deputies;
 
         const csBody = document.querySelector("#courtSecurityTable tbody");
         const otherBody = document.querySelector("#otherDivisionsTable tbody");
