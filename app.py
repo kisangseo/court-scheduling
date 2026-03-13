@@ -1535,11 +1535,18 @@ def _parse_assigned_member_names(value):
     if not text:
         return []
 
+    def _is_placeholder_assignment(name):
+        normalized = (name or "").strip().upper()
+        return normalized in {"OPEN", "VACANT", "UNASSIGNED", "TBD"} or normalized.startswith("OPEN-")
+
     if "||" in text:
-        return [name.strip() for name in re.split(r"\s*\|\|\s*", text) if name.strip()]
+        return [name.strip() for name in re.split(r"\s*\|\|\s*", text) if name.strip() and not _is_placeholder_assignment(name)]
 
     if "\n" in text:
-        return [name.strip() for name in re.split(r"\n+", text) if name.strip()]
+        return [name.strip() for name in re.split(r"\n+", text) if name.strip() and not _is_placeholder_assignment(name)]
+
+    if _is_placeholder_assignment(text):
+        return []
 
     return [text]
 
