@@ -217,7 +217,7 @@ function effectiveStatusForSelectedDate(dep) {
         const ranges = payload.ranges;
 
         if (selectedDate) {
-            let active = [];
+            let latestStatus = "";
 
             for (let i = 0; i < ranges.length; i++) {
                 const entry = ranges[i];
@@ -225,18 +225,18 @@ function effectiveStatusForSelectedDate(dep) {
                 const end = parseDateOnly(entry.end_date);
 
                 if (start && end && selectedDate >= start && selectedDate <= end) {
-                    if (!active.includes(entry.status)) {
-                        active.push(entry.status);
-                    }
+                    // Newer entries are appended later; last matching entry wins.
+                    latestStatus = entry.status || latestStatus;
                 }
             }
 
-            if (hasUnavailableForSelectedDate(dep) && !active.includes("Unavailable")) {
-                active.push("Unavailable");
+            // Weekly unavailable should also behave like an overriding status.
+            if (hasUnavailableForSelectedDate(dep)) {
+                latestStatus = "Unavailable";
             }
 
-            if (active.length > 0) {
-                return active.join(" / ");
+            if (latestStatus) {
+                return latestStatus;
             }
         }
 
