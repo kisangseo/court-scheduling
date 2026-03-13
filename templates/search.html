@@ -1359,7 +1359,7 @@ function requiresK9SecurityRole(courthouse, post) {
     const normalizedCourthouse = (courthouse || '').trim().toLowerCase();
     const normalizedPost = (post || '').trim().toLowerCase();
 
-    return normalizedCourthouse === 'mitchell' && normalizedPost === 'rover';
+    return normalizedCourthouse === 'mitchell' && (normalizedPost === 'k9 services' || normalizedPost === 'rover');
 }
 
 function isArmedByName(name) {
@@ -1449,6 +1449,10 @@ function isEligibleForCell(cell, role) {
         const shift = (cell.dataset.shift || '').trim();
         const slotPart = (cell.dataset.part || '').trim();
 
+        if (requiresK9SecurityRole(courthouse, post)) {
+            return isK9Capability(role);
+        }
+
         if (!requiresArmedFixedPostSlot(courthouse, post, slotPart) && !requiresCourtTrainedFixedPostSlot(courthouse, post, slotPart)) {
             return true;
         }
@@ -1474,10 +1478,6 @@ function isEligibleForCell(cell, role) {
             }
 
             return true;
-        }
-
-        if (requiresK9SecurityRole(courthouse, post)) {
-            return isK9Capability(role);
         }
 
         if (existingAssignments === 0) {
