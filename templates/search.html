@@ -1389,6 +1389,17 @@ function isArmedAssignmentChip(chip) {
     return isArmedByName(name);
 }
 
+function isCourtPrimaryAssignmentChip(chip) {
+    const role = (chip?.dataset?.role || '').trim().toUpperCase();
+    if (role) return isCourtPrimaryCapability(role);
+
+    const name = (chip?.dataset?.name || chip?.textContent || '').trim();
+    const deputy = getDeputyRecordByName(name);
+    const deputyRole = getDeputyRole(deputy || {});
+    if (!deputyRole) return false;
+    return isCourtPrimaryCapability(deputyRole);
+}
+
 function cellRequiresArmedFixedPost(cell) {
     return requiresArmedFixedPostSlot(cell?.dataset?.courthouse, cell?.dataset?.room, cell?.dataset?.part);
 }
@@ -1421,11 +1432,7 @@ function updateFixedPostArmedWarnings() {
             return;
         }
 
-       if (requiresCourtTrained && getAssignedChipsFromCell(cell).some(
-            chip =>
-                isCourtPrimaryCapability(chip?.dataset?.role) ||
-                isDoorPrimaryCapability(chip?.dataset?.role)
-        )) {
+        if (requiresCourtTrained && getAssignedChipsFromCell(cell).some(isCourtPrimaryAssignmentChip)) {
             return;
         }
 
@@ -1866,7 +1873,9 @@ function initAssignmentDropzones() {
         // Recreate chips from raw DB string
         if (rawAssigned) {
             parseAssignedMemberValue(rawAssigned).forEach(name => {
-                list.appendChild(buildAssignmentChip(name, '', cell));
+                const deputy = getDeputyRecordByName(name);
+                const role = getDeputyRole(deputy || {});
+                list.appendChild(buildAssignmentChip(name, role, cell));
             });
         }
 
