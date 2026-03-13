@@ -1417,7 +1417,11 @@ function updateFixedPostArmedWarnings() {
             return;
         }
 
-        if (requiresCourtTrained && getAssignedChipsFromCell(cell).some(chip => isCourtPrimaryCapability(chip?.dataset?.role))) {
+       if (requiresCourtTrained && getAssignedChipsFromCell(cell).some(
+            chip =>
+                isCourtPrimaryCapability(chip?.dataset?.role) ||
+                isDoorPrimaryCapability(chip?.dataset?.role)
+        )) {
             return;
         }
 
