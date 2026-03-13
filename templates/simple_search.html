@@ -265,23 +265,23 @@ function parseAssignedNames(value) {
 
 function getStats(rows) {
     const stats = { vacant: 0, filled: 0, open: 0, total: 0 };
-    const fixedPostGroups = new Map();
 
     rows.forEach(row => {
         const assignmentType = (row.assignment_type || '').trim();
         const assignedCount = parseAssignedNames(row.assigned_member || '').length;
 
         if (isSecurityPostAssignmentType(assignmentType)) {
-            const groupKey = getFixedPostRequirementGroup({
-                courthouse: row.courthouse,
-                post: row.location_group,
-                detail: row.location_detail,
-                part: row.part
-            });
-            if (!groupKey) return;
+            const courthouse = (row.courthouse || '').trim().toLowerCase();
+            const post = (row.location_group || '').trim().toLowerCase();
+            const part = (row.part || '').trim().toLowerCase();
 
-            const existingCount = fixedPostGroups.get(groupKey) || 0;
-            if (assignedCount > existingCount) fixedPostGroups.set(groupKey, assignedCount);
+            if (courthouse === 'mitchell' && post === 'calvert' && part === '0800-3') return;
+            if (courthouse === 'cummings' && post === 'cummings' && part === '0830-2') return;
+            if (courthouse === 'cummings' && post === 'transportation') return;
+
+            if (assignedCount > 0) stats.filled += 1;
+            else stats.vacant += 1;
+            stats.total += 1;
             return;
         }
 
@@ -289,7 +289,7 @@ function getStats(rows) {
             const normalized = normalizeCourtroomAssignmentLabel(row.assignment_notes || '');
             if (isInactiveCourtLabel(normalized)) return;
 
-            if (isOpenCourtLabel(normalized) || isOpenAssignedMember(row.assigned_member || '')) {
+            if (isOpenCourtLabel(normalized)) {
                 stats.open += 1;
                 stats.total += 1;
                 return;
@@ -302,12 +302,6 @@ function getStats(rows) {
             stats.vacant += Math.max(requiredDeputies - assignedCount, 0);
             stats.total += requiredDeputies;
         }
-    });
-
-    fixedPostGroups.forEach((assignedCount) => {
-        if (assignedCount > 0) stats.filled += 1;
-        else stats.vacant += 1;
-        stats.total += 1;
     });
 
     return stats;
