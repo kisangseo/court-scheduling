@@ -2014,6 +2014,31 @@ function getCourtroomDefaults(courthouse) {
     return {};
 }
 
+function formatJudgeDisplayName(judgeName) {
+    const raw = (judgeName || "").trim();
+    if (!raw) return "";
+
+    const commaMatch = raw.match(/^([^,]+),\s*(.+)$/);
+    if (commaMatch) {
+        const last = commaMatch[1].trim();
+        const firstToken = commaMatch[2].trim().split(/\s+/)[0] || "";
+        const initial = firstToken.replace(/[^A-Za-z]/g, "").charAt(0);
+        return initial ? `${last}, ${initial}.` : last;
+    }
+
+    const parts = raw.split(/\s+/);
+    if (parts.length >= 2) {
+        const firstToken = parts[0];
+        const last = parts.slice(1).join(" ");
+        const initial = firstToken.replace(/[^A-Za-z]/g, "").charAt(0);
+        if (initial && last) {
+            return `${last}, ${initial}.`;
+        }
+    }
+
+    return raw;
+}
+
 function orderCourtroomRows(courthouse, rows) {
     const rowsToRender = [...rows].sort((a, b) => {
         const roomCompare = (a.location_detail || "").localeCompare(b.location_detail || "");
@@ -2330,6 +2355,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         const roomDefaults = defaults[room] || null;
         const effectivePart = row.part || (roomDefaults ? roomDefaults.part : "");
         const effectiveJudge = row.judge_name || (roomDefaults ? roomDefaults.judge_name : "");
+        const displayJudge = formatJudgeDisplayName(effectiveJudge);
 
         const tr = document.createElement("tr");
         tr.classList.add("courtroom-meta-row");
@@ -2345,7 +2371,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         tr.dataset.part = effectivePart;
         tr.innerHTML = `
             <td>${row.__building || courthouse}</td>
-            <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}">${effectiveJudge}</td>
+            <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" data-raw-judge="${effectiveJudge}">${displayJudge}</td>
             <td>${room}${effectivePart ? "/" + effectivePart : ""}</td>
             <td class="courtroom-assignment-cell">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
@@ -2551,6 +2577,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
         const roomDefaults = courtroomDefaults[room] || null;
         const effectivePart = row && row.part ? row.part : (roomDefaults ? roomDefaults.part : "");
         const effectiveJudge = row && row.judge_name ? row.judge_name : (roomDefaults ? roomDefaults.judge_name : "");
+        const displayJudge = formatJudgeDisplayName(effectiveJudge);
 
         const tr = document.createElement("tr");
         tr.classList.add("courtroom-meta-row");
@@ -2559,7 +2586,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
         tr.dataset.room = room;
         tr.dataset.part = effectivePart;
         tr.innerHTML = `
-            <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}">${effectiveJudge}</td>
+            <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" data-raw-judge="${effectiveJudge}">${displayJudge}</td>
            
             <td>${room}${effectivePart ? "/" + effectivePart : ""}</td>
             <td class="courtroom-assignment-cell">
@@ -3347,7 +3374,7 @@ document.addEventListener("click", function(e) {
 
     const input = document.createElement("input");
     input.type = "text";
-    input.value = cell.textContent.trim();
+    input.value = (cell.dataset.rawJudge || cell.textContent || "").trim();
 
     cell.innerHTML = "";
     cell.appendChild(input);
@@ -3377,7 +3404,9 @@ document.addEventListener("click", function(e) {
         if (rowEl) {
             markCourtroomRowChanged(rowEl);
         }
-        cell.textContent = input.value;
+        const rawJudge = input.value;
+        cell.dataset.rawJudge = rawJudge;
+        cell.textContent = formatJudgeDisplayName(rawJudge);
 
         updateSaveStatusBadge();
 
