@@ -1988,7 +1988,7 @@ function getCourtroomRoomOrder(courthouse) {
         return ["600M", "636M", "231M", "417M", "556C", "215M", "441M", "309M", "226M", "420M", "400M", "236M", "203M", "451M", "438M"];
     }
     if (courthouse === "Cummings") {
-        return ["225C", "201C", "430C", "329C", "230C", "227C", "540C", "404C", "523C", "228C", "223C", "528C", "113C", "103,105", "317,327 & 339, 303"];
+        return ["225C", "201C", "430C", "329C", "230C", "227C", "540C", "404C", "523C", "228C", "223C", "528C", "113M", "103,105", "317,327 & 339, 303"];
     }
     if (courthouse === "Family") {
         return ["126", "120", "122", "124"];
@@ -2164,7 +2164,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
                 const part = normalizePart(row.part);
                 const judge = normalizeRoom(row.judge_name);
                 if (judge === "H. TIPTON" && room === "223C" && part === "6") return false;
-                if (judge === "LAZEROW" && room === "113C" && part === "04") return false;
+                if (judge === "LAZEROW" && room === "113M" && (part === "04" || part === "4")) return false;
                 return true;
             });
 
@@ -2239,6 +2239,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
             { courthouse: "Mitchell", building: "Mitchell", room: "451M", part: "25", judge: "M. Schreiber" },
             { courthouse: "Mitchell", building: "Mitchell", room: "438M", part: "21", judge: "Y. Tanner" },
             { courthouse: "Cummings", building: "Cummings", room: "528C", part: "31", judge: "B. Williams" },
+            { courthouse: "Cummings", building: "Cummings", room: "113M", part: "4", judge: "Lazerow" },
             { courthouse: "Cummings", building: "Cummings", room: "103,105", part: "1st FL", judge: "Magistrates" },
             { courthouse: "Cummings", building: "Cummings", room: "317,327 & 339, 303", part: "3rd FL", judge: "Magistrates" }
         ];

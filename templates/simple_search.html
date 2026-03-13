@@ -83,7 +83,7 @@ const CUMMINGS_POSTS = [
 ];
 
 const MITCHELL_ROOMS = ["600M", "636M","231M","417M","556C","215M","441M","309M","228C","226M","420M","400M","236M","203M","451M","438M"];
-const CUMMINGS_ROOMS = ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113C","103,105","317,327 & 339, 303"];
+const CUMMINGS_ROOMS = ["225C","201C","430C","329C","230C","227C","540C","404C","523C","528C","113M","103,105","317,327 & 339, 303"];
 const JUVENILE_EXPECTED = [
     { room: "C-1", part: "12", judge_name: "Blomquist" },
     { room: "C-2", part: "11", judge_name: "Schiffer" },
@@ -390,7 +390,7 @@ function renderCourtroomTable(courthouse, rows) {
             const part = normalizePart(row.part);
             const judge = (row.judge_name || '').trim().toUpperCase();
             if (judge === 'H. TIPTON' && room === '223C' && part === '6') return false;
-            if (judge === 'LAZEROW' && room === '113C' && part === '04') return false;
+            if (judge === 'LAZEROW' && room === '113M' && (part === '04' || part === '4')) return false;
             return true;
         });
 
