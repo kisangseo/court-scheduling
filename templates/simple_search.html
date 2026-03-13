@@ -57,30 +57,28 @@ const MITCHELL_POSTS = [
     { post: "Lexington", detail: "7:00 AM - 3:00 PM", part: "0700-1500" },
     { post: "Lexington", detail: "3:00 PM - 11:00 PM", part: "1500-2300" },
     { post: "Lexington", detail: "11:00 PM - 7:00 AM", part: "2300-0700" },
-    { post: "Fayette H/C Console room", detail: "7:00 AM", part: "0700" },
-    { post: "Fayette H/C Console room", detail: "7:15 AM", part: "0715" },
-    { post: "Lock Up West", detail: "1 of 2", part: "OPEN-1" },
-    { post: "Lock Up West", detail: "2 of 2", part: "OPEN-2" },
-    { post: "Jury Room", detail: "7:30 AM", part: "0730" },
-    { post: "Jury Room", detail: "7:30 AM", part: "0800" },
-    { post: "St. Paul", detail: "7:30 AM", part: "0730" },
-    { post: "St. Paul", detail: "8:30 AM", part: "0830" },
-    { post: "Rover", detail: "7:00 AM", part: "0700" },
-    { post: "Judges", detail: "7:00 AM", part: "0700" }
+    { post: "Fayette ADA", detail: "7:00 AM", part: "0700" },
+    { post: "Console room", detail: "7:00 AM", part: "0715" },
+    { post: "Lock Up West", detail: "8:00 AM - 4:00 PM", part: "OPEN-1" },
+    { post: "Lock Up West", detail: "8:00 AM - 4:00 PM", part: "OPEN-2" },
+    { post: "Jury Room", detail: "7:00 AM - 3:00 PM", part: "0730" },
+    { post: "St. Paul", detail: "7:00 AM - 3:00 PM", part: "0730" },
+    { post: "St. Paul", detail: "7:00 AM - 3:00 PM", part: "0830" },
+    { post: "K9 Services", detail: "7:00 AM", part: "0700" },
+    { post: "Judges O/T", detail: "7:00 AM", part: "0700" }
 ];
 
 const CUMMINGS_POSTS = [
     { post: "Cummings", detail: "8:00 AM", part: "0800" },
     { post: "Cummings", detail: "8:30 AM", part: "0830-1" },
     { post: "Cummings", detail: "8:30 AM", part: "0830-2" },
-    { post: "Fayette St. H/C", detail: "7:15 AM", part: "0715" },
-    { post: "Fayette St. H/C", detail: "9:00 AM", part: "0900" },
+    { post: "Fayette St. ADA", detail: "7:00 AM", part: "0715" },
+    { post: "Fayette St. ADA", detail: "9:00 AM", part: "0900" },
     { post: "Console Room", detail: "8:30 AM", part: "0830-1" },
     { post: "Console Room", detail: "8:30 AM", part: "0830-2" },
     { post: "Lock Up East", detail: "8:00 AM", part: "0800" },
-    { post: "Garage", detail: "6:00 AM", part: "0600" },
-    { post: "Garage", detail: "4:00 PM", part: "1600" },
-    { post: "Family Court", detail: "8:00 AM", part: "0800" },
+    { post: "Garage", detail: "6:00 AM - 2:00 PM", part: "0600" },
+    { post: "Garage", detail: "4:30 PM - 9:00 PM", part: "1600" },
     { post: "Transportation", detail: "", part: "" }
 ];
 
@@ -265,23 +263,23 @@ function parseAssignedNames(value) {
 
 function getStats(rows) {
     const stats = { vacant: 0, filled: 0, open: 0, total: 0 };
-    const fixedPostGroups = new Map();
 
     rows.forEach(row => {
         const assignmentType = (row.assignment_type || '').trim();
         const assignedCount = parseAssignedNames(row.assigned_member || '').length;
 
         if (isSecurityPostAssignmentType(assignmentType)) {
-            const groupKey = getFixedPostRequirementGroup({
-                courthouse: row.courthouse,
-                post: row.location_group,
-                detail: row.location_detail,
-                part: row.part
-            });
-            if (!groupKey) return;
+            const courthouse = (row.courthouse || '').trim().toLowerCase();
+            const post = (row.location_group || '').trim().toLowerCase();
+            const part = (row.part || '').trim().toLowerCase();
 
-            const existingCount = fixedPostGroups.get(groupKey) || 0;
-            if (assignedCount > existingCount) fixedPostGroups.set(groupKey, assignedCount);
+            if (courthouse === 'mitchell' && post === 'calvert' && part === '0800-3') return;
+            if (courthouse === 'cummings' && post === 'cummings' && part === '0830-2') return;
+            if (courthouse === 'cummings' && post === 'transportation') return;
+
+            if (assignedCount > 0) stats.filled += 1;
+            else stats.vacant += 1;
+            stats.total += 1;
             return;
         }
 
@@ -289,7 +287,7 @@ function getStats(rows) {
             const normalized = normalizeCourtroomAssignmentLabel(row.assignment_notes || '');
             if (isInactiveCourtLabel(normalized)) return;
 
-            if (isOpenCourtLabel(normalized) || isOpenAssignedMember(row.assigned_member || '')) {
+            if (isOpenCourtLabel(normalized)) {
                 stats.open += 1;
                 stats.total += 1;
                 return;
@@ -302,12 +300,6 @@ function getStats(rows) {
             stats.vacant += Math.max(requiredDeputies - assignedCount, 0);
             stats.total += requiredDeputies;
         }
-    });
-
-    fixedPostGroups.forEach((assignedCount) => {
-        if (assignedCount > 0) stats.filled += 1;
-        else stats.vacant += 1;
-        stats.total += 1;
     });
 
     return stats;
