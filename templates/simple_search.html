@@ -150,6 +150,31 @@ function dedupeAssignmentRows(rows = []) {
     return Array.from(byKey.values());
 }
 
+function formatJudgeDisplayName(judgeName) {
+    const raw = (judgeName || '').trim();
+    if (!raw) return '';
+
+    const commaMatch = raw.match(/^([^,]+),\s*(.+)$/);
+    if (commaMatch) {
+        const last = commaMatch[1].trim();
+        const firstToken = commaMatch[2].trim().split(/\s+/)[0] || '';
+        const initial = firstToken.replace(/[^A-Za-z]/g, '').charAt(0);
+        return initial ? `${last}, ${initial}.` : last;
+    }
+
+    const parts = raw.split(/\s+/);
+    if (parts.length >= 2) {
+        const firstToken = parts[0];
+        const last = parts.slice(1).join(' ');
+        const initial = firstToken.replace(/[^A-Za-z]/g, '').charAt(0);
+        if (initial && last) {
+            return `${last}, ${initial}.`;
+        }
+    }
+
+    return raw;
+}
+
 function formatCountMetrics(vacant, filled, open) {
     return `<span class="metric-red">Vacant ${vacant}</span> / <span class="metric-green">Filled ${filled}</span> / <span class="metric-blue">Open ${open}</span>`;
 }
@@ -465,6 +490,7 @@ function renderCourtroomTable(courthouse, rows) {
                 : null;
         const effectivePart = row && row.part ? row.part : (roomDefaults ? roomDefaults.part : '');
         const effectiveJudge = row && row.judge_name ? row.judge_name : (roomDefaults ? roomDefaults.judge_name : '');
+        const displayJudge = formatJudgeDisplayName(effectiveJudge);
 
         countRows.push({
             assignment_type: 'Courtroom',
@@ -474,7 +500,7 @@ function renderCourtroomTable(courthouse, rows) {
 
         const rowForDisplay = { ...(row || {}), part: effectivePart };
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${effectiveJudge}</td><td>${room}${effectivePart ? '/' + effectivePart : ''}</td><td>${buildCourtroomAssignmentText(rowForDisplay)}</td><td>${row ? (row.assigned_member || '') : ''}</td>`;
+        tr.innerHTML = `<td>${displayJudge}</td><td>${room}${effectivePart ? '/' + effectivePart : ''}</td><td>${buildCourtroomAssignmentText(rowForDisplay)}</td><td>${row ? (row.assigned_member || '') : ''}</td>`;
         tbody.appendChild(tr);
     });
 
