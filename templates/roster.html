@@ -28,6 +28,10 @@
         .add-message { font-size: 0.95em; margin-top: 6px; min-height: 1.2em; }
         .add-message-success { color: #067647; font-weight: 700; }
         .add-message-error { color: #b42318; font-weight: 700; }
+        .status-row-scheduled-leave { background-color: #e9f9ee; }
+        .status-row-unscheduled-leave { background-color: #feeceb; }
+        .status-row-unavailable { background-color: #eceff3; }
+        .status-row-training { background-color: #f6eee3; }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
@@ -401,6 +405,17 @@ function renderStatusControls(dep, hostTr) {
 
 function createDeputyRow(dep, includeDivision) {
     const tr = document.createElement("tr");
+    const primaryStatus = getPrimaryStatus(dep);
+    const rowClassByStatus = {
+        "Scheduled Leave": "status-row-scheduled-leave",
+        "Unscheduled Leave": "status-row-unscheduled-leave",
+        "Unavailable": "status-row-unavailable",
+        "Training": "status-row-training"
+    };
+    const statusRowClass = rowClassByStatus[primaryStatus];
+    if (statusRowClass) {
+        tr.classList.add(statusRowClass);
+    }
 
     const rankDisplay = document.createElement("span");
     rankDisplay.textContent = dep.rank || "";
