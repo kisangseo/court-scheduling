@@ -810,22 +810,29 @@ function searchSimple() {
 
         const juvenileRows = grouped['Juvenile'] || [];
         const juvenileCourtRows = juvenileRows.filter(r => r.assignment_type === 'Courtroom');
-        const juvenileMovedToCummings = juvenileCourtRows.filter(r => {
-            const part = (r.part || '').toString().trim().toUpperCase().replace(/^PART\s+/, '');
-            const judge = (r.judge_name || '').trim().toUpperCase();
-            return part === '16' || judge === 'VITTORIA';
-        });
-        const juvenileMovedToMitchell = juvenileCourtRows.filter(r => {
-            const part = (r.part || '').toString().trim().toUpperCase().replace(/^PART\s+/, '');
-            const judge = (r.judge_name || '').trim().toUpperCase();
-            return ['81', '22', '82', '85', '87'].includes(part) || ['STORM', 'R. RAFFERTY', 'M. PHINNETT', 'SILKWORTH', 'RASIN'].includes(judge);
-        });
-        const juvenileKeptAsJuvenile = juvenileCourtRows.filter(r => {
-            const room = (r.location_detail || '').trim().toUpperCase();
-            const part = (r.part || '').toString().trim().toUpperCase().replace(/^PART\s+/, '');
-            const judge = (r.judge_name || '').trim().toUpperCase();
-            return room === '329C' && part === 'C-1' && judge === 'BLOMQUIST';
-        });
+
+        const getJuvenileCourtroomBuilding = (row) => {
+            const room = (row.location_detail || '').trim().toUpperCase();
+            const part = (row.part || '').toString().trim().toUpperCase().replace(/^PART\s+/, '');
+            const judge = (row.judge_name || '').trim().toUpperCase();
+
+            // True juvenile courtroom that should remain with Juvenile totals.
+            if (room === '329C' && part === 'C-1' && judge === 'BLOMQUIST') return 'Juvenile';
+
+            // Primary routing: room suffix indicates Cummings/Mitchell building.
+            if (room.endsWith('C')) return 'Cummings';
+            if (room.endsWith('M')) return 'Mitchell';
+
+            // Fallback for legacy rows where the room/building may not be encoded consistently.
+            if (part === '16' || judge === 'VITTORIA') return 'Cummings';
+            if (['81', '22', '82', '85', '87'].includes(part) || ['STORM', 'R. RAFFERTY', 'M. PHINNETT', 'SILKWORTH', 'RASIN'].includes(judge)) return 'Mitchell';
+
+            return 'Juvenile';
+        };
+
+        const juvenileMovedToCummings = juvenileCourtRows.filter(r => getJuvenileCourtroomBuilding(r) === 'Cummings');
+        const juvenileMovedToMitchell = juvenileCourtRows.filter(r => getJuvenileCourtroomBuilding(r) === 'Mitchell');
+        const juvenileKeptAsJuvenile = juvenileCourtRows.filter(r => getJuvenileCourtroomBuilding(r) === 'Juvenile');
 
         const mitchellRows = dedupeAssignmentRows([...(grouped['Mitchell'] || []), ...juvenileMovedToMitchell.map(r => ({ ...r, courthouse: 'Mitchell' }))]);
         const cummingsRows = dedupeAssignmentRows([...(grouped['Cummings'] || []), ...juvenileMovedToCummings.map(r => ({ ...r, courthouse: 'Cummings' }))]);
