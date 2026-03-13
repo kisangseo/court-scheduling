@@ -1056,6 +1056,11 @@ function openTransferTimePicker({ title, defaultTime, onSave }) {
 }
 
 function applyDeputyToCell(dropCell, assignedName, role) {
+    if (!canAssignDeputyName(assignedName)) {
+        showCellWarning(dropCell, 'Deputy is not currently available to be assigned from typing.');
+        return false;
+    }
+
     if (!isEligibleForCell(dropCell, role)) {
         showCellWarning(dropCell, getIneligibleAssignmentMessage(dropCell));
         return false;
@@ -1755,13 +1760,27 @@ function getDeputyAutocompleteMatches(query) {
     const normalizedQuery = (query || '').trim().toLowerCase();
     if (normalizedQuery.length < 4) return [];
 
+    const assignedNames = getAssignedNamesAcrossGrid();
+
     return allDeputies
         .filter(dep => {
             const fullName = (dep.full_name || '').toLowerCase();
-            return fullName.includes(normalizedQuery);
+            const isAssignedElsewhere = assignedNames.has((dep.full_name || '').trim());
+            return fullName.includes(normalizedQuery) && !isAssignedElsewhere;
         })
         .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
         .slice(0, 8);
+}
+
+function canAssignDeputyName(name) {
+    const normalizedName = normalizeDeputyName(name);
+    if (!normalizedName) return false;
+
+    const deputy = rawDeputies.find(dep => normalizeDeputyName(dep.full_name) === normalizedName);
+    if (!deputy || !isDeputyAvailable(deputy)) return false;
+
+    const assignedNames = getAssignedNamesAcrossGrid();
+    return !assignedNames.has((deputy.full_name || '').trim());
 }
 
 function createAssignmentTypeahead(cell) {
