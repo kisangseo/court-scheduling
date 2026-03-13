@@ -832,12 +832,18 @@ function updateAssignmentCountBadges() {
 
         setVacantRowHighlight(cell, slotState);
 
+        const required = sectionType === 'Courtroom'
+            ? getRequiredDeputiesForCourtroomLabel(assignmentLabel)
+            : 1;
+
         if (slotState === 'vacant') {
-            statsBySection[key].vacant += 1;
-            overallVacant += 1;
-        } else if (slotState === 'filled') {
-            statsBySection[key].filled += 1;
-            overallFilled += 1;
+            const missing = Math.max(required - assignedCount, 1);
+            statsBySection[key].vacant += missing;
+            overallVacant += missing;
+        }
+        else if (slotState === 'filled') {
+            statsBySection[key].filled += required;
+            overallFilled += required;
         } else if (slotState === 'open') {
             statsBySection[key].open += 1;
             overallOpen += 1;
