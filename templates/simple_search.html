@@ -160,12 +160,12 @@ function normalizeCourtroomAssignmentLabel(value) {
 
 function isOpenCourtLabel(value) {
     const normalized = normalizeCourtroomAssignmentLabel(value);
-    return normalized === 'OPEN' || normalized.startsWith('OPEN-');
+    return normalized === 'OPEN' || normalized.startsWith('OPEN-') || normalized === 'WAITING TO RECEIVE CASE';
 }
 
 function isOpenAssignedMember(value) {
     const normalized = normalizeCourtroomAssignmentLabel(value);
-    return normalized === 'OPEN' || normalized.startsWith('OPEN-');
+    return normalized === 'OPEN' || normalized.startsWith('OPEN-') || normalized === 'WAITING TO RECEIVE CASE';
 }
 
 function isInactiveCourtLabel(value) {
@@ -181,7 +181,8 @@ function getRequiredDeputiesForCourtroomLabel(value) {
         'CLOSED',
         'NO DEPUTY',
         'NO DEPUTIES',
-        'CIVIL - NO DEPUTIES'
+        'CIVIL - NO DEPUTIES',
+        'ON LEAVE'
     ].includes(normalized)) {
         return 0;
     }
@@ -195,7 +196,6 @@ function getRequiredDeputiesForCourtroomLabel(value) {
         'CIVIL - 1 DEPUTY',
         'JUVENILE',
         'FAMILY',
-        'WAITING TO RECEIVE CASE',
         'OPEN'
     ].includes(normalized) || normalized.startsWith('OPEN-')) {
         return 1;

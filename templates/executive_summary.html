@@ -119,7 +119,8 @@ function getRequiredDeputiesForCourtroomLabel(value) {
         'CLOSED',
         'NO DEPUTY',
         'NO DEPUTIES',
-        'CIVIL - NO DEPUTIES'
+        'CIVIL - NO DEPUTIES',
+        'ON LEAVE'
     ].includes(normalized)) {
         return 0;
     }
@@ -500,7 +501,7 @@ function getAssignmentTotals(assignments) {
 
         const normalized = normalizeAssignmentLabel(row.assignment_notes || '');
         const assignedMember = normalizeAssignmentLabel(row.assigned_member || '');
-        if (normalized === 'OPEN' || normalized.startsWith('OPEN-') || assignedMember === 'OPEN' || assignedMember.startsWith('OPEN-')) {
+        if (normalized === 'OPEN' || normalized.startsWith('OPEN-') || normalized === 'WAITING TO RECEIVE CASE' || assignedMember === 'OPEN' || assignedMember.startsWith('OPEN-')) {
             totals.open += 1;
             return;
         }
