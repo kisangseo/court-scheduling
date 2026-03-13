@@ -1537,7 +1537,10 @@ function isEligibleForCell(cell, role) {
         });
 
         if (requiresArmedFixedPostSlot(courthouse, post, slotPart) && !isDoorPrimaryCapability(role)) {
-            return false;
+            const armedAlreadyAssignedInCell = isArmedRequirementSatisfied(cell);
+            if (!armedAlreadyAssignedInCell) {
+                return false;
+            }
         }
 
         const requirePrimary = requiresPrimarySecurityRole(courthouse, post, shift, slotPart);
