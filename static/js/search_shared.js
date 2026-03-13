@@ -64,6 +64,19 @@
         return [courthouse, post, detail, part].join('|');
     }
 
+
+    function shouldCountFixedPostSlotMain(slotMeta) {
+        const meta = slotMeta || {};
+        const courthouse = (meta.courthouse || '').trim().toLowerCase();
+        const post = (meta.post || '').trim().toLowerCase();
+        const part = (meta.part || '').trim().toLowerCase();
+
+        if (courthouse === 'mitchell' && post === 'calvert' && part === '0800-3') return false;
+        if (courthouse === 'cummings' && post === 'cummings' && part === '0830-2') return false;
+        if (courthouse === 'cummings' && post === 'transportation') return false;
+        return true;
+    }
+
     function isSecurityPostAssignmentType(value) {
         const normalized = (value || '').trim().toLowerCase();
         return normalized === 'fixed post' || normalized === 'security post';
@@ -139,6 +152,7 @@
         isInactiveCourtLabel,
         getRequiredDeputiesForCourtroomLabel,
         getFixedPostRequirementGroup,
+        shouldCountFixedPostSlotMain,
         isSecurityPostAssignmentType,
         parseAssignedNames,
         pickPreferredRow,

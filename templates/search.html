@@ -413,18 +413,13 @@ function getRequiredDeputiesForCourtroomLabel(value) {
 }
 
 function shouldCountFixedPostSlot(slotMeta = {}) {
-    return !!SharedSearchLogic.getFixedPostRequirementGroup({
-        courthouse: slotMeta.courthouse,
-        post: slotMeta.post,
-        detail: slotMeta.detail,
-        part: slotMeta.part,
-    });
+    return SharedSearchLogic.shouldCountFixedPostSlotMain(slotMeta);
 }
 
 function getSlotState(assignmentType, assignmentLabel, assignedCount, slotMeta = {}) {
     const type = (assignmentType || '').trim();
 
-    if (type === 'Fixed Post') {
+    if (SharedSearchLogic.isSecurityPostAssignmentType(type)) {
         if (!shouldCountFixedPostSlot(slotMeta)) return 'inactive';
         return assignedCount > 0 ? 'filled' : 'vacant';
     }
@@ -695,7 +690,7 @@ function fetchGlobalAssignmentTotals(dateValue) {
     return fetch(`/api/search?date=${date}`)
         .then(response => response.json())
         .then(rows => {
-            const relevantRows = (rows || []).filter(row => row.assignment_type === 'Courtroom' || row.assignment_type === 'Fixed Post');
+            const relevantRows = (rows || []).filter(row => row.assignment_type === 'Courtroom' || SharedSearchLogic.isSecurityPostAssignmentType(row.assignment_type));
             let vacant = 0;
             let filled = 0;
             let open = 0;
@@ -714,7 +709,7 @@ function fetchGlobalAssignmentTotals(dateValue) {
 
             const posted = new Set();
             (rows || [])
-                .filter(row => ['Courtroom', 'Fixed Post', 'Overtime', 'Transport'].includes(row.assignment_type))
+                .filter(row => ['Courtroom', 'Overtime', 'Transport'].includes(row.assignment_type) || SharedSearchLogic.isSecurityPostAssignmentType(row.assignment_type))
                 .filter(row => (row.assigned_member || '').trim().length > 0)
                 .forEach(row => {
                 parseAssignedMemberValue(row.assigned_member).forEach(name => posted.add(name));
