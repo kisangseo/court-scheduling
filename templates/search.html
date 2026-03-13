@@ -1296,7 +1296,6 @@ function isNoGunFixedPost(courthouse, post) {
 const REQUIRED_ARMED_FIXED_POST_SLOTS = new Set([
     'mitchell|calvert|0800-1',
     'mitchell|lexington|0700-1500',
-    'mitchell|jury room|0730',
     'mitchell|st. paul|0730',
     'mitchell|judges o/t|0700',
     'cummings|cummings|0800',
@@ -1305,6 +1304,10 @@ const REQUIRED_ARMED_FIXED_POST_SLOTS = new Set([
     'juvenile|office|0830-1700',
     'juvenile|lobby|0830-1630-1',
     'juvenile|lockup|'
+]);
+
+const REQUIRED_COURT_TRAINED_FIXED_POST_SLOTS = new Set([
+    'mitchell|jury room|0730'
 ]);
 
 function getFixedPostSlotKey(courthouse, post, part) {
@@ -1316,6 +1319,10 @@ function getFixedPostSlotKey(courthouse, post, part) {
 
 function requiresArmedFixedPostSlot(courthouse, post, part) {
     return REQUIRED_ARMED_FIXED_POST_SLOTS.has(getFixedPostSlotKey(courthouse, post, part));
+}
+
+function requiresCourtTrainedFixedPostSlot(courthouse, post, part) {
+    return REQUIRED_COURT_TRAINED_FIXED_POST_SLOTS.has(getFixedPostSlotKey(courthouse, post, part));
 }
 
 function requiresPrimarySecurityRole(courthouse, post, shift, part) {
@@ -1377,6 +1384,10 @@ function cellRequiresArmedFixedPost(cell) {
     return requiresArmedFixedPostSlot(cell?.dataset?.courthouse, cell?.dataset?.room, cell?.dataset?.part);
 }
 
+function cellRequiresCourtTrainedFixedPost(cell) {
+    return requiresCourtTrainedFixedPostSlot(cell?.dataset?.courthouse, cell?.dataset?.room, cell?.dataset?.part);
+}
+
 function isArmedRequirementSatisfied(cell) {
     return getAssignedChipsFromCell(cell).some(isArmedAssignmentChip);
 }
@@ -1394,7 +1405,14 @@ function updateFixedPostArmedWarnings() {
         cell.classList.remove('armed-required-unmet');
         row?.classList.remove('assignment-armed-unmet-row');
 
-        if (!cellRequiresArmedFixedPost(cell) || isArmedRequirementSatisfied(cell)) {
+        const requiresCourtTrained = cellRequiresCourtTrainedFixedPost(cell);
+        const requiresArmed = cellRequiresArmedFixedPost(cell);
+
+        if (!requiresCourtTrained && (!requiresArmed || isArmedRequirementSatisfied(cell))) {
+            return;
+        }
+
+        if (requiresCourtTrained && getAssignedChipsFromCell(cell).some(chip => isCourtPrimaryCapability(chip?.dataset?.role))) {
             return;
         }
 
@@ -1404,7 +1422,7 @@ function updateFixedPostArmedWarnings() {
         warning.className = 'armed-warning';
         warning.style.color = '#b42318';
         warning.style.fontWeight = '700';
-        warning.textContent = 'ARMED';
+        warning.textContent = requiresCourtTrained ? 'COURT TRAINED' : 'ARMED';
         cell.appendChild(warning);
     });
 }
@@ -1430,7 +1448,30 @@ function isEligibleForCell(cell, role) {
         const shift = (cell.dataset.shift || '').trim();
         const slotPart = (cell.dataset.part || '').trim();
 
-        if (!requiresArmedFixedPostSlot(courthouse, post, slotPart)) {
+        if (!requiresArmedFixedPostSlot(courthouse, post, slotPart) && !requiresCourtTrainedFixedPostSlot(courthouse, post, slotPart)) {
+            return true;
+        }
+
+        if (requiresCourtTrainedFixedPostSlot(courthouse, post, slotPart)) {
+            const matchingSecurityCells = Array.from(
+                document.querySelectorAll('.editable[data-type="Fixed Post"]')
+            ).filter(candidate => {
+                if ((candidate.dataset.room || '').trim() !== post) return false;
+                return (candidate.dataset.shift || '').trim() === shift;
+            });
+
+            const hasCourtPrimaryAssigned = matchingSecurityCells.some(candidate =>
+                getAssignedNamesFromCell(candidate).some(name => {
+                    const deputy = getDeputyRecordByName(name);
+                    const assignedRole = getDeputyRole(deputy || {});
+                    return isCourtPrimaryCapability(assignedRole);
+                })
+            );
+
+            if (!hasCourtPrimaryAssigned && !isCourtPrimaryCapability(role)) {
+                return false;
+            }
+
             return true;
         }
 
