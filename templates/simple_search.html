@@ -175,6 +175,20 @@ function formatJudgeDisplayName(judgeName) {
     return raw;
 }
 
+function getJudgeLastNameSortKey(judgeName) {
+    const raw = (judgeName || '').trim();
+    if (!raw) return 'zzzzzz';
+
+    const commaMatch = raw.match(/^([^,]+),\s*(.+)$/);
+    if (commaMatch) {
+        return commaMatch[1].trim().toUpperCase();
+    }
+
+    const parts = raw.split(/\s+/).filter(Boolean);
+    if (!parts.length) return 'zzzzzz';
+    return parts[parts.length - 1].toUpperCase();
+}
+
 function formatCountMetrics(vacant, filled, open) {
     return `<span class="metric-red">Vacant ${vacant}</span> / <span class="metric-green">Filled ${filled}</span> / <span class="metric-blue">Open ${open}</span>`;
 }
@@ -479,6 +493,30 @@ function renderCourtroomTable(courthouse, rows) {
         rowsToRender.length = 0;
         rowsToRender.push(...orderedRows);
     }
+
+    rowsToRender.sort((a, b) => {
+        const roomA = a.location_detail || '';
+        const roomB = b.location_detail || '';
+        const roomDefaultsA = courthouse === 'Family'
+            ? FAMILY_ROOM_DEFAULTS[roomA]
+            : courthouse === 'Cummings'
+                ? CUMMINGS_ROOM_DEFAULTS[roomA]
+                : null;
+        const roomDefaultsB = courthouse === 'Family'
+            ? FAMILY_ROOM_DEFAULTS[roomB]
+            : courthouse === 'Cummings'
+                ? CUMMINGS_ROOM_DEFAULTS[roomB]
+                : null;
+        const judgeA = a && a.judge_name ? a.judge_name : (roomDefaultsA ? roomDefaultsA.judge_name : '');
+        const judgeB = b && b.judge_name ? b.judge_name : (roomDefaultsB ? roomDefaultsB.judge_name : '');
+
+        const judgeCompare = getJudgeLastNameSortKey(judgeA).localeCompare(getJudgeLastNameSortKey(judgeB));
+        if (judgeCompare !== 0) return judgeCompare;
+
+        const roomCompare = roomA.localeCompare(roomB);
+        if (roomCompare !== 0) return roomCompare;
+        return (a.part || '').localeCompare(b.part || '');
+    });
 
     const countRows = [];
     rowsToRender.forEach(row => {
