@@ -2253,16 +2253,24 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
                 if (roomCompare !== 0) return roomCompare;
                 return (a.part || "").localeCompare(b.part || "");
             })
-            .forEach(row => combinedRows.push({ ...row, __building: getJuvenileBuildingLabel(row.location_detail), __courthouse: "Juvenile" }));
+            .forEach((row, index) => {
+                if (index === 0) {
+                    combinedRows.push({ __isRetiredJudgesHeader: true, __courthouse: "Juvenile" });
+                }
+
+                combinedRows.push({ ...row, __building: getJuvenileBuildingLabel(row.location_detail), __courthouse: "Juvenile" });
+            });
     }
 
     combinedRows.forEach(row => {
-        if (row.__isFamilyHeader || row.__isJuvenileHeader) {
+        if (row.__isFamilyHeader || row.__isJuvenileHeader || row.__isRetiredJudgesHeader) {
             const groupTr = document.createElement("tr");
             groupTr.className = row.__isFamilyHeader
                 ? "courtroom-group-row family-group-row"
-                : "courtroom-group-row juvenile-group-row";
-            groupTr.innerHTML = `<td colspan="9">${row.__isFamilyHeader ? "Family" : "Juvenile"}</td>`;
+                : row.__isRetiredJudgesHeader
+                    ? "courtroom-group-row retired-judges-group-row"
+                    : "courtroom-group-row juvenile-group-row";
+            groupTr.innerHTML = `<td colspan="9">${row.__isFamilyHeader ? "Family" : row.__isRetiredJudgesHeader ? "Retired Judges" : "Juvenile"}</td>`;
             body.appendChild(groupTr);
             return;
         }

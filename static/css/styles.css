@@ -525,6 +525,12 @@ h4 {
     font-weight: 700;
 }
 
+.retired-judges-group-row td {
+    background: #dcfce7;
+    color: #166534;
+    font-weight: 700;
+}
+
 .juvenile-courtroom-row td {
     background: #fef9c3;
 }
