@@ -210,15 +210,23 @@ def _canonical_capacity_tag(value):
 
     direct_options = {
         _normalize_capacity_tag_key("DEPUTY"): "DEPUTY",
-        _normalize_capacity_tag_key("CSO/SPO-A: Court Trained (FT)"): "CSO/SPO-A: Court Trained (FT)",
-        _normalize_capacity_tag_key("CSO/SPO-A: Court Trained (contractor)"): "CSO/SPO-A: Court Trained (contractor)",
-        _normalize_capacity_tag_key("CSO/SPO-A: (FT)"): "CSO/SPO-A: (FT)",
-        _normalize_capacity_tag_key("CSO/SPO-A: (contractor)"): "CSO/SPO-A: (contractor)",
-        _normalize_capacity_tag_key("CSO/SPO: Court Trained(FT)"): "CSO/SPO: Court Trained(FT)",
-        _normalize_capacity_tag_key("CSO/SPO Court Trained (contractor)"): "CSO/SPO Court Trained (contractor)",
+        _normalize_capacity_tag_key("SPO-A: Court Trained (FT)"): "SPO-A: Court Trained (FT)",
+        _normalize_capacity_tag_key("SPO-A: Court Trained (contractor)"): "SPO-A: Court Trained (contractor)",
+        _normalize_capacity_tag_key("SPO-A: (FT)"): "SPO-A: (FT)",
+        _normalize_capacity_tag_key("SPO-A: (contractor)"): "SPO-A: (contractor)",
+        _normalize_capacity_tag_key("SPO: Court Trained(FT)"): "SPO: Court Trained(FT)",
+        _normalize_capacity_tag_key("SPO Court Trained (contractor)"): "SPO Court Trained (contractor)",
+        _normalize_capacity_tag_key("K9"): "K9",
         _normalize_capacity_tag_key("CSO: Non-SPO/CR"): "CSO",
         _normalize_capacity_tag_key("CSO"): "CSO",
         _normalize_capacity_tag_key("Cadet"): "Cadet",
+        # Legacy aliases from older labels
+        _normalize_capacity_tag_key("CSO/SPO-A: Court Trained (FT)"): "SPO-A: Court Trained (FT)",
+        _normalize_capacity_tag_key("CSO/SPO-A: Court Trained (contractor)"): "SPO-A: Court Trained (contractor)",
+        _normalize_capacity_tag_key("CSO/SPO-A: (FT)"): "SPO-A: (FT)",
+        _normalize_capacity_tag_key("CSO/SPO-A: (contractor)"): "SPO-A: (contractor)",
+        _normalize_capacity_tag_key("CSO/SPO: Court Trained(FT)"): "SPO: Court Trained(FT)",
+        _normalize_capacity_tag_key("CSO/SPO Court Trained (contractor)"): "SPO Court Trained (contractor)",
     }
 
     if normalized_key in direct_options:
