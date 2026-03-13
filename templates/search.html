@@ -2124,27 +2124,28 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
     const normalizePart = (value) => (value || "").toString().trim().toUpperCase().replace(/^PART\s+/, "");
     const normalizeRoom = (value) => (value || "").trim().toUpperCase();
     const normalizeJudge = (value) => normalizeRoom(value).replace(/[\s.\-]+/g, "");
-    const retiredJudgeNames = new Set([
+    const retiredJudgeOrder = [
         "VITTORIA",
         "STORM",
-        "FLETCHERHILL",
-        "WHITE",
-        "SAMPSON",
-        "HOWARD",
-        "DOORY",
-        "DOXXY",
-        "LDANIELS",
-        "WELCH",
-        "VBROWN",
         "RTAYLOR",
         "MPHINN",
-        "MPHINNETT",
-        "PETERS",
         "SILKWORTH",
-        "PJACKSON",
         "RASIN",
-        "MURDOCK"
-    ]);
+        "PJACKSON",
+        "PETERS",
+        "MURDOCK",
+        "HOWARD",
+        "DOORY",
+        "LDANIELS",
+        "WELCH",
+        "SAMPSON",
+        "VBROWN",
+        "FLETCHERHILL",
+        "WHITE",
+        "DOXXY",
+        "MPHINNETT"
+    ];
+    const retiredJudgeNames = new Set(retiredJudgeOrder);
     const courtroomRowExclusionRules = [
         { courthouse: "Cummings", judge: "H. TIPTON", room: "223C", parts: ["6"] },
         { courthouse: "Mitchell", judge: "LAZEROW", room: "113M", parts: ["04", "4"] }
@@ -2361,6 +2362,17 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
 
         remaining
             .sort((a, b) => {
+                const retiredOrderA = retiredJudgeOrder.indexOf(normalizeJudge(a.judge_name));
+                const retiredOrderB = retiredJudgeOrder.indexOf(normalizeJudge(b.judge_name));
+                const hasRetiredOrderA = retiredOrderA >= 0;
+                const hasRetiredOrderB = retiredOrderB >= 0;
+
+                if (hasRetiredOrderA && hasRetiredOrderB) {
+                    return retiredOrderA - retiredOrderB;
+                }
+                if (hasRetiredOrderA) return -1;
+                if (hasRetiredOrderB) return 1;
+
                 const roomCompare = (a.location_detail || "").localeCompare(b.location_detail || "");
                 if (roomCompare !== 0) return roomCompare;
                 return (a.part || "").localeCompare(b.part || "");
