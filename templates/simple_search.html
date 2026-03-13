@@ -207,6 +207,12 @@ function pickPreferredRow(rows) {
     return rows.find(r => (r.assigned_member || '').trim()) || rows[0] || null;
 }
 
+
+function isSecurityPostAssignmentType(value) {
+    const normalized = (value || '').trim().toLowerCase();
+    return normalized === 'fixed post' || normalized === 'security post';
+}
+
 function parseAssignedNames(value) {
     const text = (value || '').trim();
     if (!text) return [];
@@ -223,7 +229,7 @@ function getStats(rows) {
         const assignmentType = (row.assignment_type || '').trim();
         const assignedCount = parseAssignedNames(row.assigned_member || '').length;
 
-        if (assignmentType === 'Fixed Post') {
+        if (isSecurityPostAssignmentType(assignmentType)) {
             const groupKey = getFixedPostRequirementGroup({
                 courthouse: row.courthouse,
                 post: row.location_group,
@@ -267,7 +273,7 @@ function getStats(rows) {
 
 function renderPostTable(courthouse, rows) {
     const postSlots = courthouse === 'Mitchell' ? MITCHELL_POSTS : CUMMINGS_POSTS;
-    const postRows = rows.filter(r => r.assignment_type === 'Fixed Post');
+    const postRows = rows.filter(r => isSecurityPostAssignmentType(r.assignment_type));
 
     const table = document.createElement('table');
     table.innerHTML = `<thead><tr><th>Post</th><th>Shift</th><th>Deputy</th></tr></thead><tbody></tbody>`;
@@ -549,7 +555,7 @@ function renderBorrowedPanel(allRows) {
     const tbody = table.querySelector('tbody');
 
     const rows = [];
-    allRows.filter(r => ['Courtroom', 'Fixed Post', 'Overtime', 'Transport'].includes(r.assignment_type)).forEach(r => {
+    allRows.filter(r => r.assignment_type === 'Courtroom' || isSecurityPostAssignmentType(r.assignment_type) || ['Overtime', 'Transport'].includes(r.assignment_type)).forEach(r => {
         parseAssignedNames(r.assigned_member).forEach(name => {
             const deputy = getDeputyByName(name);
             if (!deputy || isCourtSecurityDeputy(deputy)) return;
@@ -588,7 +594,7 @@ function renderBorrowedPanel(allRows) {
 function getPostedNameSetForSimpleView() {
     const names = new Set();
     latestRows
-        .filter(r => ['Courtroom', 'Fixed Post', 'Overtime', 'Transport'].includes(r.assignment_type))
+        .filter(r => r.assignment_type === 'Courtroom' || isSecurityPostAssignmentType(r.assignment_type) || ['Overtime', 'Transport'].includes(r.assignment_type))
         .forEach(r => parseAssignedNames(r.assigned_member).forEach(name => names.add(name.trim())));
     return names;
 }
