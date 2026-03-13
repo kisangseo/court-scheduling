@@ -265,12 +265,13 @@ function normalizeCapacityTag(deputy) {
 
 const courtSecurityRoleOrder = [
     'DEPUTY',
-    'CSO/SPO-A: Court Trained (FT)',
-    'CSO/SPO-A: Court Trained (contractor)',
-    'CSO/SPO-A: (FT)',
-    'CSO/SPO-A: (contractor)',
-    'CSO/SPO: Court Trained(FT)',
-    'CSO/SPO Court Trained (contractor)',
+    'SPO-A: Court Trained (FT)',
+    'SPO-A: Court Trained (contractor)',
+    'SPO-A: (FT)',
+    'SPO-A: (contractor)',
+    'SPO: Court Trained(FT)',
+    'SPO Court Trained (contractor)',
+    'K9',
     'CSO',
     'Cadet'
 ];
@@ -290,12 +291,29 @@ function getCapacityTagLabel(deputy) {
     return (deputy.capacity_tag || deputy.capability_tag || '').toString().trim() || 'UNSPECIFIED';
 }
 
+const CAPABILITY_CATEGORY_RULES = {
+    'DEPUTY': { court: true, armed: true },
+    'SPO-A: COURT TRAINED (FT)': { court: true, armed: true },
+    'SPO-A: COURT TRAINED (CONTRACTOR)': { court: true, armed: true },
+    'SPO-A: (FT)': { court: false, armed: true },
+    'SPO-A: (CONTRACTOR)': { court: false, armed: true },
+    'SPO: COURT TRAINED(FT)': { court: true, armed: false },
+    'SPO COURT TRAINED (CONTRACTOR)': { court: true, armed: false },
+    'K9': { court: true, armed: true },
+    'CSO': { court: false, armed: false },
+    'CADET': { court: false, armed: false }
+};
+
+function getCapabilityCategoryRule(tag) {
+    return CAPABILITY_CATEGORY_RULES[(tag || '').toString().trim().toUpperCase()] || null;
+}
+
 function isCourtCategoryTag(tag) {
-    return tag === 'DEPUTY' || tag.includes('COURT TRAINED');
+    return Boolean(getCapabilityCategoryRule(tag)?.court);
 }
 
 function isArmedCategoryTag(tag) {
-    return tag === 'DEPUTY' || tag.includes('-A');
+    return Boolean(getCapabilityCategoryRule(tag)?.armed);
 }
 
 function summarizeAvailableDeputies(availableDeputies) {
