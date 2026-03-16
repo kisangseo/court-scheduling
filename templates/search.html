@@ -2150,6 +2150,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         
         
     ];
+    const retiredJudgeNames = new Set(retiredJudgeOrder);
     const courtroomRowExclusionRules = [
         { courthouse: "Cummings", judge: "H. TIPTON", room: "223C", parts: ["6"] },
         { courthouse: "Mitchell", judge: "LAZEROW", room: "113M", parts: ["04", "4"] }
