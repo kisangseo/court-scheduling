@@ -348,6 +348,18 @@ function renderStatusControls(dep, hostTr) {
                     }
                 }
             }
+
+            if (dropdown.value === "Scheduled Leave") {
+                const assignmentLabel = getWorkAssignmentForDeputy(dep.full_name);
+                if (assignmentLabel) {
+                    const warningMessage = `${dep.full_name} is scheduled to work ${assignmentLabel} on ${formatDateForWarning(selectedDate)}.
+
+Select OK to approve leave anyway, or Cancel to keep current status.`;
+                    if (!window.confirm(warningMessage)) {
+                        return;
+                    }
+                }
+            }
             const statuses = ["Scheduled Leave", "Unscheduled Leave", "Unavailable", "Training"];
             Promise.all(statuses.map(status => fetch("/api/update-status-range", {
                 method: "POST",
@@ -526,6 +538,34 @@ function isInactiveCourtLabel(value) {
     ].includes(normalized);
 }
 
+function getWorkAssignmentForDeputy(fullName) {
+    const assignments = window.currentAssignments || [];
+    const normalizedName = (fullName || "").trim().toLowerCase();
+    if (!normalizedName) return null;
+
+    const match = assignments.find(row => {
+        const assigned = (row.assigned_member || "").trim().toLowerCase();
+        return assigned && assigned === normalizedName;
+    });
+
+    if (!match) return null;
+
+    if ((match.assignment_type || "").trim().toLowerCase() === "fixed post") {
+        return (match.assignment_notes || match.location_detail || "Fixed Post").trim();
+    }
+
+    const location = (match.location_detail || "Courtroom").trim();
+    const part = (match.part || "").trim();
+    return part ? `${location}/${part}` : location;
+}
+
+function formatDateForWarning(value) {
+    if (!value) return "selected date";
+    const d = parseDateOnly(value);
+    if (!d) return value;
+    return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+}
+
 
 function getTotalNeededFromAssignments(assignments) {
     const rows = assignments || [];
@@ -609,6 +649,7 @@ function loadRoster() {
     ]).then(([deputiesData, assignments]) => {
         const deputies = (deputiesData || []).sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
         window.currentDeputies = deputies;
+        window.currentAssignments = assignments || [];
 
         const csBody = document.querySelector("#courtSecurityTable tbody");
         const otherBody = document.querySelector("#otherDivisionsTable tbody");
