@@ -1041,7 +1041,7 @@ function openTransferTimePicker({ title, defaultTime, onSave }) {
         close();
     });
 
-    overlay.addEventListener('click', (evt) => {
+    overlay.addEventListener('mousedown', (evt) => {
         if (evt.target === overlay) close();
     });
 
