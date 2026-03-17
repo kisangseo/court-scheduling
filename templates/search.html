@@ -1625,6 +1625,10 @@ function buildAssignmentChip(name, role, owningCell = null) {
     btnTransfer.type = 'button';
     btnTransfer.textContent = 'Transfer Out';
 
+    const btnRemoveTransferData = document.createElement('button');
+    btnRemoveTransferData.type = 'button';
+    btnRemoveTransferData.textContent = 'Remove transfer data';
+
     const btnRemove = document.createElement('button');
     btnRemove.type = 'button';
     btnRemove.textContent = 'Remove';
@@ -1634,6 +1638,7 @@ function buildAssignmentChip(name, role, owningCell = null) {
     btnCancel.textContent = 'Cancel';
 
     pop.appendChild(btnTransfer);
+    pop.appendChild(btnRemoveTransferData);
     pop.appendChild(btnRemove);
     pop.appendChild(btnCancel);
 
@@ -1655,6 +1660,26 @@ function buildAssignmentChip(name, role, owningCell = null) {
 
     btnCancel.addEventListener('click', (ev) => { ev.stopPropagation(); closePop(); });
     btnRemove.addEventListener('click', (ev) => { ev.stopPropagation(); removeChip(); });
+
+    btnRemoveTransferData.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      fetch('/api/remove-transfer-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assignment_date: date,
+          full_name: deputyName
+        })
+      })
+      .then(r => r.json())
+      .then(payload => {
+        if (payload?.status !== 'success') return;
+        clearTransferVisualStateForDeputy(deputyName);
+        delete transferMap[(deputyName || '').trim()];
+        return fetchTransfersForDate().then(() => applyTransferCaptionToRosterAndGrid());
+      })
+      .finally(() => closePop());
+    });
 
     btnTransfer.addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -2818,6 +2843,24 @@ function forgetTransferredInChip(cell, name) {
   const key = getTransferredChipKey(cell, name);
   if (!key) return;
   transferredInChipMeta.delete(key);
+}
+
+function clearTransferVisualStateForDeputy(name) {
+  const deputyName = (name || '').trim();
+  if (!deputyName) return;
+
+  document.querySelectorAll('.assignment-chip').forEach(chip => {
+    const chipName = (chip.dataset.name || chip.textContent || '').trim();
+    if (chipName !== deputyName) return;
+
+    const owningCell = chip.closest('.editable');
+    forgetTransferredChip(owningCell, chipName);
+    forgetTransferredInChip(owningCell, chipName);
+    chip.dataset.transferredOut = 'false';
+    chip.dataset.transferOutTime = '';
+    chip.dataset.transferInTime = '';
+    chip.classList.remove('transferred-out');
+  });
 }
 
 function getTransferredInTimeForChip(cell, name) {
