@@ -62,6 +62,9 @@ SUPERVISOR_PATH_PREFIXES = [
     "/api/update-status-range",
     "/api/update-unavailability",
     "/api/upsert-deputy",
+]
+
+ADMIN_PATH_PREFIXES = [
     "/api/delete-deputy",
 ]
 
@@ -88,6 +91,11 @@ def enforce_auth_and_permissions():
     for prefix in SUPERVISOR_PATH_PREFIXES:
         if request.path == prefix or request.path.startswith(prefix + "/"):
             required_level = PERMISSION_LEVELS["supervisor"]
+            break
+
+    for prefix in ADMIN_PATH_PREFIXES:
+        if request.path == prefix or request.path.startswith(prefix + "/"):
+            required_level = max(required_level, PERMISSION_LEVELS["admin"])
             break
 
     if _get_current_permission_level() < required_level:
@@ -1221,7 +1229,12 @@ def get_staffing():
 @app.route("/roster")
 def roster_page():
     can_edit_roster = _get_current_permission_level() >= PERMISSION_LEVELS["supervisor"]
-    return render_template("roster.html", can_edit_roster=can_edit_roster)
+    can_remove_deputy = _get_current_permission_level() >= PERMISSION_LEVELS["admin"]
+    return render_template(
+        "roster.html",
+        can_edit_roster=can_edit_roster,
+        can_remove_deputy=can_remove_deputy,
+    )
 @app.route("/api/update-staffing", methods=["POST"])
 def update_staffing():
     data = request.json

@@ -101,6 +101,7 @@
 
 <script>
 const canEditRoster = {{ "true" if can_edit_roster else "false" }};
+const canRemoveDeputy = {{ "true" if can_remove_deputy else "false" }};
 
 const rankOptions = ["DEP", "Cadet", "CSO", "SPO", "SGT", "LT", "Detective", "CAPT", "MJR"];
 const capabilityOptions = [
@@ -533,21 +534,23 @@ function createDeputyRow(dep, includeDivision) {
             });
     });
 
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.textContent = "Remove";
-    removeBtn.addEventListener("click", () => {
-        if (!confirm(`Remove ${dep.full_name}?`)) return;
-        fetch("/api/delete-deputy", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ full_name: dep.full_name })
-        }).then(() => loadRoster());
-    });
-
     actionsTd.appendChild(editBtn);
     actionsTd.appendChild(saveBtn);
-    actionsTd.appendChild(removeBtn);
+
+    if (canRemoveDeputy) {
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.textContent = "Remove";
+        removeBtn.addEventListener("click", () => {
+            if (!confirm(`Remove ${dep.full_name}?`)) return;
+            fetch("/api/delete-deputy", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ full_name: dep.full_name })
+            }).then(() => loadRoster());
+        });
+        actionsTd.appendChild(removeBtn);
+    }
     }
 
     tr.appendChild(Object.assign(document.createElement("td"), { textContent: dep.full_name || "" }));
