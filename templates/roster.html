@@ -40,6 +40,8 @@
 <h2>Deputy Roster</h2>
 <button type="button" onclick="window.location.href='/'">Return to Main</button>
 <button type="button" onclick="window.location.href='/logout'">Logout</button>
+<div id="rosterAccessNotice" class="small" style="display:none; margin-bottom: 10px;">View-only access: only supervisors/admins can edit roster data.</div>
+
 <div class="toolbar">
     <label>
         Date:
@@ -97,6 +99,8 @@
 </div>
 
 <script>
+const canEditRoster = {{ "true" if can_edit_roster else "false" }};
+
 const rankOptions = ["DEP", "Cadet", "CSO", "SPO", "SGT", "LT", "Detective", "CAPT", "MJR"];
 const capabilityOptions = [
     "DEPUTY",
@@ -260,6 +264,11 @@ function statusIncludes(dep, value) {
 }
 
 function renderStatusControls(dep, hostTr) {
+    if (!canEditRoster) {
+        const readOnly = document.createElement("span");
+        readOnly.textContent = getPrimaryStatus(dep) || "Available";
+        return readOnly;
+    }
     const wrapper = document.createElement("div");
     wrapper.className = "status-group";
 
@@ -447,6 +456,11 @@ function createDeputyRow(dep, includeDivision) {
 
     const actionsTd = document.createElement("td");
 
+    if (!canEditRoster) {
+        actionsTd.textContent = "View only";
+    }
+
+    if (canEditRoster) {
     const editBtn = document.createElement("button");
     editBtn.type = "button";
     editBtn.textContent = "Edit";
@@ -503,6 +517,7 @@ function createDeputyRow(dep, includeDivision) {
     actionsTd.appendChild(editBtn);
     actionsTd.appendChild(saveBtn);
     actionsTd.appendChild(removeBtn);
+    }
 
     tr.appendChild(Object.assign(document.createElement("td"), { textContent: dep.full_name || "" }));
     if (includeDivision) tr.appendChild(Object.assign(document.createElement("td"), { textContent: dep.division || "Unassigned Division" }));
@@ -670,6 +685,7 @@ function loadRoster() {
     });
 }
 
+if (canEditRoster) {
 document.getElementById("addDeputyBtn").addEventListener("click", () => {
     const fullName = document.getElementById("newFullName").value.trim();
     const messageEl = document.getElementById("addDeputyMessage");
@@ -713,6 +729,10 @@ document.getElementById("addDeputyBtn").addEventListener("click", () => {
         messageEl.className = "add-message add-message-error";
     });
 });
+} else {
+    document.querySelector(".add-form").style.display = "none";
+    document.getElementById("rosterAccessNotice").style.display = "block";
+}
 
 document.getElementById("rosterDate").addEventListener("change", loadRoster);
 document.getElementById("rosterDate").value = new Date().toISOString().split("T")[0];

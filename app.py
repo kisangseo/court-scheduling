@@ -58,7 +58,6 @@ def _fetch_user(email):
 
 
 SUPERVISOR_PATH_PREFIXES = [
-    "/roster",
     "/api/update-status",
     "/api/update-status-range",
     "/api/update-unavailability",
@@ -85,7 +84,7 @@ def enforce_auth_and_permissions():
             return jsonify({"status": "error", "message": "password_change_required"}), 403
         return redirect(url_for("change_password"))
 
-    required_level = PERMISSION_LEVELS["edit"]
+    required_level = 0
     for prefix in SUPERVISOR_PATH_PREFIXES:
         if request.path == prefix or request.path.startswith(prefix + "/"):
             required_level = PERMISSION_LEVELS["supervisor"]
@@ -1128,7 +1127,8 @@ def get_staffing():
     return jsonify(result)
 @app.route("/roster")
 def roster_page():
-    return render_template("roster.html")
+    can_edit_roster = _get_current_permission_level() >= PERMISSION_LEVELS["supervisor"]
+    return render_template("roster.html", can_edit_roster=can_edit_roster)
 @app.route("/api/update-staffing", methods=["POST"])
 def update_staffing():
     data = request.json
