@@ -1070,7 +1070,7 @@ function hasActiveAssignmentElsewhere(name, excludeCell) {
         return Array.from(cell.querySelectorAll('.assignment-chip')).some(chip => {
             const chipName = (chip.dataset.name || '').trim();
             if (chipName !== targetName) return false;
-            return !isChipMarkedTransferredOut(chip);
+            return !isChipUnavailableForDualAssignment(chip, chipName);
         });
     });
 }
@@ -1802,7 +1802,7 @@ function clearExistingAssignmentForName(name, excludeCell) {
         chips.forEach(chip => {
             const chipName = chip.dataset.name?.trim();
             if (chipName === name) {
-                if (isChipMarkedTransferredOut(chip)) return;
+                if (isChipUnavailableForDualAssignment(chip, chipName)) return;
                 forgetTransferredChip(cell, chipName);
                 chip.remove();
                 removed = true;
@@ -2887,6 +2887,11 @@ function isCurrentlyTransferredOut(name) {
 
 function isChipMarkedTransferredOut(chip) {
   return (chip?.dataset?.transferredOut || '').trim() === 'true';
+}
+
+function isChipUnavailableForDualAssignment(chip, explicitName) {
+  const name = (explicitName || chip?.dataset?.name || chip?.textContent || '').trim();
+  return isChipMarkedTransferredOut(chip) || isCurrentlyTransferredOut(name);
 }
 
 function getTransferredChipKey(cell, name) {
