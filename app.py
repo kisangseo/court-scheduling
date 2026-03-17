@@ -748,7 +748,8 @@ def remove_transfer_data():
 
 @app.route("/")
 def index():
-    return render_template("search.html")
+    can_reassign_posted = _get_current_permission_level() >= PERMISSION_LEVELS["supervisor"]
+    return render_template("search.html", can_reassign_posted=can_reassign_posted)
 
 @app.route("/simple-search")
 def simple_search_page():
