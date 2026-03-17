@@ -1384,6 +1384,11 @@ function getBaseFixedPostPart(part) {
     return (part || '').replace(/__LUNCH$/i, '').trim();
 }
 
+function isLunchFixedPostCell(cell) {
+    const part = (cell?.dataset?.part || '').trim();
+    return /__LUNCH$/i.test(part) || part === '__LUNCH';
+}
+
 function requiresPrimarySecurityRole(courthouse, post, shift, part) {
     if (requiresArmedFixedPostSlot(courthouse, post, part)) {
         return true;
@@ -1472,6 +1477,8 @@ function isArmedRequirementSatisfied(cell) {
 
 function getUnmetArmedFixedPostSlots() {
     return Array.from(document.querySelectorAll('.editable[data-type="Fixed Post"]')).filter(cell =>
+        !isLunchFixedPostCell(cell)
+        &&
         cellRequiresArmedFixedPost(cell) && !isArmedRequirementSatisfied(cell)
     );
 }
@@ -1482,6 +1489,10 @@ function updateFixedPostArmedWarnings() {
         cell.querySelectorAll('.armed-warning').forEach(el => el.remove());
         cell.classList.remove('armed-required-unmet');
         row?.classList.remove('assignment-armed-unmet-row');
+
+        if (isLunchFixedPostCell(cell)) {
+            return;
+        }
 
         const requiresCourtTrained = cellRequiresCourtTrainedFixedPost(cell);
         const requiresArmed = cellRequiresArmedFixedPost(cell);
