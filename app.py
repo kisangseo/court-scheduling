@@ -821,7 +821,12 @@ def update_status_range():
             continue
 
         # Preserve any non-overlapping portions of existing ranges.
-        for seg_start, seg_end in _split_status_range(r_start, r_end, target_start, target_end):
+        segments = _split_status_range(r_start, r_end, target_start, target_end)
+        if not segments:
+            # Entire range was removed (common for single-day ranges).
+            continue
+
+        for seg_start, seg_end in segments:
             new_ranges.append({
                 "status": r_status,
                 "start_date": seg_start.isoformat(),
