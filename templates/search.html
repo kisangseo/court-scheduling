@@ -450,6 +450,10 @@ function shouldCountFixedPostSlot(slotMeta = {}) {
     const post = (slotMeta.post || '').trim().toLowerCase();
     const part = (slotMeta.part || '').trim().toLowerCase();
 
+    if (/__lunch$/i.test(part) || part === '__lunch') {
+        return false;
+    }
+
     if (courthouse === 'mitchell' && post === 'calvert' && part === '0800-3') {
         return false;
     }
