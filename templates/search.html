@@ -1057,6 +1057,20 @@ function openTransferTimePicker({ title, defaultTime, onSave }) {
     input.focus();
 }
 
+function hasActiveAssignmentElsewhere(name, excludeCell) {
+    const targetName = (name || '').trim();
+    if (!targetName) return false;
+
+    return Array.from(document.querySelectorAll('.editable')).some(cell => {
+        if (cell === excludeCell) return false;
+        return Array.from(cell.querySelectorAll('.assignment-chip')).some(chip => {
+            const chipName = (chip.dataset.name || '').trim();
+            if (chipName !== targetName) return false;
+            return !isChipMarkedTransferredOut(chip);
+        });
+    });
+}
+
 function applyDeputyToCell(dropCell, assignedName, role) {
     if (!canAssignDeputyName(assignedName)) {
         showCellWarning(dropCell, 'Deputy is not currently available to be assigned from typing.');
@@ -1068,25 +1082,36 @@ function applyDeputyToCell(dropCell, assignedName, role) {
         return false;
     }
 
+    const normalizedName = (assignedName || '').trim();
+    const existingInCell = getAssignedNamesFromCell(dropCell);
+    if (existingInCell.includes(normalizedName)) {
+        return true;
+    }
+
+    const deputyAssignedElsewhere = hasActiveAssignmentElsewhere(normalizedName, dropCell);
+    if (deputyAssignedElsewhere && canReassignPosted) {
+        const confirmed = window.confirm(`${normalizedName} is already assigned to another slot. Keep them on BOTH assignments?`);
+        if (!confirmed) return false;
+    }
+
     const assignmentList = ensureCellStructure(dropCell);
-    // Remove placeholder if present
-    
-    clearExistingAssignmentForName(assignedName, dropCell);
 
-   
+    if (!deputyAssignedElsewhere || !canReassignPosted) {
+        clearExistingAssignmentForName(normalizedName, dropCell);
+    }
 
-    const item = buildAssignmentChip(assignedName, role, dropCell);
+    const item = buildAssignmentChip(normalizedName, role, dropCell);
     assignmentList.appendChild(item);
 
     
 
     setPendingAssignmentFromCell(dropCell);
 
-    const transferState = transferMap[(assignedName || '').trim()];
+    const transferState = transferMap[normalizedName];
     const openTransferIndex = transferState?.openTransferIndex || null;
     if (openTransferIndex) {
         openTransferTimePicker({
-            title: `Transfer In: ${assignedName}`,
+            title: `Transfer In: ${normalizedName}`,
             defaultTime: getDefaultTransferTimeValue(),
             onSave: (transferTime) => {
                 fetch('/api/transfer-in', {
@@ -1094,7 +1119,7 @@ function applyDeputyToCell(dropCell, assignedName, role) {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         assignment_date: dropCell.dataset.date,
-                        full_name: assignedName,
+                        full_name: normalizedName,
                         transfer_index: openTransferIndex,
                         transfer_time: transferTime
                     })
@@ -1104,8 +1129,8 @@ function applyDeputyToCell(dropCell, assignedName, role) {
                     if (payload?.status !== 'success') return;
                     item.dataset.transferInTime = payload.in_time || transferTime;
                     item.dataset.transferOutTime = '';
-                    rememberTransferredInChip(dropCell, assignedName, payload.in_time || transferTime);
-                    forgetTransferredChip(dropCell, assignedName);
+                    rememberTransferredInChip(dropCell, normalizedName, payload.in_time || transferTime);
+                    forgetTransferredChip(dropCell, normalizedName);
                     item.dataset.transferredOut = 'false';
                     item.classList.remove('transferred-out');
                     return fetchTransfersForDate().then(() => applyTransferCaptionToRosterAndGrid());
@@ -1797,7 +1822,10 @@ function getDeputyAutocompleteMatches(query) {
         .filter(dep => {
             const fullName = (dep.full_name || '').toLowerCase();
             const isAssignedElsewhere = assignedNames.has((dep.full_name || '').trim());
-            return fullName.includes(normalizedQuery) && !isAssignedElsewhere;
+            if (!fullName.includes(normalizedQuery)) return false;
+            if (!isDeputyAvailable(dep)) return false;
+            if (isAssignedElsewhere && !canReassignPosted) return false;
+            return true;
         })
         .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
         .slice(0, 8);
@@ -1811,7 +1839,8 @@ function canAssignDeputyName(name) {
     if (!deputy || !isDeputyAvailable(deputy)) return false;
 
     const assignedNames = getAssignedNamesAcrossGrid();
-    return !assignedNames.has((deputy.full_name || '').trim());
+    if (assignedNames.has((deputy.full_name || '').trim()) && !canReassignPosted) return false;
+    return true;
 }
 
 function createAssignmentTypeahead(cell) {
