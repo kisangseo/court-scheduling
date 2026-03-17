@@ -259,7 +259,8 @@ function effectiveStatusForSelectedDate(dep) {
             }
         }
 
-        if (payload.legacy) return payload.legacy;
+        const hasStructuredStatus = (payload.ranges || []).length > 0 || (payload.weekly_unavailable || []).length > 0;
+        if (!hasStructuredStatus && payload.legacy) return payload.legacy;
     } catch (_) {
         // fallback to effective status from API
     }
