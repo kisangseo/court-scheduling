@@ -1625,6 +1625,9 @@ function buildAssignmentChip(name, role, owningCell = null) {
     btnTransfer.type = 'button';
     btnTransfer.textContent = 'Transfer Out';
 
+    const transferState = transferMap[(deputyName || '').trim()] || {};
+    const hasTransferData = (transferState?.history?.length || 0) > 0;
+
     const btnRemoveTransferData = document.createElement('button');
     btnRemoveTransferData.type = 'button';
     btnRemoveTransferData.textContent = 'Remove transfer data';
@@ -1638,7 +1641,9 @@ function buildAssignmentChip(name, role, owningCell = null) {
     btnCancel.textContent = 'Cancel';
 
     pop.appendChild(btnTransfer);
-    pop.appendChild(btnRemoveTransferData);
+    if (hasTransferData) {
+      pop.appendChild(btnRemoveTransferData);
+    }
     pop.appendChild(btnRemove);
     pop.appendChild(btnCancel);
 
@@ -1683,7 +1688,6 @@ function buildAssignmentChip(name, role, owningCell = null) {
 
     btnTransfer.addEventListener('click', (ev) => {
       ev.stopPropagation();
-      const transferState = transferMap[(deputyName || '').trim()];
       const transferCount = transferState?.history?.length || 0;
       if (transferCount >= 3 && !transferState?.openTransferIndex) {
         closePop();
