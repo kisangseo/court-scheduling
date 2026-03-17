@@ -995,7 +995,7 @@ function getDefaultTransferTimeValue() {
     return `${h}:${m} ${meridiem}`;
 }
 
-function openTransferTimePicker({ title, defaultTime, onSave }) {
+function openTransferTimePicker({ title, defaultTime, onSave, onCancel }) {
     const overlay = document.createElement('div');
     overlay.style.position = 'fixed';
     overlay.style.inset = '0';
@@ -1038,8 +1038,12 @@ function openTransferTimePicker({ title, defaultTime, onSave }) {
     saveBtn.textContent = 'Save';
 
     const close = () => overlay.remove();
+    const cancel = () => {
+        if (typeof onCancel === 'function') onCancel();
+        close();
+    };
 
-    cancelBtn.addEventListener('click', close);
+    cancelBtn.addEventListener('click', cancel);
     saveBtn.addEventListener('click', () => {
         const normalized = normalizeUserTimeValue(input.value) || input.value.trim();
         if (!normalized) return;
@@ -1048,7 +1052,7 @@ function openTransferTimePicker({ title, defaultTime, onSave }) {
     });
 
     overlay.addEventListener('mousedown', (evt) => {
-        if (evt.target === overlay) close();
+        if (evt.target === overlay) cancel();
     });
 
     actions.appendChild(cancelBtn);
@@ -1117,6 +1121,12 @@ function applyDeputyToCell(dropCell, assignedName, role) {
         openTransferTimePicker({
             title: `Transfer In: ${normalizedName}`,
             defaultTime: getDefaultTransferTimeValue(),
+            onCancel: () => {
+                forgetTransferredInChip(dropCell, normalizedName);
+                item.remove();
+                setPendingAssignmentFromCell(dropCell);
+                refreshRosterAssignedState();
+            },
             onSave: (transferTime) => {
                 fetch('/api/transfer-in', {
                     method: 'POST',
