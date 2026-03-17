@@ -1797,7 +1797,10 @@ function getDeputyAutocompleteMatches(query) {
         .filter(dep => {
             const fullName = (dep.full_name || '').toLowerCase();
             const isAssignedElsewhere = assignedNames.has((dep.full_name || '').trim());
-            return fullName.includes(normalizedQuery) && !isAssignedElsewhere;
+            if (!fullName.includes(normalizedQuery)) return false;
+            if (!isDeputyAvailable(dep)) return false;
+            if (isAssignedElsewhere && !canReassignPosted) return false;
+            return true;
         })
         .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
         .slice(0, 8);
@@ -1811,7 +1814,8 @@ function canAssignDeputyName(name) {
     if (!deputy || !isDeputyAvailable(deputy)) return false;
 
     const assignedNames = getAssignedNamesAcrossGrid();
-    return !assignedNames.has((deputy.full_name || '').trim());
+    if (assignedNames.has((deputy.full_name || '').trim()) && !canReassignPosted) return false;
+    return true;
 }
 
 function createAssignmentTypeahead(cell) {
