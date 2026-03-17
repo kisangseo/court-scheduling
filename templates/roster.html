@@ -205,10 +205,23 @@ function formatStatusAudit(dep) {
     const changedAtRaw = dep.status_changed_at;
     if (!changedBy || !changedAtRaw) return "";
 
-    const when = new Date(changedAtRaw);
+    const normalizedTimestamp = /z$|[+-]\d{2}:?\d{2}$/i.test(changedAtRaw)
+        ? changedAtRaw
+        : `${changedAtRaw}Z`;
+    const when = new Date(normalizedTimestamp);
     const formattedWhen = Number.isNaN(when.getTime())
         ? changedAtRaw
-        : when.toLocaleString();
+        : when.toLocaleString("en-US", {
+            timeZone: "America/New_York",
+            year: "numeric",
+            month: "numeric",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+            timeZoneName: "short"
+        });
     return `Set by ${changedBy} on ${formattedWhen}`;
 }
 
