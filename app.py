@@ -724,6 +724,28 @@ def transfer_in():
         "in_time": history[target_index].get("in"),
         "history": history
     })
+
+
+@app.route("/api/remove-transfer-data", methods=["POST"])
+def remove_transfer_data():
+    data = request.json or {}
+    assignment_date = data.get("assignment_date")
+    full_name = data.get("full_name")
+    if not assignment_date or not full_name:
+        return jsonify({"status": "error", "message": "missing assignment_date/full_name"}), 400
+
+    conn = get_conn()
+    cursor = conn.cursor()
+    _ensure_deputy_transfers_table(cursor)
+    cursor.execute("""
+        DELETE FROM dbo.deputy_transfers
+        WHERE assignment_date = ? AND full_name = ?
+    """, (assignment_date, full_name))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success"})
+
+
 @app.route("/")
 def index():
     return render_template("search.html")
