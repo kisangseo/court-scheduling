@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session
 from db_connect import get_conn
 import pyodbc
 import os
@@ -9,6 +9,168 @@ from datetime import datetime, timedelta
 
 
 app = Flask(__name__)
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-key-change-me")
+
+TEMP_PASSWORD = "BCSO-Temp!2026"
+PERMISSION_LEVELS = {
+    "edit": 1,
+    "supervisor": 2,
+    "admin": 3,
+}
+
+
+def _normalize_permission(value):
+    return (value or "").strip().lower()
+
+
+def _get_current_permission_level():
+    permission = _normalize_permission(session.get("permission"))
+    return PERMISSION_LEVELS.get(permission, 0)
+
+
+def _current_user_must_change_password():
+    return bool(session.get("must_change_password"))
+
+
+def _fetch_user(email):
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT TOP 1 email, password_hash, permission, must_change_password
+        FROM search.users
+        WHERE email = ?
+        """,
+        (email,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return None
+
+    return {
+        "email": row[0],
+        "password": row[1],
+        "permission": _normalize_permission(row[2]),
+        "must_change_password": bool(row[3]),
+    }
+
+
+SUPERVISOR_PATH_PREFIXES = [
+    "/roster",
+    "/api/update-status",
+    "/api/update-status-range",
+    "/api/update-unavailability",
+    "/api/upsert-deputy",
+    "/api/delete-deputy",
+]
+
+
+@app.before_request
+def enforce_auth_and_permissions():
+    public_endpoints = {"login", "logout", "change_password", "static"}
+    if request.endpoint in public_endpoints:
+        return None
+
+    is_api = request.path.startswith("/api/")
+
+    if not session.get("user_email"):
+        if is_api:
+            return jsonify({"status": "error", "message": "unauthorized"}), 401
+        return redirect(url_for("login", next=request.path))
+
+    if _current_user_must_change_password() and request.endpoint != "change_password":
+        if is_api:
+            return jsonify({"status": "error", "message": "password_change_required"}), 403
+        return redirect(url_for("change_password"))
+
+    required_level = PERMISSION_LEVELS["edit"]
+    for prefix in SUPERVISOR_PATH_PREFIXES:
+        if request.path == prefix or request.path.startswith(prefix + "/"):
+            required_level = PERMISSION_LEVELS["supervisor"]
+            break
+
+    if _get_current_permission_level() < required_level:
+        if is_api:
+            return jsonify({"status": "error", "message": "forbidden"}), 403
+        return "Forbidden", 403
+
+    return None
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip().lower()
+        password = request.form.get("password") or ""
+        user = _fetch_user(email)
+
+        if not user:
+            error = "Invalid email or password."
+        else:
+            stored_password = user.get("password") or ""
+            can_login = password == stored_password
+            if user.get("must_change_password") and password == TEMP_PASSWORD:
+                can_login = True
+
+            if not can_login:
+                error = "Invalid email or password."
+            else:
+                session["user_email"] = user["email"]
+                session["permission"] = user["permission"]
+                session["must_change_password"] = user["must_change_password"]
+
+                if user["must_change_password"]:
+                    return redirect(url_for("change_password"))
+
+                next_url = request.args.get("next") or url_for("index")
+                return redirect(next_url)
+
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/change-password", methods=["GET", "POST"])
+def change_password():
+    if not session.get("user_email"):
+        return redirect(url_for("login"))
+
+    error = None
+    if request.method == "POST":
+        new_password = request.form.get("new_password") or ""
+        confirm_password = request.form.get("confirm_password") or ""
+
+        if len(new_password) < 8:
+            error = "Password must be at least 8 characters."
+        elif new_password == TEMP_PASSWORD:
+            error = "Please choose a non-temporary password."
+        elif new_password != confirm_password:
+            error = "Passwords do not match."
+        else:
+            conn = get_conn()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE search.users
+                SET password_hash = ?, must_change_password = 0
+                WHERE email = ?
+                """,
+                (new_password, session.get("user_email")),
+            )
+            conn.commit()
+            conn.close()
+
+            session["must_change_password"] = False
+            return redirect(url_for("index"))
+
+    return render_template("change_password.html", error=error)
 
 
 def _ensure_courtroom_meta_table(cursor):
