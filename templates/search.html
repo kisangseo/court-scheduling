@@ -1380,6 +1380,10 @@ function requiresCourtTrainedFixedPostSlot(courthouse, post, part) {
     return REQUIRED_COURT_TRAINED_FIXED_POST_SLOTS.has(getFixedPostSlotKey(courthouse, post, part));
 }
 
+function getBaseFixedPostPart(part) {
+    return (part || '').replace(/__LUNCH$/i, '').trim();
+}
+
 function requiresPrimarySecurityRole(courthouse, post, shift, part) {
     if (requiresArmedFixedPostSlot(courthouse, post, part)) {
         return true;
@@ -1447,11 +1451,19 @@ function isCourtPrimaryAssignmentChip(chip) {
 }
 
 function cellRequiresArmedFixedPost(cell) {
-    return requiresArmedFixedPostSlot(cell?.dataset?.courthouse, cell?.dataset?.room, cell?.dataset?.part);
+    return requiresArmedFixedPostSlot(
+        cell?.dataset?.courthouse,
+        cell?.dataset?.room,
+        getBaseFixedPostPart(cell?.dataset?.part)
+    );
 }
 
 function cellRequiresCourtTrainedFixedPost(cell) {
-    return requiresCourtTrainedFixedPostSlot(cell?.dataset?.courthouse, cell?.dataset?.room, cell?.dataset?.part);
+    return requiresCourtTrainedFixedPostSlot(
+        cell?.dataset?.courthouse,
+        cell?.dataset?.room,
+        getBaseFixedPostPart(cell?.dataset?.part)
+    );
 }
 
 function isArmedRequirementSatisfied(cell) {
@@ -1512,7 +1524,7 @@ function isEligibleForCell(cell, role) {
         const post = (cell.dataset.room || '').trim();
         const courthouse = (cell.dataset.courthouse || '').trim();
         const shift = (cell.dataset.shift || '').trim();
-        const slotPart = (cell.dataset.part || '').trim();
+        const slotPart = getBaseFixedPostPart((cell.dataset.part || '').trim());
 
         if (requiresK9SecurityRole(courthouse, post)) {
             return isK9Capability(role);
@@ -2172,7 +2184,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
                 <th>Judge</th>
                 <th>Room</th>
                 <th>Assignment</th>
-                <th class="deputy-column">Deputy (drag deputy from roster, or type in name)</th>
+                <th class="deputy-column">Deputy</th>
                 <th class="courtroom-time-header">Start</th>
                 <th class="courtroom-time-header">Restart</th>
                 <th class="courtroom-time-header">Adjourned</th>
@@ -2561,7 +2573,8 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 <tr>
                     <th>Post</th>
                     <th>Shift</th>
-                    <th class="deputy-column">Deputy (drag deputy from roster, or type in name)</th>
+                    <th class="deputy-column">Deputy</th>
+                    <th class="deputy-column">Lunch</th>
                 </tr>
             </thead>
             <tbody></tbody>
@@ -2611,6 +2624,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
 
         const postsBody = postsTable.querySelector("tbody");
         posts.forEach((slot, index) => {
+            const lunchPart = `${slot.part || ''}__LUNCH`;
             const slotMatches = postsType.filter(r =>
                 r.location_group === slot.post && (
                     (slot.part && r.part === slot.part) ||
@@ -2618,9 +2632,16 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                     (!slot.part && !slot.detail)
                 )
             );
+            const lunchSlotMatches = postsType.filter(r =>
+                r.location_group === slot.post && (
+                    (slot.part && r.part === lunchPart) ||
+                    (!slot.part && r.part === '__LUNCH')
+                )
+            );
             const fallbackMatches = postsType.filter(r => r.location_group === slot.post && !r.part && !r.location_detail);
             const pickPreferredRow = (rowList) => rowList.find(r => (r.assigned_member || '').trim()) || rowList[0] || null;
             const assigned = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
+            const lunchAssigned = pickPreferredRow(lunchSlotMatches);
             const effectiveShift = (assigned && (assigned.shift_time || '').trim()) || slot.detail || 'General';
             const parsedFixedShift = parseShiftTimeDisplayValue(effectiveShift);
 
@@ -2648,6 +2669,17 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                     data-part="${slot.part || ""}">
                     ${assigned ? (assigned.assigned_member || "") : ""}
                 </td>
+                <td class="editable deputy-column-cell"
+                    data-date="${selectedDate}"
+                    data-courthouse="${courthouse}"
+                    data-assigned="${lunchAssigned ? (lunchAssigned.assigned_member || "") : ""}"
+                    data-type="Fixed Post"
+                    data-room="${slot.post}"
+                    data-shift="${effectiveShift}"
+                    data-slot-index="${index}"
+                    data-part="${lunchPart}">
+                    ${lunchAssigned ? (lunchAssigned.assigned_member || "") : ""}
+                </td>
             `;
             postsBody.appendChild(tr);
         });
@@ -2668,7 +2700,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 
                 <th>Room</th>
                 <th>Assignment</th>
-                <th class="deputy-column">Deputy (drag deputy from roster, or type in name)</th>
+                <th class="deputy-column">Deputy</th>
                 <th class="courtroom-time-header">Start</th>
                 <th class="courtroom-time-header">Restart</th>
                 <th class="courtroom-time-header">Adjourned</th>
