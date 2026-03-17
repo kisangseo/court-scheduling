@@ -76,6 +76,7 @@ let selectedDeputy = null;
 let globalAssignmentTotals = { vacant: 0, filled: 0, open: 0 };
 let globalPostedNames = new Set();
 let hidePosted = false;
+const canReassignPosted = {{ "true" if can_reassign_posted else "false" }};
 
 const COURTROOM_ASSIGNMENT_OPTIONS = [
     "Closed",
@@ -1980,13 +1981,16 @@ function initRosterDrag() {
             group: {
                 name: 'assignmentRoster',
                 pull: function (to, from, dragEl) {
-                    return !dragEl.classList.contains('assigned') ? 'clone' : false;
+                    if (dragEl.classList.contains('assigned') && !canReassignPosted) {
+                        return false;
+                    }
+                    return 'clone';
                 },
                 put: false
             },
             animation: 100,
             sort: false,
-            filter: '.assigned'
+            filter: canReassignPosted ? '.roster-item--never-filter' : '.assigned'
         });
         rosterSortables.push(sortable);
     });
