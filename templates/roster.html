@@ -259,7 +259,8 @@ function effectiveStatusForSelectedDate(dep) {
             }
         }
 
-        if (payload.legacy) return payload.legacy;
+        const hasStructuredStatus = (payload.ranges || []).length > 0 || (payload.weekly_unavailable || []).length > 0;
+        if (!hasStructuredStatus && payload.legacy) return payload.legacy;
     } catch (_) {
         // fallback to effective status from API
     }
@@ -310,18 +311,14 @@ function renderStatusControls(dep, hostTr) {
         wrapper.querySelectorAll(".action-row").forEach(row => row.remove());
 
         if (!dropdown.value) {
-            const statuses = ["Scheduled Leave", "Unscheduled Leave", "Unavailable", "Training"];
-            Promise.all(statuses.map(status => fetch("/api/update-status-range", {
+            fetch("/api/update-status-range", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     full_name: dep.full_name,
-                    status,
-                    start_date: selectedDate,
-                    end_date: selectedDate,
-                    remove_only: true
+                    status: "CLEAR_ALL"
                 })
-            }))).then(() => loadRoster());
+            }).then(() => loadRoster());
             return;
         }
 
