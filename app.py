@@ -248,23 +248,87 @@ def _previous_weekday(target_date):
 
 def _parse_status_payload(status_text):
     if not status_text:
-        return {"legacy": None, "ranges": [], "weekly_unavailable": []}
+        return {"legacy": None, "legacy_meta": {}, "ranges": [], "weekly_unavailable": []}
 
     try:
         parsed = json.loads(status_text)
         if isinstance(parsed, dict) and "ranges" in parsed:
             return {
                 "legacy": parsed.get("legacy"),
+                "legacy_meta": parsed.get("legacy_meta") or {},
                 "ranges": parsed.get("ranges") or [],
                 "weekly_unavailable": parsed.get("weekly_unavailable") or []
             }
     except (json.JSONDecodeError, TypeError):
         pass
 
-    return {"legacy": status_text, "ranges": [], "weekly_unavailable": []}
+    return {"legacy": status_text, "legacy_meta": {}, "ranges": [], "weekly_unavailable": []}
+
+
+def _status_change_actor():
+    return (session.get("user_email") or "unknown").strip().lower()
+
+
+def _effective_status_meta_for_date(status_text, target_date):
+    payload = _parse_status_payload(status_text)
+
+    if target_date:
+        target = _parse_date_value(target_date)
+        matches = []
+
+        for idx, status_range in enumerate(payload.get("ranges", [])):
+            start = _parse_date_value(status_range.get("start_date"))
+            end = _parse_date_value(status_range.get("end_date"))
+            status_value = status_range.get("status")
+            if not (start and end and status_value):
+                continue
+            if target and start <= target <= end:
+                matches.append({
+                    "status": status_value,
+                    "changed_by": status_range.get("changed_by"),
+                    "changed_at": status_range.get("changed_at"),
+                    "order": idx,
+                })
+
+        weekday_name = target.strftime("%A") if target else None
+        for idx, rule in enumerate(payload.get("weekly_unavailable", [])):
+            rule_day = (rule.get("day") or "").strip()
+            rule_end = _parse_date_value(rule.get("end_date"))
+            if not rule_day or not rule_end or not weekday_name:
+                continue
+            if target <= rule_end and (rule_day == "Any Day" or rule_day == weekday_name):
+                matches.append({
+                    "status": "Unavailable",
+                    "changed_by": rule.get("changed_by"),
+                    "changed_at": rule.get("changed_at"),
+                    "order": len(payload.get("ranges", [])) + idx,
+                })
+
+        if matches:
+            winner = sorted(matches, key=lambda item: item.get("order", 0))[-1]
+            return {
+                "status": winner.get("status"),
+                "changed_by": winner.get("changed_by"),
+                "changed_at": winner.get("changed_at"),
+            }
+
+    legacy_status = payload.get("legacy")
+    if legacy_status:
+        legacy_meta = payload.get("legacy_meta") or {}
+        return {
+            "status": legacy_status,
+            "changed_by": legacy_meta.get("changed_by"),
+            "changed_at": legacy_meta.get("changed_at"),
+        }
+
+    return {"status": None, "changed_by": None, "changed_at": None}
 
 
 def _effective_status_for_date(status_text, target_date):
+    meta = _effective_status_meta_for_date(status_text, target_date)
+    if meta.get("status"):
+        return meta.get("status")
+
     payload = _parse_status_payload(status_text)
 
     if target_date:
@@ -657,6 +721,8 @@ def simple_search_page():
 @app.route("/api/update-status", methods=["POST"])
 def update_status():
     data = request.json
+    changed_by = _status_change_actor()
+    changed_at = datetime.utcnow().isoformat()
 
     conn = get_conn()
     cursor = conn.cursor()
@@ -671,6 +737,10 @@ def update_status():
     payload = _parse_status_payload(current_status)
 
     payload["legacy"] = data["status"]
+    payload["legacy_meta"] = {
+        "changed_by": changed_by,
+        "changed_at": changed_at,
+    }
 
     cursor.execute("""
         UPDATE dbo.deputies
@@ -696,6 +766,8 @@ def update_status_range():
     end_date = data.get("end_date")
     conn = get_conn()
     cursor = conn.cursor()
+    changed_by = _status_change_actor()
+    changed_at = datetime.utcnow().isoformat()
     
     if status == "CLEAR_ALL":
         cursor.execute("""
@@ -753,7 +825,9 @@ def update_status_range():
             new_ranges.append({
                 "status": r_status,
                 "start_date": seg_start.isoformat(),
-                "end_date": seg_end.isoformat()
+                "end_date": seg_end.isoformat(),
+                "changed_by": r.get("changed_by"),
+                "changed_at": r.get("changed_at"),
             })
 
     ranges = new_ranges
@@ -761,7 +835,9 @@ def update_status_range():
         ranges.append({
             "status": status,
             "start_date": start_date,
-            "end_date": end_date
+            "end_date": end_date,
+            "changed_by": changed_by,
+            "changed_at": changed_at,
         })
     payload["ranges"] = ranges
 
@@ -844,6 +920,8 @@ def update_unavailability():
 
     conn = get_conn()
     cursor = conn.cursor()
+    changed_by = _status_change_actor()
+    changed_at = datetime.utcnow().isoformat()
 
     cursor.execute("""
         SELECT current_status
@@ -860,7 +938,12 @@ def update_unavailability():
         payload["weekly_unavailable"] = []
     else:
         rules = [r for r in rules if not (r.get("day") == day)]
-        rules.append({"day": day, "end_date": end_date})
+        rules.append({
+            "day": day,
+            "end_date": end_date,
+            "changed_by": changed_by,
+            "changed_at": changed_at,
+        })
         payload["weekly_unavailable"] = rules
 
     cursor.execute("""
@@ -1469,12 +1552,15 @@ def get_deputies():
 
     deputies = []
     for row in rows:
+        status_meta = _effective_status_meta_for_date(row[3], target_date)
         deputy = {
             "full_name": row[0],
             "email": row[1],
             "capacity_tag": row[2],
-            "current_status": _effective_status_for_date(row[3], target_date),
+            "current_status": status_meta.get("status"),
             "status_raw": row[3],
+            "status_changed_by": status_meta.get("changed_by"),
+            "status_changed_at": status_meta.get("changed_at"),
             "division": None,
             "rank": None,
         }

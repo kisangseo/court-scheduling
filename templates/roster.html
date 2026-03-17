@@ -16,6 +16,7 @@
         .status-group label { margin-right: 8px; display: inline-block; }
         .action-row { display: flex; gap: 6px; margin-top: 6px; }
         .small { font-size: 12px; color: #344054; }
+        .status-audit { margin-top: 4px; color: #475467; }
         .add-form { margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
         .status-green {
             color: #067647;
@@ -189,13 +190,26 @@ function parseStatusPayload(dep) {
         return parsed && typeof parsed === "object"
             ? {
                 legacy: parsed.legacy || null,
+                legacy_meta: parsed.legacy_meta || {},
                 ranges: Array.isArray(parsed.ranges) ? parsed.ranges : [],
                 weekly_unavailable: Array.isArray(parsed.weekly_unavailable) ? parsed.weekly_unavailable : []
             }
-            : { legacy: null, ranges: [], weekly_unavailable: [] };
+            : { legacy: null, legacy_meta: {}, ranges: [], weekly_unavailable: [] };
     } catch (_) {
-        return { legacy: null, ranges: [], weekly_unavailable: [] };
+        return { legacy: null, legacy_meta: {}, ranges: [], weekly_unavailable: [] };
     }
+}
+
+function formatStatusAudit(dep) {
+    const changedBy = (dep.status_changed_by || "").trim();
+    const changedAtRaw = dep.status_changed_at;
+    if (!changedBy || !changedAtRaw) return "";
+
+    const when = new Date(changedAtRaw);
+    const formattedWhen = Number.isNaN(when.getTime())
+        ? changedAtRaw
+        : when.toLocaleString();
+    return `Set by ${changedBy} on ${formattedWhen}`;
 }
 
 function hasUnavailableForSelectedDate(dep) {
@@ -453,6 +467,13 @@ function createDeputyRow(dep, includeDivision) {
 
     const statusTd = document.createElement("td");
     statusTd.appendChild(renderStatusControls(dep, tr));
+    const statusAudit = formatStatusAudit(dep);
+    if (statusAudit) {
+        const auditEl = document.createElement("div");
+        auditEl.className = "small status-audit";
+        auditEl.textContent = statusAudit;
+        statusTd.appendChild(auditEl);
+    }
 
     const actionsTd = document.createElement("td");
 
