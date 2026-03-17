@@ -312,8 +312,9 @@ def _effective_status_meta_for_date(status_text, target_date):
                 "changed_at": winner.get("changed_at"),
             }
 
+    has_structured_status = bool(payload.get("ranges") or payload.get("weekly_unavailable"))
     legacy_status = payload.get("legacy")
-    if legacy_status:
+    if legacy_status and not has_structured_status:
         legacy_meta = payload.get("legacy_meta") or {}
         return {
             "status": legacy_status,
@@ -360,6 +361,10 @@ def _effective_status_for_date(status_text, target_date):
             # Keep only one status active for a given date.
             # Newer entries are appended later, so they should win.
             return active_statuses[-1]
+
+    has_structured_status = bool(payload.get("ranges") or payload.get("weekly_unavailable"))
+    if has_structured_status:
+        return None
 
     return payload.get("legacy")
 
@@ -821,7 +826,12 @@ def update_status_range():
             continue
 
         # Preserve any non-overlapping portions of existing ranges.
-        for seg_start, seg_end in _split_status_range(r_start, r_end, target_start, target_end):
+        segments = _split_status_range(r_start, r_end, target_start, target_end)
+        if not segments:
+            # Entire range was removed (common for single-day ranges).
+            continue
+
+        for seg_start, seg_end in segments:
             new_ranges.append({
                 "status": r_status,
                 "start_date": seg_start.isoformat(),
