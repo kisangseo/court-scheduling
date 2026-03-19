@@ -2060,6 +2060,151 @@ def update_courtroom_meta():
     return {"status": "success"}
 
 
+@app.route("/api/update-courtroom-location", methods=["POST"])
+def update_courtroom_location():
+    data = request.json or {}
+
+    assignment_date = (data.get("assignment_date") or "").strip()
+    courthouse = (data.get("courthouse") or "").strip()
+    old_location_detail = (data.get("old_location_detail") or "").strip()
+    old_part = (data.get("old_part") or "").strip()
+    new_location_detail = (data.get("new_location_detail") or "").strip()
+    new_part = (data.get("new_part") or "").strip()
+
+    if not assignment_date or not courthouse or not old_location_detail:
+        return jsonify({"status": "error", "message": "assignment_date, courthouse, and old_location_detail are required"}), 400
+    if not new_location_detail:
+        return jsonify({"status": "error", "message": "new_location_detail is required"}), 400
+
+    if old_location_detail == new_location_detail and old_part.lower() == new_part.lower():
+        return jsonify({"status": "success"})
+
+    conn = get_conn()
+    cursor = conn.cursor()
+    _ensure_courtroom_meta_table(cursor)
+    cursor.execute("SET LOCK_TIMEOUT 5000;")
+
+    try:
+        cursor.execute("""
+            UPDATE dbo.court_assignments
+            SET location_detail = ?,
+                part = ?
+            WHERE assignment_date = ?
+              AND courthouse = ?
+              AND assignment_type = 'Courtroom'
+              AND ISNULL(location_detail, '') = ISNULL(?, '')
+              AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
+        """, (
+            new_location_detail,
+            new_part,
+            assignment_date,
+            courthouse,
+            old_location_detail,
+            old_part
+        ))
+
+        cursor.execute("""
+            SELECT start_time, restart_time, adjourned_time, is_down, is_high_profile
+            FROM dbo.courtroom_meta
+            WHERE assignment_date = ?
+              AND courthouse = ?
+              AND ISNULL(location_detail, '') = ISNULL(?, '')
+              AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
+        """, (
+            assignment_date,
+            courthouse,
+            old_location_detail,
+            old_part
+        ))
+        source_meta = cursor.fetchone()
+
+        cursor.execute("""
+            SELECT start_time, restart_time, adjourned_time, is_down, is_high_profile
+            FROM dbo.courtroom_meta
+            WHERE assignment_date = ?
+              AND courthouse = ?
+              AND ISNULL(location_detail, '') = ISNULL(?, '')
+              AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
+        """, (
+            assignment_date,
+            courthouse,
+            new_location_detail,
+            new_part
+        ))
+        target_meta = cursor.fetchone()
+
+        if source_meta and target_meta:
+            merged_start = source_meta[0] or target_meta[0]
+            merged_restart = source_meta[1] or target_meta[1]
+            merged_adjourned = source_meta[2] or target_meta[2]
+            merged_is_down = 1 if (bool(source_meta[3]) or bool(target_meta[3])) else 0
+            merged_is_high_profile = 1 if (bool(source_meta[4]) or bool(target_meta[4])) else 0
+
+            cursor.execute("""
+                UPDATE dbo.courtroom_meta
+                SET start_time = ?,
+                    restart_time = ?,
+                    adjourned_time = ?,
+                    is_down = ?,
+                    is_high_profile = ?,
+                    updated_at = GETDATE()
+                WHERE assignment_date = ?
+                  AND courthouse = ?
+                  AND ISNULL(location_detail, '') = ISNULL(?, '')
+                  AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
+            """, (
+                merged_start,
+                merged_restart,
+                merged_adjourned,
+                merged_is_down,
+                merged_is_high_profile,
+                assignment_date,
+                courthouse,
+                new_location_detail,
+                new_part
+            ))
+
+            cursor.execute("""
+                DELETE FROM dbo.courtroom_meta
+                WHERE assignment_date = ?
+                  AND courthouse = ?
+                  AND ISNULL(location_detail, '') = ISNULL(?, '')
+                  AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
+            """, (
+                assignment_date,
+                courthouse,
+                old_location_detail,
+                old_part
+            ))
+        elif source_meta:
+            cursor.execute("""
+                UPDATE dbo.courtroom_meta
+                SET location_detail = ?,
+                    part = ?,
+                    updated_at = GETDATE()
+                WHERE assignment_date = ?
+                  AND courthouse = ?
+                  AND ISNULL(location_detail, '') = ISNULL(?, '')
+                  AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
+            """, (
+                new_location_detail,
+                new_part,
+                assignment_date,
+                courthouse,
+                old_location_detail,
+                old_part
+            ))
+
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        conn.close()
+        return jsonify({"status": "error", "message": f"Unable to update courtroom location: {exc}"}), 500
+
+    conn.close()
+    return jsonify({"status": "success"})
+
+
 @app.route("/api/clear-daily-assignments", methods=["POST"])
 def clear_daily_assignments():
     data = request.json or {}
