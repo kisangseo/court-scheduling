@@ -543,6 +543,8 @@ def _safe_transfer_history_load(raw_history, out_dt=None, in_dt=None):
             if isinstance(parsed, list):
                 history = [
                     {
+                        "from": ((entry or {}).get("from") or "").strip() or None,
+                        "to": ((entry or {}).get("to") or "").strip() or None,
                         "out": _normalize_time_label((entry or {}).get("out")),
                         "in": _normalize_time_label((entry or {}).get("in"))
                     }
@@ -553,6 +555,8 @@ def _safe_transfer_history_load(raw_history, out_dt=None, in_dt=None):
 
     if not history and out_dt:
         history.append({
+            "from": None,
+            "to": None,
             "out": out_dt.strftime("%I:%M %p").lstrip("0"),
             "in": in_dt.strftime("%I:%M %p").lstrip("0") if in_dt else None
         })
@@ -593,6 +597,7 @@ def transfer_out():
     full_name = data.get("full_name")
     transfer_time = _normalize_time_label(data.get("transfer_time")) or _default_time_label()
     transfer_index = data.get("transfer_index")
+    from_post = (data.get("from_post") or "").strip() or None
     if not assignment_date or not full_name:
         return jsonify({"status": "error", "message": "missing assignment_date/full_name"}), 400
 
@@ -617,12 +622,14 @@ def transfer_out():
         target_index = None
 
     if target_index is not None and 0 <= target_index < len(history):
+        if from_post:
+            history[target_index]["from"] = from_post
         history[target_index]["out"] = transfer_time
     else:
         if len(history) >= 3:
             conn.close()
             return jsonify({"status": "error", "message": "Maximum of 3 transfers reached"}), 400
-        history.append({"out": transfer_time, "in": None})
+        history.append({"from": from_post, "to": None, "out": transfer_time, "in": None})
         target_index = len(history) - 1
 
     latest = history[target_index] if 0 <= target_index < len(history) else history[-1]
@@ -665,6 +672,7 @@ def transfer_in():
     full_name = data.get("full_name")
     transfer_time = _normalize_time_label(data.get("transfer_time")) or _default_time_label()
     transfer_index = data.get("transfer_index")
+    to_post = (data.get("to_post") or "").strip() or None
     if not assignment_date or not full_name:
         return jsonify({"status": "error", "message": "missing assignment_date/full_name"}), 400
 
@@ -709,6 +717,8 @@ def transfer_in():
         in_time_value = in_time_value + timedelta(seconds=1)
 
     history[target_index]["in"] = _format_time_label(in_time_value) if in_time_value else transfer_time
+    if to_post:
+        history[target_index]["to"] = to_post
 
     cursor.execute("""
         UPDATE dbo.deputy_transfers

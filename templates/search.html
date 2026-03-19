@@ -1152,7 +1152,8 @@ function applyDeputyToCell(dropCell, assignedName, role, options = {}) {
                 assignment_date: dropCell.dataset.date,
                 full_name: normalizedName,
                 transfer_index: resolvedTransferIndex,
-                transfer_time: timeValue
+                transfer_time: timeValue,
+                to_post: (dropCell.dataset.room || '').trim()
             })
         })
         .then(r => r.json())
@@ -1833,7 +1834,8 @@ function buildAssignmentChip(name, role, owningCell = null) {
               assignment_date: date,
               full_name: deputyName,
               transfer_time: transferTime,
-              transfer_index: transferState?.openTransferIndex || null
+              transfer_index: transferState?.openTransferIndex || null,
+              from_post: (cell.dataset.room || '').trim()
             })
           })
           .then(r => r.json())
@@ -2129,7 +2131,8 @@ function initAssignmentDropzones() {
                                 assignment_date: fromCell.dataset.date,
                                 full_name: assignedName,
                                 transfer_time: transferTime,
-                                transfer_index: transferState?.openTransferIndex || null
+                                transfer_index: transferState?.openTransferIndex || null,
+                                from_post: (fromCell.dataset.room || '').trim()
                             })
                         })
                         .then(r => r.json())
@@ -3102,7 +3105,12 @@ function fetchTransfersForDate() {
         const name = (row.full_name || '').trim();
         if (!name) return;
         const history = Array.isArray(row.history)
-          ? row.history.map(entry => ({ out: entry?.out || null, in: entry?.in || null }))
+          ? row.history.map(entry => ({
+              from: (entry?.from || '').trim() || null,
+              to: (entry?.to || '').trim() || null,
+              out: entry?.out || null,
+              in: entry?.in || null
+            }))
           : [];
         let openTransferIndex = null;
         for (let i = history.length - 1; i >= 0; i--) {
@@ -3167,13 +3175,34 @@ function applyTransferCaptionToRosterAndGrid() {
     cap.textContent = text;
   });
 
+  const getLatestTransferTimesForPost = (name, postName) => {
+    const t = transferMap[(name || '').trim()];
+    const normalizedPost = (postName || '').trim();
+    if (!t || !normalizedPost || !Array.isArray(t.history)) return { out: '', in: '' };
+    let latestOut = '';
+    let latestIn = '';
+    t.history.forEach(entry => {
+      if (!entry || typeof entry !== 'object') return;
+      if ((entry.from || '').trim() === normalizedPost && entry.out) {
+        latestOut = entry.out;
+      }
+      if ((entry.to || '').trim() === normalizedPost && entry.in) {
+        latestIn = entry.in;
+      }
+    });
+    return { out: latestOut, in: latestIn };
+  };
+
   // add caption next to chips in grid
   document.querySelectorAll('.assignment-chip').forEach(chip => {
     const name = (chip.dataset.name || chip.textContent || '').trim();
     const owningCell = chip.closest('.editable');
+    const postName = (owningCell?.dataset?.room || '').trim();
     const isTransferredOut = isChipMarkedTransferredOut(chip) || isCurrentlyTransferredOut(name);
-    const outTime = chip.dataset.transferOutTime || '';
-    const inTime = chip.dataset.transferInTime
+    const perPostTimes = getLatestTransferTimesForPost(name, postName);
+    const outTime = perPostTimes.out || chip.dataset.transferOutTime || '';
+    const inTime = perPostTimes.in
+      || chip.dataset.transferInTime
       || getTransferredInTimeForChip(owningCell, name)
       || '';
     const text = (outTime && inTime)
