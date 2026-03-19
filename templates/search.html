@@ -1080,12 +1080,21 @@ function hasActiveAssignmentElsewhere(name, excludeCell) {
 }
 
 function applyDeputyToCell(dropCell, assignedName, role, options = {}) {
-    if (!canAssignDeputyName(assignedName)) {
-        showCellWarning(dropCell, 'Deputy is not currently available to be assigned from typing.');
-        return false;
+    const canAssignByAvailability = canAssignDeputyName(assignedName);
+    const allowUnavailable = !!options.allowUnavailable;
+    if (!canAssignByAvailability) {
+        showCellWarning(
+            dropCell,
+            allowUnavailable
+                ? 'Deputy is currently unavailable from typing, but transfer/reassignment is allowed.'
+                : 'Deputy is not currently available to be assigned from typing.'
+        );
+        if (!allowUnavailable) return false;
     }
 
-    if (!isEligibleForCell(dropCell, role)) {
+    const resolvedRole = resolveAssignmentRole(assignedName, role);
+
+    if (!isEligibleForCell(dropCell, resolvedRole)) {
         showCellWarning(dropCell, getIneligibleAssignmentMessage(dropCell));
         return false;
     }
@@ -1112,7 +1121,7 @@ function applyDeputyToCell(dropCell, assignedName, role, options = {}) {
         clearExistingAssignmentForName(normalizedName, dropCell);
     }
 
-    const item = existingChipInCell || buildAssignmentChip(normalizedName, role, dropCell);
+    const item = existingChipInCell || buildAssignmentChip(normalizedName, resolvedRole, dropCell);
     if (!existingChipInCell) {
         assignmentList.appendChild(item);
     }
@@ -1343,10 +1352,41 @@ const CAPABILITY_MATRIX = {
     'Cadet': { courtPrimary: false, courtSecondary: false, armed: false }
 };
 
+const CAPABILITY_ROLE_ALIASES = {
+    'DEP': 'DEPUTY',
+    'DEPUTIES': 'DEPUTY',
+    'DEPK9': 'K9',
+    'DEP-K9': 'K9',
+    'SPOUA': 'SPO-A:(FT)',
+    'SPO-UA': 'SPO-A:(FT)',
+    'SPO-UA(FT)': 'SPO-A:(FT)'
+};
+
 function getCapabilityRule(role) {
     const normalizedRole = normalizeRoleValue(role);
-    const matchedTag = Object.keys(CAPABILITY_MATRIX).find(tag => normalizeRoleValue(tag) === normalizedRole);
+    const aliasedRole = CAPABILITY_ROLE_ALIASES[normalizedRole] || normalizedRole;
+    const matchedTag = Object.keys(CAPABILITY_MATRIX).find(tag => normalizeRoleValue(tag) === aliasedRole);
     return matchedTag ? CAPABILITY_MATRIX[matchedTag] : null;
+}
+
+function resolveAssignmentRole(name, role) {
+    if (getCapabilityRule(role)) return role;
+
+    const normalizedName = (name || '').trim();
+    if (!normalizedName) return role;
+
+    const chipWithRole = document.querySelector(`.assignment-chip[data-name="${CSS.escape(normalizedName)}"][data-role]`);
+    const chipRole = (chipWithRole?.dataset?.role || '').trim();
+    if (getCapabilityRule(chipRole)) return chipRole;
+
+    const rosterRole = (document.querySelector(`.roster-item[data-name="${CSS.escape(normalizedName)}"]`)?.dataset?.role || '').trim();
+    if (getCapabilityRule(rosterRole)) return rosterRole;
+
+    const deputy = getDeputyRecordByName(normalizedName);
+    const deputyRole = getDeputyRole(deputy || {});
+    if (getCapabilityRule(deputyRole)) return deputyRole;
+
+    return role;
 }
 
 function isCourtPrimaryCapability(role) {
@@ -2057,7 +2097,7 @@ function initAssignmentDropzones() {
                     ((chip.dataset.name || chip.textContent || '').trim() === assignedName)
                 );
                 if (!sourceChip) {
-                    applyDeputyToCell(dropCell, assignedName, role);
+                    applyDeputyToCell(dropCell, assignedName, role, { allowUnavailable: true });
                     return;
                 }
 
@@ -2095,7 +2135,8 @@ function initAssignmentDropzones() {
                             applyDeputyToCell(dropCell, assignedName, role, {
                                 transferInTime: payload.out_time || transferTime,
                                 transferIndex: payload.transfer_index,
-                                preserveExistingAssignments: true
+                                preserveExistingAssignments: true,
+                                allowUnavailable: true
                             });
 
                             return fetchTransfersForDate().then(() => applyTransferCaptionToRosterAndGrid());
@@ -3088,7 +3129,7 @@ function applyTransferCaptionToRosterAndGrid() {
   // add caption under roster names
   document.querySelectorAll('#rosterList .roster-item').forEach(item => {
     const name = (item.dataset.name || '').trim();
-    const text = formatRosterTransferHistory(name);
+    const text = formatRosterOut(name);
 
     let cap = item.querySelector('.transfer-caption');
     if (!text) { if (cap) cap.remove(); return; }
