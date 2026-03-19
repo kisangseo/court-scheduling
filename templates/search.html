@@ -1078,7 +1078,26 @@ function hasActiveAssignmentElsewhere(name, excludeCell) {
         });
     });
 }
+function updateChipWithTransferTimes(chip, name) {
+    const history = transferMap[name]?.history || [];
 
+    const thisPost = chip.closest('.editable')?.dataset.room;
+
+    let outTime = null;
+    let inTime = null;
+
+    history.forEach(t => {
+        if (t.from === thisPost) outTime = t.out;
+        if (t.to === thisPost) inTime = t.in;
+    });
+
+    let label = name;
+
+    if (outTime) label += ` (out: ${outTime})`;
+    if (inTime) label += `${outTime ? ',' : ''} in: ${inTime}`;
+
+    chip.textContent = label;
+}
 function getChipDeputyName(chip) {
     const rawName = (chip?.dataset?.name || chip?.textContent || '').trim();
     return rawName.replace(/\s*\((out|in):.*$/i, '').trim();
@@ -1110,6 +1129,7 @@ function applyDeputyToCell(dropCell, assignedName, role, options = {}) {
         if (chip !== existingChipInCell) chip.remove();
     });
     if (existingChipInCell && !isChipMarkedTransferredOut(existingChipInCell)) {
+        updateChipWithTransferTimes(existingChipInCell, normalizedName);
         return true;
     }
 
