@@ -1158,7 +1158,11 @@ function applyDeputyToCell(dropCell, assignedName, role, options = {}) {
         .then(r => r.json())
         .then(payload => {
             if (payload?.status !== 'success') return;
+            const wasTransferredOut = isChipMarkedTransferredOut(item);
             item.dataset.transferInTime = payload.in_time || timeValue;
+            if (!wasTransferredOut) {
+                item.dataset.transferOutTime = '';
+            }
             rememberTransferredInChip(dropCell, normalizedName, payload.in_time || timeValue);
             forgetTransferredChip(dropCell, normalizedName);
             item.dataset.transferredOut = 'false';
@@ -1712,11 +1716,8 @@ function buildAssignmentChip(name, role, owningCell = null) {
   chip.dataset.role = (role || '').trim();
   chip.dataset.transferredOut = 'false';
   chip.textContent = (name || '').trim();
-  chip.dataset.transferOutTime = transferMap[(name || '').trim()]?.latestCompletedOut || '';
-  chip.dataset.transferInTime = getTransferredInTimeForChip(owningCell, name)
-    || transferMap[(name || '').trim()]?.latestCompletedIn
-    || transferMap[(name || '').trim()]?.latestIn
-    || '';
+  chip.dataset.transferOutTime = '';
+  chip.dataset.transferInTime = getTransferredInTimeForChip(owningCell, name) || '';
 
   if (owningCell && transferredOutChipKeys.has(getTransferredChipKey(owningCell, name))) {
     chip.dataset.transferredOut = 'true';
