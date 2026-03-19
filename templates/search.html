@@ -1080,9 +1080,16 @@ function hasActiveAssignmentElsewhere(name, excludeCell) {
 }
 
 function applyDeputyToCell(dropCell, assignedName, role, options = {}) {
-    if (!canAssignDeputyName(assignedName)) {
-        showCellWarning(dropCell, 'Deputy is not currently available to be assigned from typing.');
-        return false;
+    const canAssignByAvailability = canAssignDeputyName(assignedName);
+    const allowUnavailable = !!options.allowUnavailable;
+    if (!canAssignByAvailability) {
+        showCellWarning(
+            dropCell,
+            allowUnavailable
+                ? 'Deputy is currently unavailable from typing, but transfer/reassignment is allowed.'
+                : 'Deputy is not currently available to be assigned from typing.'
+        );
+        if (!allowUnavailable) return false;
     }
 
     const resolvedRole = resolveAssignmentRole(assignedName, role);
@@ -2090,7 +2097,7 @@ function initAssignmentDropzones() {
                     ((chip.dataset.name || chip.textContent || '').trim() === assignedName)
                 );
                 if (!sourceChip) {
-                    applyDeputyToCell(dropCell, assignedName, role);
+                    applyDeputyToCell(dropCell, assignedName, role, { allowUnavailable: true });
                     return;
                 }
 
@@ -2128,7 +2135,8 @@ function initAssignmentDropzones() {
                             applyDeputyToCell(dropCell, assignedName, role, {
                                 transferInTime: payload.out_time || transferTime,
                                 transferIndex: payload.transfer_index,
-                                preserveExistingAssignments: true
+                                preserveExistingAssignments: true,
+                                allowUnavailable: true
                             });
 
                             return fetchTransfersForDate().then(() => applyTransferCaptionToRosterAndGrid());
