@@ -1712,8 +1712,9 @@ function buildAssignmentChip(name, role, owningCell = null) {
   chip.dataset.role = (role || '').trim();
   chip.dataset.transferredOut = 'false';
   chip.textContent = (name || '').trim();
-  chip.dataset.transferOutTime = '';
+  chip.dataset.transferOutTime = transferMap[(name || '').trim()]?.latestCompletedOut || '';
   chip.dataset.transferInTime = getTransferredInTimeForChip(owningCell, name)
+    || transferMap[(name || '').trim()]?.latestCompletedIn
     || transferMap[(name || '').trim()]?.latestIn
     || '';
 
@@ -2977,7 +2978,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
 
     return sections;
 }
-let transferMap = {}; // { "Name": { history: [{out, in}], latestOut, latestIn, openTransferIndex } }
+let transferMap = {}; // { "Name": { history: [{out, in}], latestOut, latestIn, latestCompletedOut, latestCompletedIn, openTransferIndex } }
 let transferredOutChipKeys = new Set();
 let transferredInChipMeta = new Map();
 
@@ -3117,7 +3118,18 @@ function fetchTransfersForDate() {
             break;
           }
         }
-        transferMap[name] = { history, latestOut, latestIn, openTransferIndex };
+        let latestCompletedOut = null;
+        let latestCompletedIn = null;
+        for (let i = history.length - 1; i >= 0; i--) {
+          const out = history[i]?.out || null;
+          const inn = history[i]?.in || null;
+          if (out && inn) {
+            latestCompletedOut = out;
+            latestCompletedIn = inn;
+            break;
+          }
+        }
+        transferMap[name] = { history, latestOut, latestIn, latestCompletedOut, latestCompletedIn, openTransferIndex };
       });
     })
     .catch(() => { transferMap = {}; });
@@ -3127,8 +3139,8 @@ function applyTransferCaptionToRosterAndGrid() {
     const formatRosterOut = (name) => {
     const t = transferMap[(name || '').trim()];
     if (!t) return "";
-    const latestOut = t.latestOut || '';
-    const latestIn = t.latestIn || '';
+    const latestOut = t.latestCompletedOut || t.latestOut || '';
+    const latestIn = t.latestCompletedIn || t.latestIn || '';
     if (latestOut && latestIn) return `out: ${latestOut}, in: ${latestIn}`;
     if (latestOut) return `out: ${latestOut}`;
     if (latestIn) return `in: ${latestIn}`;
@@ -3163,9 +3175,9 @@ function applyTransferCaptionToRosterAndGrid() {
     const inTime = chip.dataset.transferInTime
       || getTransferredInTimeForChip(owningCell, name)
       || '';
-    const text = isTransferredOut
-      ? (outTime ? `out: ${outTime}` : '')
-      : ((outTime && inTime) ? `out: ${outTime}, in: ${inTime}` : (inTime ? `in: ${inTime}` : ''));
+    const text = (outTime && inTime)
+      ? `out: ${outTime}, in: ${inTime}`
+      : (outTime ? `out: ${outTime}` : (inTime ? `in: ${inTime}` : ''));
 
     chip.classList.toggle('transferred-out', isTransferredOut);
 
