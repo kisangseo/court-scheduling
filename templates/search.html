@@ -148,6 +148,83 @@ function queueCourtroomLocationMove(payload) {
     updateSaveStatusBadge();
 }
 
+function rekeyPendingCourtroomPayloads(date, courthouse, fromRoom, fromPart, toRoom, toPart) {
+    const rekeyMap = (source, keyBuilder) => {
+        const updated = {};
+        Object.values(source).forEach(payload => {
+            const isSameCourtroomRow =
+                (payload.assignment_date || '') === (date || '')
+                && (payload.courthouse || '') === (courthouse || '')
+                && (payload.assignment_type || '') === 'Courtroom'
+                && (payload.location_detail || '') === (fromRoom || '')
+                && (payload.part || '') === (fromPart || '');
+
+            const nextPayload = isSameCourtroomRow
+                ? { ...payload, location_detail: toRoom, part: toPart }
+                : payload;
+
+            updated[keyBuilder(nextPayload)] = nextPayload;
+        });
+        return updated;
+    };
+
+    pendingAssignments = rekeyMap(
+        pendingAssignments,
+        (payload) => [
+            payload.assignment_date,
+            payload.courthouse,
+            payload.assignment_type,
+            payload.location_detail,
+            payload.part
+        ].join('|')
+    );
+
+    pendingNotes = rekeyMap(
+        pendingNotes,
+        (payload) => [
+            payload.assignment_date,
+            payload.courthouse,
+            payload.assignment_type,
+            payload.location_detail,
+            payload.part
+        ].join('|')
+    );
+
+    pendingJudges = rekeyMap(
+        pendingJudges,
+        (payload) => [
+            payload.assignment_date,
+            payload.courthouse,
+            payload.assignment_type,
+            payload.location_detail,
+            payload.part
+        ].join('|')
+    );
+
+    const rekeyedMeta = {};
+    Object.values(pendingCourtroomMeta).forEach(payload => {
+        const isSameCourtroomRow =
+            (payload.assignment_date || '') === (date || '')
+            && (payload.courthouse || '') === (courthouse || '')
+            && (payload.location_detail || '') === (fromRoom || '')
+            && (payload.part || '') === (fromPart || '');
+
+        const nextPayload = isSameCourtroomRow
+            ? { ...payload, location_detail: toRoom, part: toPart }
+            : payload;
+
+        const key = [
+            nextPayload.assignment_date,
+            nextPayload.courthouse,
+            nextPayload.location_detail,
+            nextPayload.part || ''
+        ].join('|');
+
+        rekeyedMeta[key] = nextPayload;
+    });
+    pendingCourtroomMeta = rekeyedMeta;
+}
+
 function buildHidePostedToggle() {
     const label = document.createElement("label");
     label.className = "hide-posted-toggle";
@@ -2742,6 +2819,8 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
             tr.dataset.originalPart = effectivePart;
 
             retiredRoomPartInput.addEventListener('change', () => {
+                const previousRoom = tr.dataset.room || '';
+                const previousPart = tr.dataset.part || '';
                 const rawValue = (retiredRoomPartInput.value || '').trim();
                 let nextRoom = rawValue;
                 let nextPart = '';
@@ -2753,6 +2832,14 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
                 }
 
                 updateCourtroomRowIdentifiers(nextRoom, nextPart);
+                rekeyPendingCourtroomPayloads(
+                    selectedDate,
+                    courthouse,
+                    previousRoom,
+                    previousPart,
+                    nextRoom,
+                    nextPart
+                );
                 queueCourtroomLocationMove({
                     assignment_date: selectedDate,
                     courthouse,
@@ -3994,7 +4081,8 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         })
     );
 
-    Promise.all([...courtroomLocationRequests, ...assignmentRequests, ...notesRequests, ...judgeRequests, ...courtroomMetaRequests, ...shiftTimeRequests])
+    Promise.all(courtroomLocationRequests)
+        .then(() => Promise.all([...assignmentRequests, ...notesRequests, ...judgeRequests, ...courtroomMetaRequests, ...shiftTimeRequests]))
         .then(() => {
             pendingAssignments = {};
             pendingNotes = {};
