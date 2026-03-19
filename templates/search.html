@@ -1079,6 +1079,11 @@ function hasActiveAssignmentElsewhere(name, excludeCell) {
     });
 }
 
+function getChipDeputyName(chip) {
+    const rawName = (chip?.dataset?.name || chip?.textContent || '').trim();
+    return rawName.replace(/\s*\((out|in):.*$/i, '').trim();
+}
+
 function applyDeputyToCell(dropCell, assignedName, role, options = {}) {
     const canAssignByAvailability = canAssignDeputyName(assignedName);
     const allowUnavailable = !!options.allowUnavailable;
@@ -1100,9 +1105,13 @@ function applyDeputyToCell(dropCell, assignedName, role, options = {}) {
     }
 
     const normalizedName = (assignedName || '').trim();
-    const existingChipInCell = Array.from(dropCell.querySelectorAll('.assignment-chip')).find(chip =>
-        ((chip.dataset.name || chip.textContent || '').trim() === normalizedName)
+    const matchingChipsInCell = Array.from(dropCell.querySelectorAll('.assignment-chip')).filter(chip =>
+        getChipDeputyName(chip) === normalizedName
     );
+    const existingChipInCell = matchingChipsInCell.find(isChipMarkedTransferredOut) || matchingChipsInCell[0] || null;
+    matchingChipsInCell.forEach(chip => {
+        if (chip !== existingChipInCell) chip.remove();
+    });
     if (existingChipInCell && !isChipMarkedTransferredOut(existingChipInCell)) {
         return true;
     }
@@ -2094,7 +2103,7 @@ function initAssignmentDropzones() {
                 }
 
                 const sourceChip = Array.from(fromCell.querySelectorAll('.assignment-chip')).find(chip =>
-                    ((chip.dataset.name || chip.textContent || '').trim() === assignedName)
+                    getChipDeputyName(chip) === assignedName
                 );
                 if (!sourceChip) {
                     applyDeputyToCell(dropCell, assignedName, role, { allowUnavailable: true });
