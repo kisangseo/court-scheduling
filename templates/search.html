@@ -3076,14 +3076,19 @@ function fetchTransfersForDate() {
 function applyTransferCaptionToRosterAndGrid() {
     const formatRosterOut = (name) => {
     const t = transferMap[(name || '').trim()];
-    if (!t || !t.latestOut) return "";
-    return `out: ${t.latestOut}`;
+    if (!t) return "";
+    const latestOut = t.latestOut || '';
+    const latestIn = t.latestIn || '';
+    if (latestOut && latestIn) return `out: ${latestOut}, in: ${latestIn}`;
+    if (latestOut) return `out: ${latestOut}`;
+    if (latestIn) return `in: ${latestIn}`;
+    return "";
   };
 
   // add caption under roster names
   document.querySelectorAll('#rosterList .roster-item').forEach(item => {
     const name = (item.dataset.name || '').trim();
-    const text = formatRosterOut(name);
+    const text = formatRosterTransferHistory(name);
 
     let cap = item.querySelector('.transfer-caption');
     if (!text) { if (cap) cap.remove(); return; }
