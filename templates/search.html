@@ -1088,12 +1088,9 @@ function applyDeputyToCell(dropCell, assignedName, role, options = {}) {
     const canAssignByAvailability = canAssignDeputyName(assignedName);
     const allowUnavailable = !!options.allowUnavailable;
     if (!canAssignByAvailability) {
-        showCellWarning(
-            dropCell,
-            allowUnavailable
-                ? 'Deputy is currently unavailable from typing, but transfer/reassignment is allowed.'
-                : 'Deputy is not currently available to be assigned from typing.'
-        );
+        if (!allowUnavailable) {
+            showCellWarning(dropCell, 'Deputy is not currently available to be assigned from typing.');
+        }
         if (!allowUnavailable) return false;
     }
 
