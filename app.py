@@ -2082,6 +2082,7 @@ def update_courtroom_location():
     conn = get_conn()
     cursor = conn.cursor()
     _ensure_courtroom_meta_table(cursor)
+    cursor.execute("SET LOCK_TIMEOUT 5000;")
 
     cursor.execute("""
         UPDATE dbo.court_assignments

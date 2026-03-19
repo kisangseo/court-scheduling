@@ -4012,77 +4012,54 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         saveStatus.textContent = "Saving...";
     }
 
-    const courtroomLocationRequests = Object.values(pendingCourtroomLocationMoves).map(payload =>
-        fetch("/api/update-courtroom-location", {
+    const createPostTask = (url, payload, failureMessage) => () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        return fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            signal: controller.signal
         }).then(res => {
-            if (!res.ok) throw new Error("Failed to save courtroom room/part");
+            if (!res.ok) throw new Error(failureMessage);
             return res.json();
-        })
-    );
+        }).catch(err => {
+            if (err.name === 'AbortError') {
+                throw new Error(`${failureMessage} (request timed out)`);
+            }
+            throw err;
+        }).finally(() => {
+            clearTimeout(timeoutId);
+        });
+    };
 
-    const assignmentRequests = Object.values(pendingAssignments).map(payload =>
-        fetch("/api/update-deputy", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        }).then(res => {
-            if (!res.ok) throw new Error("Failed to save deputy assignment");
-            return res.json();
-        })
-    );
+    const runTasksSequentially = (tasks) =>
+        tasks.reduce((promiseChain, task) => promiseChain.then(() => task()), Promise.resolve());
 
-    const notesRequests = Object.values(pendingNotes).map(payload =>
-        fetch("/api/update-assignment-notes", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        }).then(res => {
-            if (!res.ok) throw new Error("Failed to save assignment note");
-            return res.json();
-        })
-    );
+    const runTasksInParallel = (tasks) => Promise.all(tasks.map(task => task()));
 
-    const judgeRequests = Object.values(pendingJudges).map(payload =>
-        fetch("/api/update-judge-name", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        }).then(res => {
-            if (!res.ok) throw new Error("Failed to save judge name");
-            return res.json();
-        })
-    );
+    const courtroomLocationTasks = Object.values(pendingCourtroomLocationMoves)
+        .map(payload => createPostTask("/api/update-courtroom-location", payload, "Failed to save courtroom room/part"));
 
-    const courtroomMetaRequests = changedCourtroomMeta
-        .map(payload =>
-        fetch("/api/update-courtroom-meta", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        }).then(res => {
-            if (!res.ok) throw new Error("Failed to save courtroom meta");
-            return res.json();
-        })
-    );
+    const assignmentTasks = Object.values(pendingAssignments)
+        .map(payload => createPostTask("/api/update-deputy", payload, "Failed to save deputy assignment"));
 
-    const shiftTimeRequests = Object.values(pendingShiftTimes)
+    const notesTasks = Object.values(pendingNotes)
+        .map(payload => createPostTask("/api/update-assignment-notes", payload, "Failed to save assignment note"));
+
+    const judgeTasks = Object.values(pendingJudges)
+        .map(payload => createPostTask("/api/update-judge-name", payload, "Failed to save judge name"));
+
+    const courtroomMetaTasks = changedCourtroomMeta
+        .map(payload => createPostTask("/api/update-courtroom-meta", payload, "Failed to save courtroom meta"));
+
+    const shiftTimeTasks = Object.values(pendingShiftTimes)
         .filter(payload => payload.assignment_date && payload.courthouse && (payload.location_detail || payload.location_group))
-        .map(payload =>
-        fetch("/api/update-shift-time", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        }).then(res => {
-            if (!res.ok) throw new Error("Failed to save overtime shift");
-            return res.json();
-        })
-    );
+        .map(payload => createPostTask("/api/update-shift-time", payload, "Failed to save overtime shift"));
 
-    Promise.all(courtroomLocationRequests)
-        .then(() => Promise.all([...assignmentRequests, ...notesRequests, ...judgeRequests, ...courtroomMetaRequests, ...shiftTimeRequests]))
+    runTasksSequentially(courtroomLocationTasks)
+        .then(() => runTasksInParallel([...assignmentTasks, ...notesTasks, ...judgeTasks, ...courtroomMetaTasks, ...shiftTimeTasks]))
         .then(() => {
             pendingAssignments = {};
             pendingNotes = {};
