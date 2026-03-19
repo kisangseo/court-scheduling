@@ -68,6 +68,7 @@ let pendingAssignments = {};
 let pendingNotes = {};
 let pendingJudges = {};
 let pendingCourtroomMeta = {};
+let pendingCourtroomLocationMoves = {};
 let pendingShiftTimes = {};
 let changedRows = new Set();
 let allDeputies = [];
@@ -123,6 +124,27 @@ function queueAssignmentNoteUpdate(payload) {
     ].join("|");
 
     pendingNotes[key] = payload;
+    updateSaveStatusBadge();
+}
+
+
+function queueCourtroomLocationMove(payload) {
+    const key = [
+        payload.assignment_date,
+        payload.courthouse,
+        payload.old_location_detail,
+        payload.old_part || ''
+    ].join('|');
+
+    const hasChange =
+        (payload.old_location_detail || '') !== (payload.new_location_detail || '')
+        || (payload.old_part || '') !== (payload.new_part || '');
+
+    if (!hasChange) {
+        delete pendingCourtroomLocationMoves[key];
+    } else {
+        pendingCourtroomLocationMoves[key] = payload;
+    }
     updateSaveStatusBadge();
 }
 
@@ -531,6 +553,7 @@ function updateSaveStatusBadge() {
         Object.keys(pendingNotes).length +
         Object.keys(pendingJudges).length +
         Object.keys(pendingCourtroomMeta).length +
+        Object.keys(pendingCourtroomLocationMoves).length +
         Object.keys(pendingShiftTimes).length;
 
     if (totalChanges <= 0) {
@@ -2715,6 +2738,9 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
 
         const retiredRoomPartInput = tr.querySelector('.retired-room-part-input');
         if (retiredRoomPartInput) {
+            tr.dataset.originalRoom = room;
+            tr.dataset.originalPart = effectivePart;
+
             retiredRoomPartInput.addEventListener('change', () => {
                 const rawValue = (retiredRoomPartInput.value || '').trim();
                 let nextRoom = rawValue;
@@ -2727,6 +2753,15 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
                 }
 
                 updateCourtroomRowIdentifiers(nextRoom, nextPart);
+                queueCourtroomLocationMove({
+                    assignment_date: selectedDate,
+                    courthouse,
+                    assignment_type: 'Courtroom',
+                    old_location_detail: tr.dataset.originalRoom || '',
+                    old_part: tr.dataset.originalPart || '',
+                    new_location_detail: nextRoom,
+                    new_part: nextPart
+                });
                 markCourtroomRowChanged(tr);
                 setPendingCourtroomMetaFromRow(tr);
             });
@@ -3526,6 +3561,7 @@ function clearSectionAssignments(sectionType, courthouse = "") {
             pendingNotes = {};
             pendingJudges = {};
             pendingCourtroomMeta = {};
+            pendingCourtroomLocationMoves = {};
             pendingShiftTimes = {};
             updateSaveStatusBadge();
             search();
@@ -3565,6 +3601,7 @@ function clearDailyAssignments() {
             pendingNotes = {};
             pendingJudges = {};
             pendingCourtroomMeta = {};
+            pendingCourtroomLocationMoves = {};
             pendingShiftTimes = {};
             updateSaveStatusBadge();
             search();
@@ -3888,6 +3925,17 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         saveStatus.textContent = "Saving...";
     }
 
+    const courtroomLocationRequests = Object.values(pendingCourtroomLocationMoves).map(payload =>
+        fetch("/api/update-courtroom-location", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        }).then(res => {
+            if (!res.ok) throw new Error("Failed to save courtroom room/part");
+            return res.json();
+        })
+    );
+
     const assignmentRequests = Object.values(pendingAssignments).map(payload =>
         fetch("/api/update-deputy", {
             method: "POST",
@@ -3946,12 +3994,13 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         })
     );
 
-    Promise.all([...assignmentRequests, ...notesRequests, ...judgeRequests, ...courtroomMetaRequests, ...shiftTimeRequests])
+    Promise.all([...courtroomLocationRequests, ...assignmentRequests, ...notesRequests, ...judgeRequests, ...courtroomMetaRequests, ...shiftTimeRequests])
         .then(() => {
             pendingAssignments = {};
             pendingNotes = {};
             pendingJudges = {};
             pendingCourtroomMeta = {};
+            pendingCourtroomLocationMoves = {};
             pendingShiftTimes = {};
             changedRows.clear();
             if (saveStatus) {
@@ -3997,6 +4046,7 @@ window.addEventListener("beforeunload", function (e) {
         Object.keys(pendingNotes).length +
         Object.keys(pendingJudges).length +
         Object.keys(pendingCourtroomMeta).length +
+        Object.keys(pendingCourtroomLocationMoves).length +
         Object.keys(pendingShiftTimes).length;
 
     if (totalChanges > 0) {
