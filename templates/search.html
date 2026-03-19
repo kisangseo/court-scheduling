@@ -1455,6 +1455,7 @@ const REQUIRED_ARMED_FIXED_POST_SLOTS = new Set([
     'cummings|cummings|0800',
     'cummings|garage|0600',
     'cummings|garage|1600',
+    'cummings|family desk|0800',
     'juvenile|office|0830-1700',
     'juvenile|lobby|0830-1630-1',
     'juvenile|lockup|'
@@ -1497,7 +1498,7 @@ function requiresPrimarySecurityRole(courthouse, post, shift, part) {
     const normalizedPost = (post || '').trim().toLowerCase();
     const normalizedShift = (shift || '').trim().toLowerCase();
 
-    if (normalizedCourthouse === 'cummings' && normalizedPost === 'family court') {
+    if (normalizedCourthouse === 'cummings' && (normalizedPost === 'family desk' || normalizedPost === 'family court')) {
         return true;
     }
 
@@ -1671,7 +1672,7 @@ function isEligibleForCell(cell, role) {
             return isDoorPrimaryCapability(role);
         }
 
-        if ((courthouse || '').trim().toLowerCase() === 'cummings' && post.trim().toLowerCase() === 'family court') {
+        if ((courthouse || '').trim().toLowerCase() === 'cummings' && ['family desk', 'family court'].includes(post.trim().toLowerCase())) {
             return true;
         }
 
@@ -2780,7 +2781,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 { post: "Lock Up East", detail: "8:00 AM", part: "0800" },
                 { post: "Garage", detail: "6:00 AM - 2:00 PM", part: "0600" },
                 { post: "Garage", detail: "4:30 PM - 9:00 PM", part: "1600" },
-                
+                { post: "Family Desk", detail: "8:00 AM", part: "0800" },
                 { post: "Transportation", detail: "", part: "" }
             ]
             : [
