@@ -2060,6 +2060,71 @@ def update_courtroom_meta():
     return {"status": "success"}
 
 
+@app.route("/api/update-courtroom-location", methods=["POST"])
+def update_courtroom_location():
+    data = request.json or {}
+
+    assignment_date = (data.get("assignment_date") or "").strip()
+    courthouse = (data.get("courthouse") or "").strip()
+    old_location_detail = (data.get("old_location_detail") or "").strip()
+    old_part = (data.get("old_part") or "").strip()
+    new_location_detail = (data.get("new_location_detail") or "").strip()
+    new_part = (data.get("new_part") or "").strip()
+
+    if not assignment_date or not courthouse or not old_location_detail:
+        return jsonify({"status": "error", "message": "assignment_date, courthouse, and old_location_detail are required"}), 400
+    if not new_location_detail:
+        return jsonify({"status": "error", "message": "new_location_detail is required"}), 400
+
+    if old_location_detail == new_location_detail and old_part.lower() == new_part.lower():
+        return jsonify({"status": "success"})
+
+    conn = get_conn()
+    cursor = conn.cursor()
+    _ensure_courtroom_meta_table(cursor)
+    cursor.execute("SET LOCK_TIMEOUT 5000;")
+
+    cursor.execute("""
+        UPDATE dbo.court_assignments
+        SET location_detail = ?,
+            part = ?
+        WHERE assignment_date = ?
+          AND courthouse = ?
+          AND assignment_type = 'Courtroom'
+          AND ISNULL(location_detail, '') = ISNULL(?, '')
+          AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
+    """, (
+        new_location_detail,
+        new_part,
+        assignment_date,
+        courthouse,
+        old_location_detail,
+        old_part
+    ))
+
+    cursor.execute("""
+        UPDATE dbo.courtroom_meta
+        SET location_detail = ?,
+            part = ?,
+            updated_at = GETDATE()
+        WHERE assignment_date = ?
+          AND courthouse = ?
+          AND ISNULL(location_detail, '') = ISNULL(?, '')
+          AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
+    """, (
+        new_location_detail,
+        new_part,
+        assignment_date,
+        courthouse,
+        old_location_detail,
+        old_part
+    ))
+
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success"})
+
+
 @app.route("/api/clear-daily-assignments", methods=["POST"])
 def clear_daily_assignments():
     data = request.json or {}
