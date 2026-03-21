@@ -2986,7 +2986,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
             const pickPreferredRow = (rowList) => rowList.find(r => (r.assigned_member || '').trim()) || rowList[0] || null;
             const assigned = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
             const lunchAssigned = pickPreferredRow(lunchSlotMatches);
-            const effectiveShift = (assigned && (assigned.shift_time || '').trim()) || slot.detail || 'General';
+            const effectiveShift = (assigned && (assigned.shift_time || '').trim()) || slot.detail || '';
             const parsedFixedShift = parseShiftTimeDisplayValue(effectiveShift);
 
             const tr = document.createElement("tr");
