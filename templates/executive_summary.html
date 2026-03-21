@@ -554,6 +554,10 @@ function normalizeOtPostName(value) {
     return (value || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+function normalizeOtPostToken(value) {
+    return (value || '').toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
 function parseShiftDurationHours(shiftText) {
     const raw = (shiftText || '').toString().trim();
     if (!raw || !raw.includes('-')) return 0;
@@ -607,11 +611,14 @@ function getTotalOvertimeHours(assignments) {
         const type = (row.assignment_type || '').trim();
         const courthouse = (row.courthouse || '').trim();
         const postName = normalizeOtPostName(row.location_group || '');
+        const postToken = normalizeOtPostToken(row.location_group || '');
+        const isRoverOtPost = postToken.includes('roverot') || postToken === 'rover';
+        const isJudgesOtPost = postToken.includes('judgesot') || postToken === 'judges';
 
         const isSelectedFixedPostOt =
             type === 'Fixed Post'
             && courthouse === 'Mitchell'
-            && (postName === 'rover o/t' || postName === 'rover' || postName === 'judges o/t' || postName === 'judges');
+            && (isRoverOtPost || isJudgesOtPost || postName.includes('rover o/t') || postName.includes('judges o/t'));
 
         const isSelectedOvertimeTableRow =
             type === 'Overtime'
