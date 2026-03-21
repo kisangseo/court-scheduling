@@ -550,6 +550,86 @@ function countBorrowedDeputies(assignments, deputies) {
     return borrowed.size;
 }
 
+function normalizeOtPostName(value) {
+    return (value || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function normalizeOtPostToken(value) {
+    return (value || '').toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function parseShiftDurationHours(shiftText) {
+    const raw = (shiftText || '').toString().trim();
+    if (!raw || !raw.includes('-')) return 0;
+
+    const [startRaw, endRaw] = raw.split('-').map(part => part.trim());
+    if (!startRaw || !endRaw) return 0;
+
+    const parseMinutes = (value, fallbackSuffix) => {
+        const normalized = value.toUpperCase().replace(/\./g, '').trim();
+        const ampmMatch = normalized.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/);
+        if (ampmMatch) {
+            let hour = Number(ampmMatch[1]) % 12;
+            const minute = Number(ampmMatch[2] || '0');
+            if (ampmMatch[3] === 'PM') hour += 12;
+            return (hour * 60) + minute;
+        }
+
+        const hhmmMatch = normalized.match(/^(\d{1,2})(\d{2})$/);
+        if (hhmmMatch) {
+            const hour = Number(hhmmMatch[1]);
+            const minute = Number(hhmmMatch[2]);
+            return (hour * 60) + minute;
+        }
+
+        const compactMatch = normalized.match(/^(\d{1,2})(?::(\d{2}))?$/);
+        if (compactMatch && fallbackSuffix) {
+            let hour = Number(compactMatch[1]) % 12;
+            const minute = Number(compactMatch[2] || '0');
+            if (fallbackSuffix === 'PM') hour += 12;
+            return (hour * 60) + minute;
+        }
+
+        return null;
+    };
+
+    const endSuffixMatch = endRaw.toUpperCase().match(/\b(AM|PM)\b/);
+    const startSuffixMatch = startRaw.toUpperCase().match(/\b(AM|PM)\b/);
+    const startMins = parseMinutes(startRaw, startSuffixMatch?.[1] || endSuffixMatch?.[1] || null);
+    const endMins = parseMinutes(endRaw, endSuffixMatch?.[1] || startSuffixMatch?.[1] || null);
+    if (startMins === null || endMins === null) return 0;
+
+    let diff = endMins - startMins;
+    if (diff < 0) diff += 24 * 60;
+    return diff / 60;
+}
+
+function getTotalOvertimeHours(assignments) {
+    const rows = assignments || [];
+
+    return rows.reduce((total, row) => {
+        const type = (row.assignment_type || '').trim();
+        const courthouse = (row.courthouse || '').trim();
+        const postName = normalizeOtPostName(row.location_group || '');
+        const postToken = normalizeOtPostToken(row.location_group || '');
+        const isRoverOtPost = postToken.includes('roverot') || postToken === 'rover';
+        const isJudgesOtPost = postToken.includes('judgesot') || postToken === 'judges';
+
+        const isSelectedFixedPostOt =
+            type === 'Fixed Post'
+            && courthouse === 'Mitchell'
+            && (isRoverOtPost || isJudgesOtPost || postName.includes('rover o/t') || postName.includes('judges o/t'));
+
+        const isSelectedOvertimeTableRow =
+            type === 'Overtime'
+            && ['Mitchell', 'Cummings', 'Juvenile'].includes(courthouse);
+
+        if (!isSelectedFixedPostOt && !isSelectedOvertimeTableRow) return total;
+
+        return total + parseShiftDurationHours(row.shift_time || row.location_detail || row.part || '');
+    }, 0);
+}
+
 async function loadSummary() {
     const selectedValue = summaryDateInput.value;
     if (!selectedValue) return;
@@ -601,6 +681,7 @@ async function loadSummary() {
             const assignmentTotals = getAssignmentTotals(assignments);
             const highProfileCaseCount = countHighProfileCases(courtroomMetaRows);
             const openCourtsCount = assignmentTotals.open || 0;
+            const totalOvertimeHours = getTotalOvertimeHours(assignments);
             return {
                 label: dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }),
                 needed: neededBreakdown.total,
@@ -614,6 +695,7 @@ async function loadSummary() {
                 assignmentTotals,
                 highProfileCases: highProfileCaseCount,
                 openCourts: openCourtsCount,
+                totalOvertimeHours,
                 unavailableBreakdown,
                 borrowed: borrowedCount
             };
@@ -653,6 +735,7 @@ function renderSummary(dayResults) {
 ).join('');
     const highProfileCells = dayResults.map(day => `<td>${day.highProfileCases || 0}</td>`).join('');
     const openCourtsCells = dayResults.map(day => `<td>${day.openCourts || 0}</td>`).join('');
+    const overtimeHoursCells = dayResults.map(day => `<td>${(day.totalOvertimeHours || 0).toFixed(2)}</td>`).join('');
     const unavailableTotalCells = dayResults.map(day => {
         const breakdown = day.unavailableBreakdown || { scheduled_leave: 0, unscheduled_leave: 0, unavailable: 0, training: 0 };
         const total = (breakdown.scheduled_leave || 0) + (breakdown.unscheduled_leave || 0) + (breakdown.unavailable || 0) + (breakdown.training || 0);
@@ -716,6 +799,10 @@ function renderSummary(dayResults) {
                 <tr>
                     <td class="metric-label">Open Courts</td>
                     ${openCourtsCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">Total OT Hours</td>
+                    ${overtimeHoursCells}
                 </tr>
                 ${unavailableRows}
                 <tr>
