@@ -636,6 +636,7 @@ function getTotalNeededFromAssignments(assignments) {
         { post: "St. Paul", detail: "8:30 AM", part: "0830" },
         { post: "Mitchell Office", detail: "8:00 AM", part: "0800" },
         { post: "Rover", detail: "7:00 AM", part: "0700" },
+        { post: "Rover", detail: "4:30 PM - 7:00 PM (OT)", part: "1630-1900" },
         { post: "Judges", detail: "7:00 AM", part: "0700" }
     ];
 
@@ -651,7 +652,8 @@ function getTotalNeededFromAssignments(assignments) {
         { post: "Garage", detail: "6:00 AM", part: "0600" },
         { post: "Garage", detail: "4:00 PM", part: "1600" },
         { post: "Family Desk", detail: "8:00 AM", part: "0800" },
-        { post: "Transportation", detail: "", part: "" }
+        { post: "Transportation", detail: "", part: "" },
+        { post: "Tow Truck", detail: "7:00 AM - 3:00 PM", part: "0700-1500" }
     ];
 
     const totalPosts = MITCHELL_POSTS.length + CUMMINGS_POSTS.length;
