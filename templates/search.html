@@ -591,7 +591,13 @@ function setVacantRowHighlight(cell, slotState) {
     const row = cell.closest('tr');
     if (!row) return;
 
-    row.classList.toggle('assignment-vacant-row', slotState === 'vacant');
+    cell.dataset.slotState = slotState;
+
+    const hasVacantSlot = Array.from(row.querySelectorAll('.editable')).some(editableCell =>
+        editableCell.dataset.slotState === 'vacant'
+    );
+
+    row.classList.toggle('assignment-vacant-row', hasVacantSlot);
 }
 
 function getPostedNameSetForPostsAndCourtrooms() {
