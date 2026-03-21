@@ -189,7 +189,7 @@ function getNeededBreakdownFromAssignments(assignments) {
         { post: "Garage", detail: "4:00 PM", part: "1600" },
         { post: "Family Desk", detail: "8:00 AM", part: "0800" },
         { post: "Transportation", detail: "", part: "" },
-        { post: "Transportation", detail: "Tow Truck (7:00 AM - 3:00 PM)", part: "0700-1500" }
+        { post: "Tow Truck", detail: "7:00 AM - 3:00 PM", part: "0700-1500" }
     ];
 
     const breakdown = {
@@ -442,7 +442,7 @@ function getSearchPageFixedPostRowsForCounts(assignments) {
         { post: "Garage", detail: "4:00 PM", part: "1600" },
         { post: "Family Desk", detail: "8:00 AM", part: "0800" },
         { post: "Transportation", detail: "", part: "" },
-        { post: "Transportation", detail: "Tow Truck (7:00 AM - 3:00 PM)", part: "0700-1500" }
+        { post: "Tow Truck", detail: "7:00 AM - 3:00 PM", part: "0700-1500" }
     ];
 
     const pickPreferredRow = (rows) => (rows || []).find(r => (r.assigned_member || '').trim()) || (rows || [])[0] || null;
