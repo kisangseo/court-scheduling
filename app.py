@@ -1877,8 +1877,8 @@ def _fixed_post_requirement_group(row):
     post = (row.get("location_group") or "").strip().lower()
     part = (row.get("part") or "").strip().lower()
 
-    # Transportation is informational only and should never count toward staffing totals.
-    if post == "transportation":
+    # Transportation placeholder row is informational-only; named transportation slots still count.
+    if post == "transportation" and not part and not (row.get("location_detail") or "").strip():
         return None
 
     # Mitchell Calvert includes an optional third slot.
