@@ -20,7 +20,7 @@
     </div>
 
     <div class="assignment-header-box">
-        <h2>Court Assignments <span id="overallAssignmentCounts" class="counts-inline"></span> <label class="simple-view-toggle"><input type="checkbox" id="simpleViewToggle"> Simple View</label></h2>
+        <h2>Court Assignments <span id="overallAssignmentCounts" class="counts-inline"></span> <label class="simple-view-toggle"><input type="checkbox" id="simpleViewToggle"> Simple View</label> <span id="totalOtHoursBadge" class="counts-inline metric-blue"></span></h2>
     </div>
 
     <div class="assignment-action-controls">
@@ -99,6 +99,109 @@ function escapeHtml(value) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
+}
+
+function normalizeOtPostName(value) {
+    return (value || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function normalizeOtPostToken(value) {
+    return (value || '').toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function isMitchellFixedPostOtRow(row) {
+    const type = (row?.assignment_type || '').trim();
+    const courthouse = (row?.courthouse || '').trim();
+    if (type !== 'Fixed Post' || courthouse !== 'Mitchell') return false;
+
+    const textBlob = [
+        row?.location_group || '',
+        row?.location_detail || '',
+        row?.part || '',
+        row?.assignment_notes || ''
+    ].join(' ');
+    const token = normalizeOtPostToken(textBlob);
+    return token.includes('roverot')
+        || token.includes('judgesot')
+        || (token.includes('rover') && token.includes('ot'))
+        || (token.includes('judges') && token.includes('ot'));
+}
+
+function parseShiftDurationHours(shiftText) {
+    const raw = (shiftText || '').toString().trim();
+    if (!raw || !raw.includes('-')) return 0;
+
+    const [startRaw, endRaw] = raw.split('-').map(part => part.trim());
+    if (!startRaw || !endRaw) return 0;
+
+    const parseMinutes = (value, fallbackSuffix) => {
+        const normalized = value.toUpperCase().replace(/\./g, '').trim();
+        const ampmMatch = normalized.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/);
+        if (ampmMatch) {
+            let hour = Number(ampmMatch[1]) % 12;
+            const minute = Number(ampmMatch[2] || '0');
+            if (ampmMatch[3] === 'PM') hour += 12;
+            return (hour * 60) + minute;
+        }
+
+        const hhmmMatch = normalized.match(/^(\d{1,2})(\d{2})$/);
+        if (hhmmMatch) return (Number(hhmmMatch[1]) * 60) + Number(hhmmMatch[2]);
+
+        const compactMatch = normalized.match(/^(\d{1,2})(?::(\d{2}))?$/);
+        if (compactMatch && fallbackSuffix) {
+            let hour = Number(compactMatch[1]) % 12;
+            const minute = Number(compactMatch[2] || '0');
+            if (fallbackSuffix === 'PM') hour += 12;
+            return (hour * 60) + minute;
+        }
+
+        return null;
+    };
+
+    const endSuffix = endRaw.toUpperCase().match(/\b(AM|PM)\b/)?.[1] || null;
+    const startSuffix = startRaw.toUpperCase().match(/\b(AM|PM)\b/)?.[1] || null;
+    const startMins = parseMinutes(startRaw, startSuffix || endSuffix);
+    const endMins = parseMinutes(endRaw, endSuffix || startSuffix);
+    if (startMins === null || endMins === null) return 0;
+
+    let diff = endMins - startMins;
+    if (diff < 0) diff += 24 * 60;
+    return diff / 60;
+}
+
+function getTotalOvertimeHours(rows) {
+    return (rows || []).reduce((total, row) => {
+        const type = (row.assignment_type || '').trim();
+        const courthouse = (row.courthouse || '').trim();
+        const isMitchellFixedOt = isMitchellFixedPostOtRow(row);
+        const isOvertimeTableRow = type === 'Overtime' && ['Mitchell', 'Cummings', 'Juvenile'].includes(courthouse);
+        if (!isMitchellFixedOt && !isOvertimeTableRow) return total;
+        return total + parseShiftDurationHours(row.shift_time || row.location_detail || row.part || '');
+    }, 0);
+}
+
+function updateTotalOtHoursBadge(rows) {
+    const badge = document.getElementById('totalOtHoursBadge');
+    if (!badge) return;
+    badge.textContent = `OT Hours ${getTotalOvertimeHours(rows).toFixed(2)}`;
+}
+
+function refreshOvertimeShiftPrompts() {
+    document.querySelectorAll('.editable-overtime-shift').forEach(shiftCell => {
+        if (shiftCell.querySelector('select')) return;
+
+        const shiftValue = (shiftCell.dataset.shift || '').trim();
+        const parsed = parseOvertimeShiftRange(shiftValue);
+        const hasValidRange = !!(parsed.start && parsed.end);
+        const deputyCell = shiftCell.parentElement?.querySelector('.editable[data-type="Overtime"]');
+        const hasAssignedDeputy = parseAssignedMemberValue(deputyCell?.textContent || '').length > 0;
+
+        if (hasAssignedDeputy && !hasValidRange) {
+            shiftCell.innerHTML = '<span class="metric-red">Enter Time</span>';
+        } else {
+            shiftCell.textContent = shiftValue;
+        }
+    });
 }
 
 function getCourtroomAssignmentOptionsHtml(selectedValue) {
@@ -1004,6 +1107,8 @@ function updateAssignmentCountBadges() {
         const open = postStats.open + courtroomStats.open;
         el.innerHTML = formatCountMetrics(vacant, filled, open);
     });
+
+    refreshOvertimeShiftPrompts();
 }
 
 function getCourtSecurityRosterStats() {
@@ -3450,10 +3555,13 @@ function search() {
             }
 
             if (!data || data.length === 0) {
+                updateTotalOtHoursBadge([]);
                 updateAssignmentCountBadges();
                 refreshRosterHeaderCounts();
                 return;
             }
+
+            updateTotalOtHoursBadge(data);
 
             const grouped = {};
             data.forEach(row => {
@@ -3564,6 +3672,7 @@ function search() {
             initAssignmentDropzones();
             fetchTransfersForDate().then(() => applyTransferCaptionToRosterAndGrid());
             refreshRosterAssignedState();
+            refreshOvertimeShiftPrompts();
             loadCourtroomMeta(date);
         });
 }
