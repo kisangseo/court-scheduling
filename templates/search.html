@@ -1048,13 +1048,16 @@ function buildOvertimeShiftDisplayValue(startValue, endValue) {
 }
 
 function queueOvertimeShiftUpdate(payload) {
-    const key = [
-        payload.assignment_date,
-        payload.courthouse,
-        payload.assignment_type,
-        payload.location_detail,
-        payload.part
-    ].join('|');
+    const key = payload.assignment_id
+        ? `id:${payload.assignment_id}`
+        : [
+            payload.assignment_date,
+            payload.courthouse,
+            payload.assignment_type,
+            payload.location_detail,
+            payload.part,
+            payload.shift_time || ''
+        ].join('|');
 
     pendingShiftTimes[key] = payload;
     updateSaveStatusBadge();
@@ -2292,13 +2295,16 @@ function setPendingAssignmentFromCell(cell) {
         assigned_member: assignedName
     };
 
-    const key = [
-        payload.assignment_date,
-        payload.courthouse,
-        payload.assignment_type,
-        payload.location_detail,
-        payload.part
-    ].join('|');
+    const key = payload.assignment_id
+        ? `id:${payload.assignment_id}`
+        : [
+            payload.assignment_date,
+            payload.courthouse,
+            payload.assignment_type,
+            payload.location_detail,
+            payload.part,
+            payload.shift_time || ''
+        ].join('|');
 
     pendingAssignments[key] = payload;
     updateSaveStatusBadge();

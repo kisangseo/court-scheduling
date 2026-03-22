@@ -1941,23 +1941,26 @@ def _fixed_post_requirement_group(row):
 def _assignment_dedupe_key(row):
     """
     Build a stable dedupe key for assignment rows.
-
-    Courtrooms should dedupe by room/part only. For non-courtroom assignments
-    (including overtime), shift_time is part of slot identity so that distinct
-    shifts are not collapsed into one row.
     """
-    assignment_type = (row.get("assignment_type") or "").strip()
-    base = (
+    return (
         row.get("assignment_date"),
         (row.get("courthouse") or "").strip(),
-        assignment_type,
+        (row.get("assignment_type") or "").strip(),
         (row.get("location_group") or "").strip(),
         (row.get("location_detail") or "").strip(),
         (row.get("part") or "").strip(),
     )
-    if assignment_type == "Courtroom":
-        return base
-    return base + ((row.get("shift_time") or "").strip(),)
+
+
+def _assignment_row_score(row):
+    """
+    Prefer rows with assignment data populated when duplicates exist.
+    """
+    has_assigned = 1 if (row.get("assigned_member") or "").strip() else 0
+    has_shift = 1 if (row.get("shift_time") or "").strip() else 0
+    has_notes = 1 if (row.get("assignment_notes") or "").strip() else 0
+    created_at = str(row.get("created_at") or "")
+    return (has_assigned, has_shift, has_notes, created_at)
 
 
 @app.route("/api/assignment-totals")
@@ -1976,8 +1979,10 @@ def assignment_totals():
             location_detail,
             judge_name,
             part,
+            shift_time,
             assigned_member,
-            assignment_notes
+            assignment_notes,
+            created_at
         FROM dbo.court_assignments
         WHERE assignment_date = ?
         ORDER BY assignment_date DESC
@@ -1999,7 +2004,7 @@ def assignment_totals():
             deduped[key] = row
             continue
 
-        if not (existing.get("assigned_member") or "").strip() and (row.get("assigned_member") or "").strip():
+        if _assignment_row_score(row) > _assignment_row_score(existing):
             deduped[key] = row
 
     rows = list(deduped.values())
@@ -2432,6 +2437,7 @@ def search():
             a.shift_time,
             a.assigned_member,
             a.assignment_notes,
+            a.created_at,
             ISNULL(m.is_high_profile, 0) AS is_high_profile
         FROM dbo.court_assignments a
         LEFT JOIN dbo.courtroom_meta m
@@ -2476,11 +2482,7 @@ def search():
             deduped_results[dedupe_key] = row
             continue
 
-        existing_assigned = (existing.get("assigned_member") or "").strip()
-        incoming_assigned = (row.get("assigned_member") or "").strip()
-
-        # Prefer the row that has an assigned member populated.
-        if not existing_assigned and incoming_assigned:
+        if _assignment_row_score(row) > _assignment_row_score(existing):
             deduped_results[dedupe_key] = row
 
     results = list(deduped_results.values())
