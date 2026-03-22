@@ -1648,6 +1648,22 @@ def update_deputy():
     conn = get_conn()
     cursor = conn.cursor()
 
+    assignment_id = data.get("assignment_id")
+    if assignment_id:
+        cursor.execute("""
+            UPDATE dbo.court_assignments
+            SET assigned_member = ?
+            WHERE id = ?
+              AND assignment_date = ?
+        """, (
+            data["assigned_member"],
+            assignment_id,
+            data["assignment_date"]
+        ))
+        conn.commit()
+        conn.close()
+        return {"status": "success", "updated": cursor.rowcount}
+
     is_fixed_post = data.get("assignment_type") == "Fixed Post"
     is_courtroom = data.get("assignment_type") == "Courtroom"
 
@@ -2405,6 +2421,7 @@ def search():
 
     query = """
         SELECT TOP 200
+            a.id,
             a.assignment_date,
             a.courthouse,
             a.assignment_type,
