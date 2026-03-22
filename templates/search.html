@@ -3428,7 +3428,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 data-shift="${row.shift_time || ""}">
                 ${row.shift_time || ""}
             </td>
-            <td class="editable deputy-column-cell" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${overtimeSlot}" data-assignment-id="${row.id || ''}" data-shift="${row.shift_time || ""}" data-part="${row.part || ""}">${row.assigned_member || ""}</td>
+            <td class="editable deputy-column-cell" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${overtimeSlot}" data-assignment-id="${row.id || ''}" data-shift="${row.shift_time || ""}" data-part="${row.part || ""}" data-assigned="${row.assigned_member || ""}">${row.assigned_member || ""}</td>
             <td class="editable-assignment" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${overtimeSlot}" data-part="${row.part || ""}">${row.assignment_notes || ""}</td>
         `;
 
