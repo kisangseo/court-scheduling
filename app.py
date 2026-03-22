@@ -1730,45 +1730,53 @@ def update_deputy():
                 data["assigned_member"]
             ))
     else:
+        location_group = data.get("location_group") or data.get("location_detail")
+        location_detail = data.get("location_detail")
+        normalized_part = (data.get("part") or "").strip()
+        incoming_shift_time = (data.get("shift_time") or "").strip()
         cursor.execute("""
             UPDATE dbo.court_assignments
-            SET assigned_member = ?
+            SET assigned_member = ?,
+                shift_time = COALESCE(NULLIF(shift_time, ''), NULLIF(?, ''))
             WHERE assignment_date = ?
               AND courthouse = ?
               AND assignment_type = ?
               AND (
-                    ISNULL(location_group, '') = ISNULL(?, '')
-                    OR ISNULL(location_detail, '') = ISNULL(?, '')
+                    LOWER(LTRIM(RTRIM(ISNULL(location_group, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
+                    OR LOWER(LTRIM(RTRIM(ISNULL(location_detail, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
                   )
-              AND ISNULL(part, '') = ISNULL(?, '')
+              AND LOWER(LTRIM(RTRIM(ISNULL(part, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
         """, (
             data["assigned_member"],
+            incoming_shift_time,
             data["assignment_date"],
             data["courthouse"],
             data["assignment_type"],
-            data["location_detail"],
-            data["location_detail"],
-            data.get("part")
+            location_group,
+            location_detail,
+            normalized_part
         ))
 
         if cursor.rowcount == 0:
             cursor.execute("""
                 UPDATE dbo.court_assignments
-                SET assigned_member = ?
+                SET assigned_member = ?,
+                    shift_time = COALESCE(NULLIF(shift_time, ''), NULLIF(?, ''))
                 WHERE assignment_date = ?
                   AND courthouse = ?
                   AND assignment_type = ?
                   AND (
-                        ISNULL(location_group, '') = ISNULL(?, '')
-                        OR ISNULL(location_detail, '') = ISNULL(?, '')
+                        LOWER(LTRIM(RTRIM(ISNULL(location_group, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
+                        OR LOWER(LTRIM(RTRIM(ISNULL(location_detail, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
                       )
             """, (
                 data["assigned_member"],
+                incoming_shift_time,
                 data["assignment_date"],
                 data["courthouse"],
                 data["assignment_type"],
-                data["location_detail"],
-                data["location_detail"]
+                location_group,
+                location_detail
             ))
 
         if cursor.rowcount == 0:
@@ -1786,13 +1794,15 @@ def update_deputy():
                     assignment_notes,
                     created_at
                 )
-                VALUES (?, ?, ?, NULL, ?, ?, NULL, NULL, ?, NULL, GETDATE())
+                VALUES (?, ?, ?, ?, ?, ?, NULL, NULLIF(?, ''), ?, NULL, GETDATE())
             """, (
                 data["assignment_date"],
                 data["courthouse"],
                 data["assignment_type"],
-                data["location_detail"],
-                data.get("part"),
+                location_group,
+                location_detail,
+                normalized_part,
+                incoming_shift_time,
                 data["assigned_member"]
             ))
 
