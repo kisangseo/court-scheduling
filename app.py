@@ -1922,6 +1922,28 @@ def _fixed_post_requirement_group(row):
     ])
 
 
+def _assignment_dedupe_key(row):
+    """
+    Build a stable dedupe key for assignment rows.
+
+    Courtrooms should dedupe by room/part only. For non-courtroom assignments
+    (including overtime), shift_time is part of slot identity so that distinct
+    shifts are not collapsed into one row.
+    """
+    assignment_type = (row.get("assignment_type") or "").strip()
+    base = (
+        row.get("assignment_date"),
+        (row.get("courthouse") or "").strip(),
+        assignment_type,
+        (row.get("location_group") or "").strip(),
+        (row.get("location_detail") or "").strip(),
+        (row.get("part") or "").strip(),
+    )
+    if assignment_type == "Courtroom":
+        return base
+    return base + ((row.get("shift_time") or "").strip(),)
+
+
 @app.route("/api/assignment-totals")
 def assignment_totals():
     date = request.args.get("date")
@@ -1955,14 +1977,7 @@ def assignment_totals():
     # SAME dedupe as /api/search (prefer row that has assigned_member)
     deduped = {}
     for row in raw_results:
-        key = (
-            row.get("assignment_date"),
-            (row.get("courthouse") or "").strip(),
-            (row.get("assignment_type") or "").strip(),
-            (row.get("location_group") or "").strip(),
-            (row.get("location_detail") or "").strip(),
-            (row.get("part") or "").strip(),
-        )
+        key = _assignment_dedupe_key(row)
         existing = deduped.get(key)
         if not existing:
             deduped[key] = row
@@ -2349,16 +2364,39 @@ def search():
                 NULL,
                 t.assignment_notes,
                 GETDATE()
-            FROM dbo.court_assignment_template t
-            WHERE NOT EXISTS (
+            FROM (
+                SELECT
+                    courthouse,
+                    assignment_type,
+                    location_group,
+                    location_detail,
+                    part,
+                    judge_name,
+                    shift_time,
+                    assignment_notes,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY
+                            courthouse,
+                            assignment_type,
+                            ISNULL(location_group, ''),
+                            ISNULL(location_detail, ''),
+                            ISNULL(part, ''),
+                            ISNULL(shift_time, '')
+                        ORDER BY (SELECT 1)
+                    ) AS rn
+                FROM dbo.court_assignment_template
+            ) t
+            WHERE t.rn = 1
+              AND NOT EXISTS (
                 SELECT 1
-                FROM dbo.court_assignments a
+                FROM dbo.court_assignments a WITH (UPDLOCK, HOLDLOCK)
                 WHERE a.assignment_date = ?
                 AND a.courthouse = t.courthouse
                 AND a.assignment_type = t.assignment_type
                 AND ISNULL(a.location_group,'') = ISNULL(t.location_group,'')
                 AND ISNULL(a.location_detail,'') = ISNULL(t.location_detail,'')
                 AND ISNULL(a.part,'') = ISNULL(t.part,'')
+                AND ISNULL(a.shift_time,'') = ISNULL(t.shift_time,'')
             )
         """, (date, date))
         cursor.connection.commit()
@@ -2414,14 +2452,7 @@ def search():
     # Collapse those rows at read time so the UI shows each assignment once.
     deduped_results = {}
     for row in raw_results:
-        dedupe_key = (
-            row.get("assignment_date"),
-            (row.get("courthouse") or "").strip(),
-            (row.get("assignment_type") or "").strip(),
-            (row.get("location_group") or "").strip(),
-            (row.get("location_detail") or "").strip(),
-            (row.get("part") or "").strip(),
-        )
+        dedupe_key = _assignment_dedupe_key(row)
 
         existing = deduped_results.get(dedupe_key)
         if not existing:
