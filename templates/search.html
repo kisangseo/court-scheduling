@@ -175,6 +175,11 @@ function parseShiftDurationHours(shiftText) {
         const hhmmMatch = normalized.match(/^(\d{1,2})(\d{2})$/);
         if (hhmmMatch) return (Number(hhmmMatch[1]) * 60) + Number(hhmmMatch[2]);
 
+        const twentyFourHourMatch = normalized.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+        if (twentyFourHourMatch) {
+            return (Number(twentyFourHourMatch[1]) * 60) + Number(twentyFourHourMatch[2]);
+        }
+
         const compactMatch = normalized.match(/^(\d{1,2})(?::(\d{2}))?$/);
         if (compactMatch && fallbackSuffix) {
             let hour = Number(compactMatch[1]) % 12;
