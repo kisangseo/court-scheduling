@@ -1739,10 +1739,10 @@ def update_deputy():
               AND courthouse = ?
               AND assignment_type = ?
               AND (
-                    ISNULL(location_group, '') = ISNULL(?, '')
-                    OR ISNULL(location_detail, '') = ISNULL(?, '')
+                    LOWER(LTRIM(RTRIM(ISNULL(location_group, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
+                    OR LOWER(LTRIM(RTRIM(ISNULL(location_detail, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
                   )
-              AND ISNULL(part, '') = ISNULL(?, '')
+              AND LOWER(LTRIM(RTRIM(ISNULL(part, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
         """, (
             data["assigned_member"],
             data["assignment_date"],
@@ -1761,8 +1761,8 @@ def update_deputy():
                   AND courthouse = ?
                   AND assignment_type = ?
                   AND (
-                        ISNULL(location_group, '') = ISNULL(?, '')
-                        OR ISNULL(location_detail, '') = ISNULL(?, '')
+                        LOWER(LTRIM(RTRIM(ISNULL(location_group, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
+                        OR LOWER(LTRIM(RTRIM(ISNULL(location_detail, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
                       )
             """, (
                 data["assigned_member"],
