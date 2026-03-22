@@ -1732,9 +1732,12 @@ def update_deputy():
     else:
         location_group = data.get("location_group") or data.get("location_detail")
         location_detail = data.get("location_detail")
+        normalized_part = (data.get("part") or "").strip()
+        incoming_shift_time = (data.get("shift_time") or "").strip()
         cursor.execute("""
             UPDATE dbo.court_assignments
-            SET assigned_member = ?
+            SET assigned_member = ?,
+                shift_time = COALESCE(NULLIF(shift_time, ''), NULLIF(?, ''))
             WHERE assignment_date = ?
               AND courthouse = ?
               AND assignment_type = ?
@@ -1745,18 +1748,20 @@ def update_deputy():
               AND LOWER(LTRIM(RTRIM(ISNULL(part, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
         """, (
             data["assigned_member"],
+            incoming_shift_time,
             data["assignment_date"],
             data["courthouse"],
             data["assignment_type"],
             location_group,
             location_detail,
-            data.get("part")
+            normalized_part
         ))
 
         if cursor.rowcount == 0:
             cursor.execute("""
                 UPDATE dbo.court_assignments
-                SET assigned_member = ?
+                SET assigned_member = ?,
+                    shift_time = COALESCE(NULLIF(shift_time, ''), NULLIF(?, ''))
                 WHERE assignment_date = ?
                   AND courthouse = ?
                   AND assignment_type = ?
@@ -1766,6 +1771,7 @@ def update_deputy():
                       )
             """, (
                 data["assigned_member"],
+                incoming_shift_time,
                 data["assignment_date"],
                 data["courthouse"],
                 data["assignment_type"],
@@ -1788,14 +1794,15 @@ def update_deputy():
                     assignment_notes,
                     created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL, GETDATE())
+                VALUES (?, ?, ?, ?, ?, ?, NULL, NULLIF(?, ''), ?, NULL, GETDATE())
             """, (
                 data["assignment_date"],
                 data["courthouse"],
                 data["assignment_type"],
                 location_group,
                 location_detail,
-                data.get("part"),
+                normalized_part,
+                incoming_shift_time,
                 data["assigned_member"]
             ))
 
