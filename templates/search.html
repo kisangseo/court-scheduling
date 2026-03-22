@@ -288,7 +288,35 @@ function getTotalOvertimeHours() {
 function updateTotalOtHoursBadge() {
     const badge = document.getElementById('totalOtHoursBadge');
     if (!badge) return;
-    badge.textContent = `OT Hours ${getTotalOvertimeHours().toFixed(2)}`;
+
+    const hasRenderedShiftCells = document.querySelectorAll('.editable-overtime-shift, .editable-fixed-shift').length > 0;
+    let totalHours = 0;
+
+    if (hasRenderedShiftCells) {
+        document.querySelectorAll('.editable-overtime-shift').forEach(shiftCell => {
+            const deputyCell = shiftCell.parentElement?.querySelector('.editable[data-type="Overtime"]');
+            if (!deputyCell) return;
+            if (parseAssignedMemberValue(deputyCell.textContent || '').length === 0) return;
+            const shiftText = (shiftCell.dataset.shift || shiftCell.textContent || '').trim();
+            totalHours += parseShiftDurationHours(shiftText);
+        });
+
+        document.querySelectorAll('.editable-fixed-shift').forEach(shiftCell => {
+            const postName = (shiftCell.dataset.room || '').toLowerCase();
+            if (!postName.includes('ot')) return;
+
+            const deputyCell = shiftCell.parentElement?.querySelector('.editable[data-type="Fixed Post"]');
+            if (!deputyCell) return;
+            if (parseAssignedMemberValue(deputyCell.textContent || '').length === 0) return;
+
+            const shiftText = (shiftCell.dataset.shift || shiftCell.textContent || '').trim();
+            totalHours += parseShiftDurationHours(shiftText);
+        });
+    } else {
+        totalHours = getTotalOvertimeHours(rows);
+    }
+
+    badge.textContent = `OT Hours ${totalHours.toFixed(2)}`;
 }
 
 
@@ -1192,6 +1220,7 @@ function updateAssignmentCountBadges() {
     if (overallBadge) {
         overallBadge.innerHTML = formatCountMetrics(sourceVacant, sourceFilled, sourceOpen);
     }
+    updateTotalOtHoursBadge();
 
     document.querySelectorAll('[data-badge-key]').forEach(el => {
         const key = el.dataset.badgeKey;
@@ -3668,8 +3697,6 @@ function search() {
                 return;
             }
 
-            updateTotalOtHoursBadge();
-
             const grouped = {};
             data.forEach(row => {
                 if (!grouped[row.courthouse]) grouped[row.courthouse] = [];
@@ -3780,6 +3807,7 @@ function search() {
             fetchTransfersForDate().then(() => applyTransferCaptionToRosterAndGrid());
             refreshRosterAssignedState();
             refreshOvertimeShiftPrompts();
+            updateTotalOtHoursBadge(data);
             loadCourtroomMeta(date);
         });
 }
@@ -3953,6 +3981,77 @@ function importPreviousWeekdayEntries() {
         });
 }
 
+function showShiftTimeEditorModal({ title, currentStart, currentEnd, optionsHtmlBuilder, endLabel = 'End', onSave }) {
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.background = 'rgba(0,0,0,0.3)';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.zIndex = '10000';
+
+    const modal = document.createElement('div');
+    modal.style.background = '#fff';
+    modal.style.padding = '12px';
+    modal.style.borderRadius = '8px';
+    modal.style.minWidth = '260px';
+    modal.style.boxShadow = '0 8px 30px rgba(0,0,0,0.25)';
+
+    const heading = document.createElement('div');
+    heading.textContent = title || 'Edit Shift';
+    heading.style.fontWeight = '600';
+    heading.style.marginBottom = '8px';
+
+    const startSelect = document.createElement('select');
+    startSelect.style.width = '100%';
+    startSelect.style.marginBottom = '8px';
+    startSelect.innerHTML = `<option value="">Start</option>${optionsHtmlBuilder(currentStart || '')}`;
+
+    const endSelect = document.createElement('select');
+    endSelect.style.width = '100%';
+    endSelect.style.marginBottom = '10px';
+    endSelect.innerHTML = `<option value="">${endLabel}</option>${optionsHtmlBuilder(currentEnd || '')}`;
+
+    const buttonRow = document.createElement('div');
+    buttonRow.style.display = 'flex';
+    buttonRow.style.justifyContent = 'flex-end';
+    buttonRow.style.gap = '8px';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = 'Cancel';
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.textContent = 'Save';
+
+    buttonRow.appendChild(cancelBtn);
+    buttonRow.appendChild(saveBtn);
+
+    modal.appendChild(heading);
+    modal.appendChild(startSelect);
+    modal.appendChild(endSelect);
+    modal.appendChild(buttonRow);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const close = () => {
+        if (overlay.parentElement) overlay.parentElement.removeChild(overlay);
+    };
+
+    cancelBtn.addEventListener('click', close);
+    overlay.addEventListener('click', evt => {
+        if (evt.target === overlay) close();
+    });
+
+    saveBtn.addEventListener('click', () => {
+        onSave(startSelect.value, endSelect.value);
+        close();
+    });
+
+    startSelect.focus();
+}
+
 window.onload = function() {
     const today = (() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`; })();
     const savedDate = localStorage.getItem('searchPageDate');
@@ -3998,33 +4097,16 @@ document.addEventListener("click", function(e) {
 
     const fixedShiftCell = e.target.closest('.editable-fixed-shift');
     if (fixedShiftCell) {
-        if (fixedShiftCell.querySelector('select')) return;
+        showShiftTimeEditorModal({
+            title: `${fixedShiftCell.dataset.room || 'Fixed Post'} Shift`,
+            currentStart: fixedShiftCell.dataset.startTime || '',
+            currentEnd: fixedShiftCell.dataset.endTime || '',
+            optionsHtmlBuilder: buildHalfHourTimeOptionsHtml,
+            endLabel: 'Finish',
+            onSave: (start, end) => {
+                const display = buildShiftDisplayValue(start, end);
+                if (!start || !end || !display) return;
 
-        const currentStart = fixedShiftCell.dataset.startTime || '';
-        const currentEnd = fixedShiftCell.dataset.endTime || '';
-
-        const editor = document.createElement('div');
-        editor.style.display = 'flex';
-        editor.style.gap = '6px';
-
-        const startSelect = document.createElement('select');
-        const endSelect = document.createElement('select');
-        startSelect.innerHTML = `<option value="">Start</option>${buildHalfHourTimeOptionsHtml(currentStart)}`;
-        endSelect.innerHTML = `<option value="">Finish</option>${buildHalfHourTimeOptionsHtml(currentEnd)}`;
-
-        editor.appendChild(startSelect);
-        editor.appendChild(endSelect);
-
-        fixedShiftCell.innerHTML = '';
-        fixedShiftCell.appendChild(editor);
-        startSelect.focus();
-
-        const commit = ({ forceClose = false } = {}) => {
-            const start = startSelect.value;
-            const end = endSelect.value;
-            const display = buildShiftDisplayValue(start, end);
-
-            if (start && end && display) {
                 fixedShiftCell.dataset.startTime = start;
                 fixedShiftCell.dataset.endTime = end;
                 fixedShiftCell.dataset.shift = display;
@@ -4045,27 +4127,7 @@ document.addEventListener("click", function(e) {
                     shift_time: display
                 });
                 updateTotalOtHoursBadge();
-                return;
             }
-
-            if (!forceClose) {
-                return;
-            }
-
-            fixedShiftCell.textContent = fixedShiftCell.dataset.shift || '';
-        };
-
-        startSelect.addEventListener('change', () => commit());
-        endSelect.addEventListener('change', () => commit());
-
-        [startSelect, endSelect].forEach(select => {
-            select.addEventListener('blur', () => {
-                setTimeout(() => {
-                    if (!fixedShiftCell.contains(document.activeElement) && fixedShiftCell.querySelector('select')) {
-                        commit({ forceClose: true });
-                    }
-                }, 0);
-            });
         });
 
         return;
@@ -4073,33 +4135,16 @@ document.addEventListener("click", function(e) {
 
     const shiftCell = e.target.closest('.editable-overtime-shift');
     if (shiftCell) {
-        if (shiftCell.querySelector('select')) return;
+        showShiftTimeEditorModal({
+            title: `${shiftCell.dataset.room || 'Overtime'} Shift`,
+            currentStart: shiftCell.dataset.startTime || '',
+            currentEnd: shiftCell.dataset.endTime || '',
+            optionsHtmlBuilder: buildTimeOptionsHtml,
+            endLabel: 'End',
+            onSave: (start, end) => {
+                const display = buildOvertimeShiftDisplayValue(start, end);
+                if (!start || !end || !display) return;
 
-        const currentStart = shiftCell.dataset.startTime || '';
-        const currentEnd = shiftCell.dataset.endTime || '';
-
-        const editor = document.createElement('div');
-        editor.style.display = 'flex';
-        editor.style.gap = '6px';
-
-        const startSelect = document.createElement('select');
-        const endSelect = document.createElement('select');
-        startSelect.innerHTML = `<option value="">Start</option>${buildTimeOptionsHtml(currentStart)}`;
-        endSelect.innerHTML = `<option value="">End</option>${buildTimeOptionsHtml(currentEnd)}`;
-
-        editor.appendChild(startSelect);
-        editor.appendChild(endSelect);
-
-        shiftCell.innerHTML = '';
-        shiftCell.appendChild(editor);
-        startSelect.focus();
-
-        const commit = ({ forceClose = false } = {}) => {
-            const start = startSelect.value;
-            const end = endSelect.value;
-            const display = buildOvertimeShiftDisplayValue(start, end);
-
-            if (start && end && display) {
                 shiftCell.dataset.startTime = start;
                 shiftCell.dataset.endTime = end;
                 shiftCell.dataset.shift = display;
@@ -4119,27 +4164,9 @@ document.addEventListener("click", function(e) {
                     part: shiftCell.dataset.part || '',
                     shift_time: display
                 });
-                return;
+                refreshOvertimeShiftPrompts();
+                updateTotalOtHoursBadge();
             }
-
-            if (!forceClose) {
-                return;
-            }
-
-            shiftCell.textContent = shiftCell.dataset.shift || '';
-        };
-
-        startSelect.addEventListener('change', () => commit());
-        endSelect.addEventListener('change', () => commit());
-
-        [startSelect, endSelect].forEach(select => {
-            select.addEventListener('blur', () => {
-                setTimeout(() => {
-                    if (!shiftCell.contains(document.activeElement) && shiftCell.querySelector('select')) {
-                        commit({ forceClose: true });
-                    }
-                }, 0);
-            });
         });
 
         return;
