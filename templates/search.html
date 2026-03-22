@@ -134,9 +134,32 @@ function isMitchellFixedPostOtRow(row) {
 
 function parseShiftDurationHours(shiftText) {
     const raw = (shiftText || '').toString().trim();
-    if (!raw || !raw.includes('-')) return 0;
+    if (!raw) return 0;
 
-    const [startRaw, endRaw] = raw.split('-').map(part => part.trim());
+    const normalizedRangeText = raw
+        .replace(/[\u2013\u2014]/g, '-')
+        .replace(/\bTO\b/gi, '-')
+        .replace(/\s*\n+\s*/g, ' ')
+        .replace(/\s+-\s+/g, '-')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    let startRaw = '';
+    let endRaw = '';
+    if (normalizedRangeText.includes('-')) {
+        const parts = normalizedRangeText.split('-').map(part => part.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+            startRaw = parts[0];
+            endRaw = parts[1];
+        }
+    } else {
+        const tokenMatches = normalizedRangeText.match(/\b\d{1,2}(?::?\d{2})?\s*(?:AM|PM)?\b/gi) || [];
+        if (tokenMatches.length >= 2) {
+            startRaw = tokenMatches[0];
+            endRaw = tokenMatches[1];
+        }
+    }
+
     if (!startRaw || !endRaw) return 0;
 
     const parseMinutes = (value, fallbackSuffix) => {
@@ -174,10 +197,44 @@ function parseShiftDurationHours(shiftText) {
     return diff / 60;
 }
 
+function getDefaultFixedPostShiftRange(row) {
+    if (!row || (row.assignment_type || '').trim() !== 'Fixed Post') return '';
+
+    const courthouse = (row.courthouse || '').trim();
+    const post = normalizeOtPostName(row.location_group || row.location_detail || '');
+    const part = (row.part || '').toString().trim().toLowerCase();
+    const token = normalizeOtPostToken([
+        row.location_group || '',
+        row.location_detail || '',
+        row.assignment_notes || ''
+    ].join(' '));
+
+    const byCourthouse = {
+        Mitchell: {
+            'rover ot|1630-1900': '4:30 PM - 7:00 PM',
+            'rover|1630-1900': '4:30 PM - 7:00 PM',
+            'judges ot|0700': '7:00 AM - 3:00 PM',
+            'judges|0700': '7:00 AM - 3:00 PM'
+        }
+    };
+
+    const matchKey = `${post}|${part}`;
+    const exactMatch = byCourthouse[courthouse]?.[matchKey] || '';
+    if (exactMatch) return exactMatch;
+
+    if (courthouse === 'Mitchell') {
+        if (token.includes('roverot') || (token.includes('rover') && token.includes('ot'))) return '4:30 PM - 7:00 PM';
+        if (token.includes('judgesot') || (token.includes('judges') && token.includes('ot'))) return '7:00 AM - 3:00 PM';
+    }
+
+    return '';
+}
+
 function getOvertimeHoursForRow(row) {
     const candidates = [
         row?.shift_time || '',
         row?.location_detail || '',
+        getDefaultFixedPostShiftRange(row),
         row?.part || ''
     ];
 
@@ -186,11 +243,6 @@ function getOvertimeHoursForRow(row) {
         if (parsed > 0) return parsed;
     }
 
-    if (!isMitchellFixedPostOtRow(row)) return 0;
-
-    const normalizedPart = (row?.part || '').toString().trim().toLowerCase();
-    if (normalizedPart === '0700') return 8;
-    if (normalizedPart === '1630-1900') return 2.5;
     return 0;
 }
 
