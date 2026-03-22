@@ -4332,7 +4332,8 @@ document.getElementById("saveAssignments").addEventListener("click", function() 
         .map(payload => createPostTask("/api/update-shift-time", payload, "Failed to save overtime shift"));
 
     runTasksSequentially(courtroomLocationTasks)
-        .then(() => runTasksInParallel([...assignmentTasks, ...notesTasks, ...judgeTasks, ...courtroomMetaTasks, ...shiftTimeTasks]))
+        .then(() => runTasksInParallel([...assignmentTasks, ...notesTasks, ...judgeTasks, ...courtroomMetaTasks]))
+        .then(() => runTasksSequentially(shiftTimeTasks))
         .then(() => {
             pendingAssignments = {};
             pendingNotes = {};
