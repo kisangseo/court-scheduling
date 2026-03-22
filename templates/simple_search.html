@@ -191,6 +191,26 @@ function parseShiftDurationHours(shiftText) {
     return diff / 60;
 }
 
+function getOvertimeHoursForRow(row) {
+    const candidates = [
+        row?.shift_time || '',
+        row?.location_detail || '',
+        row?.part || ''
+    ];
+
+    for (const candidate of candidates) {
+        const parsed = parseShiftDurationHours(candidate);
+        if (parsed > 0) return parsed;
+    }
+
+    if (!isMitchellFixedPostOtRow(row)) return 0;
+
+    const normalizedPart = (row?.part || '').toString().trim().toLowerCase();
+    if (normalizedPart === '0700') return 8;
+    if (normalizedPart === '1630-1900') return 2.5;
+    return 0;
+}
+
 function getTotalOvertimeHours(rows) {
     return (rows || []).reduce((total, row) => {
         const type = (row.assignment_type || '').trim();
@@ -201,7 +221,7 @@ function getTotalOvertimeHours(rows) {
         if (!isMitchellFixedOt && !isOvertimeTableRow) return total;
         if (!(row.assigned_member || '').trim()) return total;
 
-        return total + parseShiftDurationHours(row.shift_time || row.location_detail || row.part || '');
+        return total + getOvertimeHoursForRow(row);
     }, 0);
 }
 
