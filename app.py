@@ -1730,6 +1730,8 @@ def update_deputy():
                 data["assigned_member"]
             ))
     else:
+        location_group = data.get("location_group") or data.get("location_detail")
+        location_detail = data.get("location_detail")
         cursor.execute("""
             UPDATE dbo.court_assignments
             SET assigned_member = ?
@@ -1746,8 +1748,8 @@ def update_deputy():
             data["assignment_date"],
             data["courthouse"],
             data["assignment_type"],
-            data["location_detail"],
-            data["location_detail"],
+            location_group,
+            location_detail,
             data.get("part")
         ))
 
@@ -1767,8 +1769,8 @@ def update_deputy():
                 data["assignment_date"],
                 data["courthouse"],
                 data["assignment_type"],
-                data["location_detail"],
-                data["location_detail"]
+                location_group,
+                location_detail
             ))
 
         if cursor.rowcount == 0:
@@ -1786,12 +1788,13 @@ def update_deputy():
                     assignment_notes,
                     created_at
                 )
-                VALUES (?, ?, ?, NULL, ?, ?, NULL, NULL, ?, NULL, GETDATE())
+                VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL, GETDATE())
             """, (
                 data["assignment_date"],
                 data["courthouse"],
                 data["assignment_type"],
-                data["location_detail"],
+                location_group,
+                location_detail,
                 data.get("part"),
                 data["assigned_member"]
             ))
