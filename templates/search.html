@@ -1048,13 +1048,16 @@ function buildOvertimeShiftDisplayValue(startValue, endValue) {
 }
 
 function queueOvertimeShiftUpdate(payload) {
-    const key = [
-        payload.assignment_date,
-        payload.courthouse,
-        payload.assignment_type,
-        payload.location_detail,
-        payload.part
-    ].join('|');
+    const key = payload.assignment_id
+        ? `id:${payload.assignment_id}`
+        : [
+            payload.assignment_date,
+            payload.courthouse,
+            payload.assignment_type,
+            payload.location_detail,
+            payload.part,
+            payload.shift_time || ''
+        ].join('|');
 
     pendingShiftTimes[key] = payload;
     updateSaveStatusBadge();
@@ -2281,6 +2284,7 @@ function clearExistingAssignmentForName(name, excludeCell) {
 function setPendingAssignmentFromCell(cell) {
     const assignedName = getAssignedNamesFromCell(cell).join(' || ');
     const payload = {
+        assignment_id: cell.dataset.assignmentId ? Number(cell.dataset.assignmentId) : null,
         assignment_date: cell.dataset.date,
         courthouse: cell.dataset.courthouse,
         assignment_type: cell.dataset.type,
@@ -2291,13 +2295,16 @@ function setPendingAssignmentFromCell(cell) {
         assigned_member: assignedName
     };
 
-    const key = [
-        payload.assignment_date,
-        payload.courthouse,
-        payload.assignment_type,
-        payload.location_detail,
-        payload.part
-    ].join('|');
+    const key = payload.assignment_id
+        ? `id:${payload.assignment_id}`
+        : [
+            payload.assignment_date,
+            payload.courthouse,
+            payload.assignment_type,
+            payload.location_detail,
+            payload.part,
+            payload.shift_time || ''
+        ].join('|');
 
     pendingAssignments[key] = payload;
     updateSaveStatusBadge();
@@ -3416,11 +3423,12 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 data-courthouse="${courthouse}"
                 data-type="Overtime"
                 data-room="${overtimeSlot}"
+                data-assignment-id="${row.id || ''}"
                 data-part="${row.part || ""}"
                 data-shift="${row.shift_time || ""}">
                 ${row.shift_time || ""}
             </td>
-            <td class="editable deputy-column-cell" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${overtimeSlot}" data-shift="${row.shift_time || ""}" data-part="${row.part || ""}">${row.assigned_member || ""}</td>
+            <td class="editable deputy-column-cell" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${overtimeSlot}" data-assignment-id="${row.id || ''}" data-shift="${row.shift_time || ""}" data-part="${row.part || ""}" data-assigned="${row.assigned_member || ""}">${row.assigned_member || ""}</td>
             <td class="editable-assignment" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${overtimeSlot}" data-part="${row.part || ""}">${row.assignment_notes || ""}</td>
         `;
 
