@@ -563,6 +563,11 @@ function isMitchellFixedPostOtRow(row) {
     const courthouse = (row?.courthouse || '').trim();
     if (type !== 'Fixed Post' || courthouse !== 'Mitchell') return false;
 
+    const normalizedPost = normalizeOtPostName(row?.location_group || '');
+    const normalizedPart = (row?.part || '').toString().trim().toLowerCase();
+    if ((normalizedPost === 'rover' || normalizedPost === 'rover ot') && normalizedPart === '1630-1900') return true;
+    if ((normalizedPost === 'judges' || normalizedPost === 'judges ot') && normalizedPart === '0700') return true;
+
     const textBlob = [
         row?.location_group || '',
         row?.location_detail || '',
@@ -635,6 +640,7 @@ function getTotalOvertimeHours(assignments) {
             && ['Mitchell', 'Cummings', 'Juvenile'].includes(courthouse);
 
         if (!isSelectedFixedPostOt && !isSelectedOvertimeTableRow) return total;
+        if (parseAssignedMemberValue(row.assigned_member || '').length === 0) return total;
 
         return total + parseShiftDurationHours(row.shift_time || row.location_detail || row.part || '');
     }, 0);
