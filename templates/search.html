@@ -251,19 +251,46 @@ function getOvertimeHoursForRow(row) {
     return 0;
 }
 
-function getTotalOvertimeHours(rows) {
-    return (rows || []).reduce((total, row) => {
-        const type = (row.assignment_type || '').trim();
-        const courthouse = (row.courthouse || '').trim();
-        const isMitchellFixedOt = isMitchellFixedPostOtRow(row);
-        const isOvertimeTableRow = type === 'Overtime' && ['Mitchell', 'Cummings', 'Juvenile'].includes(courthouse);
-        if (!isMitchellFixedOt && !isOvertimeTableRow) return total;
-        if (parseAssignedMemberValue(row.assigned_member || '').length === 0) return total;
-        return total + getOvertimeHoursForRow(row);
-    }, 0);
+function getTotalOvertimeHours() {
+    let total = 0;
+
+    // Mitchell fixed-post OT rows like Rover O/T and Judges O/T
+    document.querySelectorAll('.editable-fixed-shift').forEach(shiftCell => {
+        const row = shiftCell.closest('tr');
+        if (!row) return;
+
+        const postName = (row.children[0]?.textContent || '').trim().toLowerCase();
+        const deputyCell = row.querySelector('.editable[data-type="Fixed Post"]');
+        const hasDeputy = parseAssignedMemberValue(deputyCell?.textContent || '').length > 0;
+        if (!hasDeputy) return;
+
+        const isOtPost =
+            postName.includes('rover o/t') ||
+            postName.includes('judges o/t') ||
+            postName.includes('rover ot') ||
+            postName.includes('judges ot');
+
+        if (!isOtPost) return;
+
+        total += parseShiftDurationHours((shiftCell.dataset.shift || shiftCell.textContent || '').trim());
+    });
+
+    // Regular OT table rows
+    document.querySelectorAll('.editable-overtime-shift').forEach(shiftCell => {
+        const row = shiftCell.closest('tr');
+        if (!row) return;
+
+        const deputyCell = row.querySelector('.editable[data-type="Overtime"]');
+        const hasDeputy = parseAssignedMemberValue(deputyCell?.textContent || '').length > 0;
+        if (!hasDeputy) return;
+
+        total += parseShiftDurationHours((shiftCell.dataset.shift || shiftCell.textContent || '').trim());
+    });
+
+    return total;
 }
 
-function updateTotalOtHoursBadge(rows) {
+function updateTotalOtHoursBadge() {
     const badge = document.getElementById('totalOtHoursBadge');
     if (!badge) return;
 
@@ -296,6 +323,8 @@ function updateTotalOtHoursBadge(rows) {
 
     badge.textContent = `OT Hours ${totalHours.toFixed(2)}`;
 }
+
+
 
 function refreshOvertimeShiftPrompts() {
     document.querySelectorAll('.editable-overtime-shift').forEach(shiftCell => {
@@ -4109,7 +4138,7 @@ document.addEventListener("click", function(e) {
                     memberCell.dataset.shift = display;
                 }
 
-                queueOvertimeShiftUpdate({
+               queueOvertimeShiftUpdate({
                     assignment_date: fixedShiftCell.dataset.date,
                     courthouse: fixedShiftCell.dataset.courthouse,
                     assignment_type: fixedShiftCell.dataset.type,
