@@ -558,6 +558,24 @@ function normalizeOtPostToken(value) {
     return (value || '').toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
+function isMitchellFixedPostOtRow(row) {
+    const type = (row?.assignment_type || '').trim();
+    const courthouse = (row?.courthouse || '').trim();
+    if (type !== 'Fixed Post' || courthouse !== 'Mitchell') return false;
+
+    const textBlob = [
+        row?.location_group || '',
+        row?.location_detail || '',
+        row?.part || '',
+        row?.assignment_notes || ''
+    ].join(' ');
+    const token = normalizeOtPostToken(textBlob);
+    return token.includes('roverot')
+        || token.includes('judgesot')
+        || (token.includes('rover') && token.includes('ot'))
+        || (token.includes('judges') && token.includes('ot'));
+}
+
 function parseShiftDurationHours(shiftText) {
     const raw = (shiftText || '').toString().trim();
     if (!raw || !raw.includes('-')) return 0;
@@ -610,15 +628,7 @@ function getTotalOvertimeHours(assignments) {
     return rows.reduce((total, row) => {
         const type = (row.assignment_type || '').trim();
         const courthouse = (row.courthouse || '').trim();
-        const postName = normalizeOtPostName(row.location_group || '');
-        const postToken = normalizeOtPostToken(row.location_group || '');
-        const isRoverOtPost = postToken.includes('roverot') || postToken === 'rover';
-        const isJudgesOtPost = postToken.includes('judgesot') || postToken === 'judges';
-
-        const isSelectedFixedPostOt =
-            type === 'Fixed Post'
-            && courthouse === 'Mitchell'
-            && (isRoverOtPost || isJudgesOtPost || postName.includes('rover o/t') || postName.includes('judges o/t'));
+        const isSelectedFixedPostOt = isMitchellFixedPostOtRow(row);
 
         const isSelectedOvertimeTableRow =
             type === 'Overtime'
