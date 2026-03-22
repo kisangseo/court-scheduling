@@ -4139,6 +4139,9 @@ document.addEventListener("click", function(e) {
                 if (memberCell) {
                     memberCell.dataset.shift = display;
                 }
+                const assignedMember = memberCell
+                    ? getAssignedNamesFromCell(memberCell).join(' || ')
+                    : '';
 
                queueOvertimeShiftUpdate({
                     assignment_date: fixedShiftCell.dataset.date,
@@ -4147,7 +4150,8 @@ document.addEventListener("click", function(e) {
                     location_detail: fixedShiftCell.dataset.room,
                     location_group: fixedShiftCell.dataset.room,
                     part: fixedShiftCell.dataset.part || '',
-                    shift_time: display
+                    shift_time: display,
+                    assigned_member: assignedMember
                 });
                 updateTotalOtHoursBadge();
             }
@@ -4177,6 +4181,9 @@ document.addEventListener("click", function(e) {
                 if (memberCell) {
                     memberCell.dataset.shift = display;
                 }
+                const assignedMember = memberCell
+                    ? getAssignedNamesFromCell(memberCell).join(' || ')
+                    : '';
 
                 queueOvertimeShiftUpdate({
                     assignment_date: shiftCell.dataset.date,
@@ -4185,7 +4192,8 @@ document.addEventListener("click", function(e) {
                     location_detail: shiftCell.dataset.room,
                     location_group: shiftCell.dataset.room,
                     part: shiftCell.dataset.part || '',
-                    shift_time: display
+                    shift_time: display,
+                    assigned_member: assignedMember
                 });
                 refreshOvertimeShiftPrompts();
                 updateTotalOtHoursBadge();

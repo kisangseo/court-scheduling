@@ -1444,6 +1444,11 @@ def update_judge_name():
 def update_shift_time():
     data = request.json or {}
     assignment_type = data.get("assignment_type")
+    location_group = (data.get("location_group") or data.get("location_detail") or "").strip()
+    location_detail = (data.get("location_detail") or "").strip()
+    normalized_part = (data.get("part") or "").strip()
+    assigned_member = (data.get("assigned_member") or "").strip() or None
+    shift_time = (data.get("shift_time") or "").strip() or None
 
     conn = get_conn()
     cursor = conn.cursor()
@@ -1458,12 +1463,12 @@ def update_shift_time():
               AND ISNULL(location_group, '') = ISNULL(?, '')
               AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
         """, (
-            data.get("shift_time"),
+            shift_time,
             data.get("assignment_date"),
             data.get("courthouse"),
             assignment_type,
-            data.get("location_group") or data.get("location_detail"),
-            data.get("part")
+            location_group,
+            normalized_part
         ))
     else:
         cursor.execute("""
@@ -1473,18 +1478,18 @@ def update_shift_time():
               AND courthouse = ?
               AND assignment_type = ?
               AND (
-                    ISNULL(location_group, '') = ISNULL(?, '')
-                    OR ISNULL(location_detail, '') = ISNULL(?, '')
+                    LOWER(LTRIM(RTRIM(ISNULL(location_group, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
+                    OR LOWER(LTRIM(RTRIM(ISNULL(location_detail, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
                   )
-              AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
+              AND LOWER(LTRIM(RTRIM(ISNULL(part, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
         """, (
-            data.get("shift_time"),
+            shift_time,
             data.get("assignment_date"),
             data.get("courthouse"),
             assignment_type,
-            data.get("location_group") or data.get("location_detail"),
-            data.get("location_detail"),
-            data.get("part")
+            location_group,
+            location_detail,
+            normalized_part
         ))
 
         if cursor.rowcount == 0:
@@ -1495,16 +1500,16 @@ def update_shift_time():
                   AND courthouse = ?
                   AND assignment_type = ?
                   AND (
-                        ISNULL(location_group, '') = ISNULL(?, '')
-                        OR ISNULL(location_detail, '') = ISNULL(?, '')
+                        LOWER(LTRIM(RTRIM(ISNULL(location_group, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
+                        OR LOWER(LTRIM(RTRIM(ISNULL(location_detail, '')))) = LOWER(LTRIM(RTRIM(ISNULL(?, ''))))
                       )
             """, (
-                data.get("shift_time"),
+                shift_time,
                 data.get("assignment_date"),
                 data.get("courthouse"),
                 assignment_type,
-                data.get("location_group") or data.get("location_detail"),
-                data.get("location_detail")
+                location_group,
+                location_detail
             ))
 
     if cursor.rowcount == 0:
@@ -1528,9 +1533,9 @@ def update_shift_time():
                 data.get("assignment_date"),
                 data.get("courthouse"),
                 assignment_type,
-                data.get("location_group") or data.get("location_detail"),
-                data.get("part"),
-                data.get("shift_time")
+                location_group,
+                normalized_part,
+                shift_time
             ))
         else:
             cursor.execute("""
@@ -1547,15 +1552,16 @@ def update_shift_time():
                     assignment_notes,
                     created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL, GETDATE())
+                VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, GETDATE())
             """, (
                 data.get("assignment_date"),
                 data.get("courthouse"),
                 assignment_type,
-                data.get("location_group") if data.get("location_group") else None,
-                data.get("location_detail"),
-                data.get("part"),
-                data.get("shift_time")
+                location_group if location_group else None,
+                location_detail,
+                normalized_part,
+                shift_time,
+                assigned_member
             ))
 
     conn.commit()
