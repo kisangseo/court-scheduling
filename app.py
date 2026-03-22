@@ -2364,16 +2364,39 @@ def search():
                 NULL,
                 t.assignment_notes,
                 GETDATE()
-            FROM dbo.court_assignment_template t
-            WHERE NOT EXISTS (
+            FROM (
+                SELECT
+                    courthouse,
+                    assignment_type,
+                    location_group,
+                    location_detail,
+                    part,
+                    judge_name,
+                    shift_time,
+                    assignment_notes,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY
+                            courthouse,
+                            assignment_type,
+                            ISNULL(location_group, ''),
+                            ISNULL(location_detail, ''),
+                            ISNULL(part, ''),
+                            ISNULL(shift_time, '')
+                        ORDER BY (SELECT 1)
+                    ) AS rn
+                FROM dbo.court_assignment_template
+            ) t
+            WHERE t.rn = 1
+              AND NOT EXISTS (
                 SELECT 1
-                FROM dbo.court_assignments a
+                FROM dbo.court_assignments a WITH (UPDLOCK, HOLDLOCK)
                 WHERE a.assignment_date = ?
                 AND a.courthouse = t.courthouse
                 AND a.assignment_type = t.assignment_type
                 AND ISNULL(a.location_group,'') = ISNULL(t.location_group,'')
                 AND ISNULL(a.location_detail,'') = ISNULL(t.location_detail,'')
                 AND ISNULL(a.part,'') = ISNULL(t.part,'')
+                AND ISNULL(a.shift_time,'') = ISNULL(t.shift_time,'')
             )
         """, (date, date))
         cursor.connection.commit()
