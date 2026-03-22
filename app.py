@@ -1963,6 +1963,23 @@ def _assignment_row_score(row):
     return (has_assigned, has_shift, has_notes, created_at)
 
 
+def _assignment_row_id_value(row):
+    try:
+        return int(row.get("id"))
+    except (TypeError, ValueError):
+        return 2**31 - 1
+
+
+def _should_replace_deduped_row(existing, incoming):
+    incoming_score = _assignment_row_score(incoming)
+    existing_score = _assignment_row_score(existing)
+    if incoming_score > existing_score:
+        return True
+    if incoming_score < existing_score:
+        return False
+    return _assignment_row_id_value(incoming) < _assignment_row_id_value(existing)
+
+
 @app.route("/api/assignment-totals")
 def assignment_totals():
     date = request.args.get("date")
@@ -1972,6 +1989,7 @@ def assignment_totals():
     # Reuse the exact same query + dedupe behavior as /api/search
     query = """
         SELECT TOP 200
+            id,
             assignment_date,
             courthouse,
             assignment_type,
@@ -2004,7 +2022,7 @@ def assignment_totals():
             deduped[key] = row
             continue
 
-        if _assignment_row_score(row) > _assignment_row_score(existing):
+        if _should_replace_deduped_row(existing, row):
             deduped[key] = row
 
     rows = list(deduped.values())
@@ -2482,7 +2500,7 @@ def search():
             deduped_results[dedupe_key] = row
             continue
 
-        if _assignment_row_score(row) > _assignment_row_score(existing):
+        if _should_replace_deduped_row(existing, row):
             deduped_results[dedupe_key] = row
 
     results = list(deduped_results.values())
