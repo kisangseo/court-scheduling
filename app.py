@@ -1648,6 +1648,22 @@ def update_deputy():
     conn = get_conn()
     cursor = conn.cursor()
 
+    assignment_id = data.get("assignment_id")
+    if assignment_id:
+        cursor.execute("""
+            UPDATE dbo.court_assignments
+            SET assigned_member = ?
+            WHERE id = ?
+              AND assignment_date = ?
+        """, (
+            data["assigned_member"],
+            assignment_id,
+            data["assignment_date"]
+        ))
+        conn.commit()
+        conn.close()
+        return {"status": "success", "updated": cursor.rowcount}
+
     is_fixed_post = data.get("assignment_type") == "Fixed Post"
     is_courtroom = data.get("assignment_type") == "Courtroom"
 
@@ -1922,6 +1938,31 @@ def _fixed_post_requirement_group(row):
     ])
 
 
+def _assignment_dedupe_key(row):
+    """
+    Build a stable dedupe key for assignment rows.
+    """
+    return (
+        row.get("assignment_date"),
+        (row.get("courthouse") or "").strip(),
+        (row.get("assignment_type") or "").strip(),
+        (row.get("location_group") or "").strip(),
+        (row.get("location_detail") or "").strip(),
+        (row.get("part") or "").strip(),
+    )
+
+
+def _assignment_row_score(row):
+    """
+    Prefer rows with assignment data populated when duplicates exist.
+    """
+    has_assigned = 1 if (row.get("assigned_member") or "").strip() else 0
+    has_shift = 1 if (row.get("shift_time") or "").strip() else 0
+    has_notes = 1 if (row.get("assignment_notes") or "").strip() else 0
+    created_at = str(row.get("created_at") or "")
+    return (has_assigned, has_shift, has_notes, created_at)
+
+
 @app.route("/api/assignment-totals")
 def assignment_totals():
     date = request.args.get("date")
@@ -1938,8 +1979,10 @@ def assignment_totals():
             location_detail,
             judge_name,
             part,
+            shift_time,
             assigned_member,
-            assignment_notes
+            assignment_notes,
+            created_at
         FROM dbo.court_assignments
         WHERE assignment_date = ?
         ORDER BY assignment_date DESC
@@ -1955,20 +1998,13 @@ def assignment_totals():
     # SAME dedupe as /api/search (prefer row that has assigned_member)
     deduped = {}
     for row in raw_results:
-        key = (
-            row.get("assignment_date"),
-            (row.get("courthouse") or "").strip(),
-            (row.get("assignment_type") or "").strip(),
-            (row.get("location_group") or "").strip(),
-            (row.get("location_detail") or "").strip(),
-            (row.get("part") or "").strip(),
-        )
+        key = _assignment_dedupe_key(row)
         existing = deduped.get(key)
         if not existing:
             deduped[key] = row
             continue
 
-        if not (existing.get("assigned_member") or "").strip() and (row.get("assigned_member") or "").strip():
+        if _assignment_row_score(row) > _assignment_row_score(existing):
             deduped[key] = row
 
     rows = list(deduped.values())
@@ -2349,16 +2385,39 @@ def search():
                 NULL,
                 t.assignment_notes,
                 GETDATE()
-            FROM dbo.court_assignment_template t
-            WHERE NOT EXISTS (
+            FROM (
+                SELECT
+                    courthouse,
+                    assignment_type,
+                    location_group,
+                    location_detail,
+                    part,
+                    judge_name,
+                    shift_time,
+                    assignment_notes,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY
+                            courthouse,
+                            assignment_type,
+                            ISNULL(location_group, ''),
+                            ISNULL(location_detail, ''),
+                            ISNULL(part, ''),
+                            ISNULL(shift_time, '')
+                        ORDER BY (SELECT 1)
+                    ) AS rn
+                FROM dbo.court_assignment_template
+            ) t
+            WHERE t.rn = 1
+              AND NOT EXISTS (
                 SELECT 1
-                FROM dbo.court_assignments a
+                FROM dbo.court_assignments a WITH (UPDLOCK, HOLDLOCK)
                 WHERE a.assignment_date = ?
                 AND a.courthouse = t.courthouse
                 AND a.assignment_type = t.assignment_type
                 AND ISNULL(a.location_group,'') = ISNULL(t.location_group,'')
                 AND ISNULL(a.location_detail,'') = ISNULL(t.location_detail,'')
                 AND ISNULL(a.part,'') = ISNULL(t.part,'')
+                AND ISNULL(a.shift_time,'') = ISNULL(t.shift_time,'')
             )
         """, (date, date))
         cursor.connection.commit()
@@ -2367,6 +2426,7 @@ def search():
 
     query = """
         SELECT TOP 200
+            a.id,
             a.assignment_date,
             a.courthouse,
             a.assignment_type,
@@ -2377,6 +2437,7 @@ def search():
             a.shift_time,
             a.assigned_member,
             a.assignment_notes,
+            a.created_at,
             ISNULL(m.is_high_profile, 0) AS is_high_profile
         FROM dbo.court_assignments a
         LEFT JOIN dbo.courtroom_meta m
@@ -2414,25 +2475,14 @@ def search():
     # Collapse those rows at read time so the UI shows each assignment once.
     deduped_results = {}
     for row in raw_results:
-        dedupe_key = (
-            row.get("assignment_date"),
-            (row.get("courthouse") or "").strip(),
-            (row.get("assignment_type") or "").strip(),
-            (row.get("location_group") or "").strip(),
-            (row.get("location_detail") or "").strip(),
-            (row.get("part") or "").strip(),
-        )
+        dedupe_key = _assignment_dedupe_key(row)
 
         existing = deduped_results.get(dedupe_key)
         if not existing:
             deduped_results[dedupe_key] = row
             continue
 
-        existing_assigned = (existing.get("assigned_member") or "").strip()
-        incoming_assigned = (row.get("assigned_member") or "").strip()
-
-        # Prefer the row that has an assigned member populated.
-        if not existing_assigned and incoming_assigned:
+        if _assignment_row_score(row) > _assignment_row_score(existing):
             deduped_results[dedupe_key] = row
 
     results = list(deduped_results.values())
