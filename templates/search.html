@@ -2281,6 +2281,7 @@ function clearExistingAssignmentForName(name, excludeCell) {
 function setPendingAssignmentFromCell(cell) {
     const assignedName = getAssignedNamesFromCell(cell).join(' || ');
     const payload = {
+        assignment_id: cell.dataset.assignmentId ? Number(cell.dataset.assignmentId) : null,
         assignment_date: cell.dataset.date,
         courthouse: cell.dataset.courthouse,
         assignment_type: cell.dataset.type,
@@ -3416,11 +3417,12 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 data-courthouse="${courthouse}"
                 data-type="Overtime"
                 data-room="${overtimeSlot}"
+                data-assignment-id="${row.id || ''}"
                 data-part="${row.part || ""}"
                 data-shift="${row.shift_time || ""}">
                 ${row.shift_time || ""}
             </td>
-            <td class="editable deputy-column-cell" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${overtimeSlot}" data-shift="${row.shift_time || ""}" data-part="${row.part || ""}">${row.assigned_member || ""}</td>
+            <td class="editable deputy-column-cell" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${overtimeSlot}" data-assignment-id="${row.id || ''}" data-shift="${row.shift_time || ""}" data-part="${row.part || ""}">${row.assigned_member || ""}</td>
             <td class="editable-assignment" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Overtime" data-room="${overtimeSlot}" data-part="${row.part || ""}">${row.assignment_notes || ""}</td>
         `;
 
