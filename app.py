@@ -1980,6 +1980,38 @@ def _should_replace_deduped_row(existing, incoming):
     return _assignment_row_id_value(incoming) < _assignment_row_id_value(existing)
 
 
+def _cleanup_overtime_duplicates(cursor, target_date):
+    """
+    Remove duplicate overtime rows for a date, keeping the best canonical row.
+    """
+    cursor.execute("""
+        ;WITH ranked AS (
+            SELECT
+                id,
+                ROW_NUMBER() OVER (
+                    PARTITION BY
+                        assignment_date,
+                        courthouse,
+                        assignment_type,
+                        ISNULL(location_group, ''),
+                        ISNULL(location_detail, ''),
+                        ISNULL(part, '')
+                    ORDER BY
+                        CASE WHEN LTRIM(RTRIM(ISNULL(assigned_member, ''))) <> '' THEN 1 ELSE 0 END DESC,
+                        CASE WHEN LTRIM(RTRIM(ISNULL(shift_time, ''))) <> '' THEN 1 ELSE 0 END DESC,
+                        id ASC
+                ) AS rn
+            FROM dbo.court_assignments
+            WHERE assignment_date = ?
+              AND assignment_type = 'Overtime'
+        )
+        DELETE ca
+        FROM dbo.court_assignments ca
+        INNER JOIN ranked r ON r.id = ca.id
+        WHERE r.rn > 1
+    """, (target_date,))
+
+
 @app.route("/api/assignment-totals")
 def assignment_totals():
     date = request.args.get("date")
@@ -2376,7 +2408,8 @@ def search():
     name = request.args.get("name")
     date = request.args.get("date")
     if date:
-        cursor = get_conn().cursor()
+        conn_for_seed = get_conn()
+        cursor = conn_for_seed.cursor()
         cursor.execute("""
             INSERT INTO dbo.court_assignments (
                 assignment_date,
@@ -2438,8 +2471,9 @@ def search():
                 AND ISNULL(a.shift_time,'') = ISNULL(t.shift_time,'')
             )
         """, (date, date))
-        cursor.connection.commit()
-        cursor.connection.close()
+        _cleanup_overtime_duplicates(cursor, date)
+        conn_for_seed.commit()
+        conn_for_seed.close()
     courthouse = request.args.get("courthouse")
 
     query = """
