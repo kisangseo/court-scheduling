@@ -201,8 +201,13 @@ function getDefaultFixedPostShiftRange(row) {
     if (!row || (row.assignment_type || '').trim() !== 'Fixed Post') return '';
 
     const courthouse = (row.courthouse || '').trim();
-    const post = normalizeOtPostName(row.location_group || '');
+    const post = normalizeOtPostName(row.location_group || row.location_detail || '');
     const part = (row.part || '').toString().trim().toLowerCase();
+    const token = normalizeOtPostToken([
+        row.location_group || '',
+        row.location_detail || '',
+        row.assignment_notes || ''
+    ].join(' '));
 
     const byCourthouse = {
         Mitchell: {
@@ -214,7 +219,15 @@ function getDefaultFixedPostShiftRange(row) {
     };
 
     const matchKey = `${post}|${part}`;
-    return byCourthouse[courthouse]?.[matchKey] || '';
+    const exactMatch = byCourthouse[courthouse]?.[matchKey] || '';
+    if (exactMatch) return exactMatch;
+
+    if (courthouse === 'Mitchell') {
+        if (token.includes('roverot') || (token.includes('rover') && token.includes('ot'))) return '4:30 PM - 7:00 PM';
+        if (token.includes('judgesot') || (token.includes('judges') && token.includes('ot'))) return '7:00 AM - 3:00 PM';
+    }
+
+    return '';
 }
 
 function getOvertimeHoursForRow(row) {
