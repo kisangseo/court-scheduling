@@ -975,9 +975,9 @@ function buildHalfHourTimeOptionsHtml(selectedValue) {
 
 function getCourtroomTimeOptionValues() {
     const values = [];
-    for (let hour = 7; hour <= 18; hour++) {
+    for (let hour = 7; hour <= 22; hour++) {
         for (let minute = 0; minute < 60; minute += 15) {
-            if (hour === 18 && minute > 0) continue;
+            if (hour === 22 && minute > 0) continue;
             const meridiem = hour >= 12 ? 'PM' : 'AM';
             let hour12 = hour % 12;
             if (hour12 === 0) hour12 = 12;
