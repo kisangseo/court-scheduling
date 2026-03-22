@@ -175,7 +175,7 @@ function parseShiftDurationHours(shiftText) {
         const hhmmMatch = normalized.match(/^(\d{1,2})(\d{2})$/);
         if (hhmmMatch) return (Number(hhmmMatch[1]) * 60) + Number(hhmmMatch[2]);
 
-        const twentyFourHourMatch = normalized.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+        const twentyFourHourMatch = normalized.match(/^([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/);
         if (twentyFourHourMatch) {
             return (Number(twentyFourHourMatch[1]) * 60) + Number(twentyFourHourMatch[2]);
         }
@@ -991,7 +991,7 @@ function parseDisplayTimeTo24Hour(value) {
 }
 
 function parseShiftTimeDisplayValue(value) {
-    const text = (value || '').trim();
+    const text = (value || '').trim().replace(/[\u2013\u2014]/g, '-');
     const rangeMatch = text.match(/^(\d{1,2}:\d{2}\s*[AP]M)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)$/i);
     if (rangeMatch) {
         return {
@@ -1000,10 +1000,26 @@ function parseShiftTimeDisplayValue(value) {
         };
     }
 
+    const range24Match = text.match(/^([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\s*-\s*([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/);
+    if (range24Match) {
+        return {
+            start: `${String(Number(range24Match[1])).padStart(2, '0')}:${range24Match[2]}`,
+            end: `${String(Number(range24Match[3])).padStart(2, '0')}:${range24Match[4]}`
+        };
+    }
+
     const singleMatch = text.match(/^(\d{1,2}:\d{2}\s*[AP]M)$/i);
     if (singleMatch) {
         return {
             start: parseDisplayTimeTo24Hour(singleMatch[1]),
+            end: ''
+        };
+    }
+
+    const single24Match = text.match(/^([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/);
+    if (single24Match) {
+        return {
+            start: `${String(Number(single24Match[1])).padStart(2, '0')}:${single24Match[2]}`,
             end: ''
         };
     }
