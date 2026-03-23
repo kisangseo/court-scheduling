@@ -260,6 +260,8 @@ function getTotalOvertimeHours() {
         if (!row) return;
 
         const postName = (row.children[0]?.textContent || '').trim().toLowerCase();
+        const part = (shiftCell.dataset.part || '').toLowerCase();
+        const courthouse = (shiftCell.dataset.courthouse || '').toLowerCase();
         const deputyCell = row.querySelector('.editable[data-type="Fixed Post"]');
         const hasDeputy = parseAssignedMemberValue(deputyCell?.textContent || '').length > 0;
         if (!hasDeputy) return;
@@ -268,7 +270,8 @@ function getTotalOvertimeHours() {
             postName.includes('rover o/t') ||
             postName.includes('judges o/t') ||
             postName.includes('rover ot') ||
-            postName.includes('judges ot');
+            postName.includes('judges ot') ||
+            (courthouse === 'cummings' && part === '1600' && postName.includes('garage'));
 
         if (!isOtPost) return;
 
@@ -308,7 +311,10 @@ function updateTotalOtHoursBadge() {
 
         document.querySelectorAll('.editable-fixed-shift').forEach(shiftCell => {
             const postName = (shiftCell.dataset.room || '').toLowerCase();
-            if (!postName.includes('ot')) return;
+            const part = (shiftCell.dataset.part || '').toLowerCase();
+            const courthouse = (shiftCell.dataset.courthouse || '').toLowerCase();
+            const isGarageOt = courthouse === 'cummings' && postName === 'garage' && part === '1600';
+            if (!postName.includes('ot') && !isGarageOt) return;
 
             const deputyCell = shiftCell.parentElement?.querySelector('.editable[data-type="Fixed Post"]');
             if (!deputyCell) return;
@@ -3245,7 +3251,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 { post: "Console Room", detail: "8:30 AM - 4:30 PM", part: "0830-2" },
                 { post: "Lock Up East", detail: "8:00 AM - 4:00 PM", part: "0800" },
                 { post: "Garage", detail: "6:00 AM - 2:00 PM", part: "0600" },
-                { post: "Garage", detail: "4:30 PM - 9:00 PM", part: "1600" },
+                { post: "Garage", display_post: "Garage OT", detail: "4:30 PM - 9:00 PM", part: "1600" },
                 { post: "Family Desk", detail: "8:00 AM - 4:00 PM", part: "0800" },
                 { post: "Transportation", detail: "", part: "" },
                 { post: "Tow Truck", detail: "7:00 AM - 3:00 PM", part: "0700-1500" }
@@ -3282,9 +3288,11 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
             const parsedFixedShift = parseShiftTimeDisplayValue(effectiveShift);
 
             const tr = document.createElement("tr");
-            const showPost = index === 0 || posts[index - 1].post !== slot.post;
+            const slotLabel = slot.display_post || slot.post;
+            const previousSlotLabel = index > 0 ? (posts[index - 1].display_post || posts[index - 1].post) : "";
+            const showPost = index === 0 || previousSlotLabel !== slotLabel;
             tr.innerHTML = `
-                <td>${showPost ? slot.post : ""}</td>
+                <td>${showPost ? slotLabel : ""}</td>
                 <td class="editable-fixed-shift"
                     data-date="${selectedDate}"
                     data-courthouse="${courthouse}"
