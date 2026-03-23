@@ -3444,9 +3444,10 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
     overtimeRows.forEach(row => {
         const parsedShift = parseOvertimeShiftRange(row.shift_time || '');
         const overtimeSlot = row.location_detail || row.location_group || "";
+        const displayOvertimeSlot = overtimeSlot === "OT Security Sweep" ? "" : overtimeSlot;
         const tr = document.createElement("tr");
         tr.innerHTML = `
-            <td>${overtimeSlot}</td>
+            <td>${displayOvertimeSlot}</td>
             <td class="editable-overtime-shift"
                 data-date="${selectedDate}"
                 data-courthouse="${courthouse}"
