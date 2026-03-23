@@ -535,6 +535,15 @@ function isCourtSecurityDeputy(deputy) {
 
 }
 
+function normalizeRankValue(rank) {
+    return (rank || "").toUpperCase().replace(/[^A-Z]/g, "");
+}
+
+function isExcludedCourtSecurityRank(deputy) {
+    const excludedRanks = new Set(["LT", "CAPT", "MJR"]);
+    return excludedRanks.has(normalizeRankValue(deputy.rank));
+}
+
 function getDeputyRole(deputy) {
     return (deputy.role || deputy.capacity_tag || "").trim();
 }
@@ -1299,7 +1308,7 @@ function updateAssignmentCountBadges() {
 }
 
 function getCourtSecurityRosterStats() {
-    const courtSecurity = rawDeputies.filter(isCourtSecurityDeputy);
+    const courtSecurity = rawDeputies.filter(dep => isCourtSecurityDeputy(dep) && !isExcludedCourtSecurityRank(dep));
     const outCount = courtSecurity.filter(dep => !isDeputyAvailable(dep)).length;
     const postedNames = getPostedNameSetForPostsAndCourtrooms();
     const postedCount = courtSecurity.filter(dep => postedNames.has((dep.full_name || '').trim())).length;
@@ -1629,7 +1638,7 @@ function renderRoster() {
     courtList.id = "courtSecurityRosterList";
     courtList.className = "draggable-roster-list";
     const courtSecurityDeputies = allDeputies
-        .filter(isCourtSecurityDeputy)
+        .filter(dep => isCourtSecurityDeputy(dep) && !isExcludedCourtSecurityRank(dep))
         .sort((a, b) => getCourtSecuritySortRank(a) - getCourtSecuritySortRank(b)
             || (getDeputyCapacityTag(a) || getDeputyRole(a)).localeCompare(getDeputyCapacityTag(b) || getDeputyRole(b))
             || (a.full_name || "").localeCompare(b.full_name || ""));
