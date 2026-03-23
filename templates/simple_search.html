@@ -724,6 +724,15 @@ function isCourtSecurityDeputy(deputy) {
     return division === 'court security';
 }
 
+function normalizeRankValue(rank) {
+    return (rank || '').toUpperCase().replace(/[^A-Z]/g, '');
+}
+
+function isExcludedCourtSecurityRank(deputy) {
+    const excludedRanks = new Set(['LT', 'CAPT', 'MJR']);
+    return excludedRanks.has(normalizeRankValue(deputy.rank));
+}
+
 function normalizeRoleValue(role) {
     return (role || '').toUpperCase().replace(/\s+/g, '').replace(/_/g, '-');
 }
@@ -884,7 +893,7 @@ function renderRoster() {
     const courtHeading = document.createElement('h4');
     courtHeading.className = 'roster-section-title roster-section-title-court';
 
-    const courtSecurityAll = allDeputies.filter(isCourtSecurityDeputy);
+    const courtSecurityAll = allDeputies.filter(dep => isCourtSecurityDeputy(dep) && !isExcludedCourtSecurityRank(dep));
     const outCount = courtSecurityAll.filter(dep => !isDeputyAvailable(dep)).length;
     const postedCount = courtSecurityAll.filter(dep => postedNames.has((dep.full_name || '').trim())).length;
     const availableCount = Math.max(courtSecurityAll.filter(dep => isDeputyAvailable(dep)).length - postedCount, 0);

@@ -177,6 +177,15 @@ function isCourtSecurityDeputy(deputy) {
     return division === "court security";
 }
 
+function normalizeRankValue(rank) {
+    return (rank || "").toUpperCase().replace(/[^A-Z]/g, "");
+}
+
+function isExcludedCourtSecurityRank(deputy) {
+    const excludedRanks = new Set(["LT", "CAPT", "MJR"]);
+    return excludedRanks.has(normalizeRankValue(deputy.rank));
+}
+
 
 function parseDateOnly(value) {
     if (!value) return null;
@@ -668,7 +677,7 @@ function getTotalNeededFromAssignments(assignments) {
 
 
 function updateCourtSecurityStatusCounts(deputies, totalNeeded) {
-    const cs = deputies.filter(isCourtSecurityDeputy);
+    const cs = deputies.filter(dep => isCourtSecurityDeputy(dep) && !isExcludedCourtSecurityRank(dep));
     const scheduledLeave = cs.filter(dep => statusIncludes(dep, "Scheduled Leave")).length;
     const unscheduledLeave = cs.filter(dep => statusIncludes(dep, "Unscheduled Leave")).length;
     const unavailable = cs.filter(dep => statusIncludes(dep, "Unavailable")).length;
