@@ -552,6 +552,24 @@ function getDeputyCapacityTag(deputy) {
     return (deputy.capacity_tag || "").trim();
 }
 
+function isConsoleCapability(role) {
+    return normalizeRoleValue(role) === 'CONSOLE';
+}
+
+function isConsoleDeputy(deputy) {
+    return isConsoleCapability(getDeputyCapacityTag(deputy) || getDeputyRole(deputy));
+}
+
+function isConsoleRoomFixedPost(courthouse, post) {
+    const normalizedCourthouse = (courthouse || '').trim().toLowerCase();
+    if (normalizedCourthouse !== 'mitchell' && normalizedCourthouse !== 'cummings') {
+        return false;
+    }
+
+    const normalizedPost = (post || '').trim().toLowerCase();
+    return normalizedPost.includes('console room');
+}
+
 function normalizeRoleValue(role) {
     return (role || "").toUpperCase().replace(/\s+/g, "").replace(/_/g, "-");
 }
@@ -823,6 +841,10 @@ function shouldCountFixedPostSlot(slotMeta = {}) {
         return false;
     }
 
+    if (isConsoleRoomFixedPost(courthouse, post)) {
+        return false;
+    }
+
     return true;
 }
 
@@ -868,13 +890,18 @@ function getPostedNameSetForPostsAndCourtrooms() {
             chips.forEach(chip => {
                 const name = (chip.dataset.name || chip.textContent || '').trim();
                 if (!name || isChipMarkedTransferredOut(chip)) return;
+                const deputy = getDeputyRecordByName(name);
+                if (deputy && isConsoleDeputy(deputy)) return;
                 names.add(name);
             });
             return;
         }
 
         parseAssignedMemberValue(cell.textContent).forEach(name => {
-            if (!isCurrentlyTransferredOut(name)) names.add(name);
+            if (isCurrentlyTransferredOut(name)) return;
+            const deputy = getDeputyRecordByName(name);
+            if (deputy && isConsoleDeputy(deputy)) return;
+            names.add(name);
         });
     });
 
@@ -1308,7 +1335,11 @@ function updateAssignmentCountBadges() {
 }
 
 function getCourtSecurityRosterStats() {
-    const courtSecurity = rawDeputies.filter(dep => isCourtSecurityDeputy(dep) && !isExcludedCourtSecurityRank(dep));
+    const courtSecurity = rawDeputies.filter(dep =>
+        isCourtSecurityDeputy(dep)
+        && !isExcludedCourtSecurityRank(dep)
+        && !isConsoleDeputy(dep)
+    );
     const outCount = courtSecurity.filter(dep => !isDeputyAvailable(dep)).length;
     const postedNames = getPostedNameSetForPostsAndCourtrooms();
     const postedCount = courtSecurity.filter(dep => postedNames.has((dep.full_name || '').trim())).length;
@@ -2043,6 +2074,10 @@ function isEligibleForCell(cell, role) {
         const courthouse = (cell.dataset.courthouse || '').trim();
         const shift = (cell.dataset.shift || '').trim();
         const slotPart = getBaseFixedPostPart((cell.dataset.part || '').trim());
+
+        if (isConsoleCapability(role)) {
+            return isConsoleRoomFixedPost(courthouse, post);
+        }
 
         if (requiresK9SecurityRole(courthouse, post)) {
             return isK9Capability(role);

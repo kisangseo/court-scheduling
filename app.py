@@ -448,6 +448,7 @@ def _canonical_capacity_tag(value):
 
     direct_options = {
         _normalize_capacity_tag_key("DEPUTY"): "DEPUTY",
+        _normalize_capacity_tag_key("Console"): "Console",
         _normalize_capacity_tag_key("SPO-A: Court Trained (FT)"): "SPO-A: Court Trained (FT)",
         _normalize_capacity_tag_key("SPO-A: Court Trained (contractor)"): "SPO-A: Court Trained (contractor)",
         _normalize_capacity_tag_key("SPO-A: (FT)"): "SPO-A: (FT)",
