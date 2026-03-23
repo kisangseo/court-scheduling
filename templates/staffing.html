@@ -40,6 +40,10 @@ document.addEventListener("DOMContentLoaded", function() {
         return (text || "").toString().trim().toLowerCase();
     }
 
+    function isConsoleTag(deputy) {
+        return normalize(deputy && deputy.capacity_tag) === "console";
+    }
+
     function isOutStatus(statusText) {
         const status = normalize(statusText);
         if (!status) {
@@ -89,7 +93,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     function buildDynamicTable(deputies) {
         const courtSecurityDeputies = deputies.filter(
-            dep => normalize(dep.division) === "court security"
+            dep => normalize(dep.division) === "court security" && !isConsoleTag(dep)
         );
 
         const assignedCourtSecurity = sortByName(courtSecurityDeputies).map(dep => dep.full_name);

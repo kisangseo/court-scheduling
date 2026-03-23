@@ -267,6 +267,20 @@ function normalizeCapacityTag(deputy) {
     return (deputy.capacity_tag || deputy.capability_tag || '').toString().trim().toUpperCase();
 }
 
+function isConsoleTag(deputy) {
+    return normalizeCapacityTag(deputy) === 'CONSOLE';
+}
+
+function isConsoleRoomFixedPost(courthouse, post) {
+    const normalizedCourthouse = (courthouse || '').toString().trim().toLowerCase();
+    if (normalizedCourthouse !== 'mitchell' && normalizedCourthouse !== 'cummings') {
+        return false;
+    }
+
+    const normalizedPost = (post || '').toString().trim().toLowerCase();
+    return normalizedPost.includes('console room');
+}
+
 const courtSecurityRoleOrder = [
     'DEPUTY',
     'SPO-A: Court Trained (FT)',
@@ -332,6 +346,7 @@ function summarizeAvailableDeputies(availableDeputies) {
     };
 
     (availableDeputies || []).forEach(dep => {
+        if (isConsoleTag(dep)) return;
         summary.total += 1;
         const tag = normalizeCapacityTag(dep);
 
@@ -450,6 +465,9 @@ function getSearchPageFixedPostRowsForCounts(assignments) {
     const buildSlots = (courthouse, posts) => {
         const postsType = allFixedPosts.filter(row => (row.courthouse || '').trim() === courthouse);
         return posts.map(slot => {
+            if (isConsoleRoomFixedPost(courthouse, slot.post)) {
+                return null;
+            }
             const slotMatches = postsType.filter(row => {
                 if ((row.location_group || '').trim() !== slot.post) return false;
                 if (slot.part && (row.part || '').trim() === slot.part) return true;
@@ -467,7 +485,7 @@ function getSearchPageFixedPostRowsForCounts(assignments) {
                 location_group: slot.post,
                 part: slot.part || ''
             };
-        });
+        }).filter(Boolean);
     };
 
     return [
@@ -701,7 +719,7 @@ async function loadSummary() {
             const deputies = await deputiesRes.json();
             const assignments = await assignmentsRes.json();
             const courtroomMetaRows = await courtroomMetaRes.json();
-            const courtSecurityDeputies = deputies.filter(isCourtSecurity);
+            const courtSecurityDeputies = deputies.filter(dep => isCourtSecurity(dep) && !isConsoleTag(dep));
             const unavailableBreakdown = courtSecurityDeputies.reduce((totals, dep) => {
                 const breakdown = getUnavailableBreakdown(dep.current_status);
                 totals.scheduled_leave += breakdown.scheduled_leave;
