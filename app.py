@@ -1918,6 +1918,14 @@ def _fixed_post_requirement_group(row):
     if courthouse == "mitchell" and post == "calvert" and part == "0800-3":
         return None
 
+    # Mitchell Lockup West second slot and select Juvenile slots are optional and do not count toward VFO.
+    if courthouse == "mitchell" and post in {"lock up west", "lockup west"} and part == "open-2":
+        return None
+    if courthouse == "juvenile" and post == "lobby" and part == "0830-1630-3":
+        return None
+    if courthouse == "juvenile" and post == "lockup":
+        return None
+
     # Armed requirement rules:
     # - Jury Room + St. Paul are treated as one combined armed post.
     if courthouse == "mitchell" and post in {"jury room", "st. paul"}:
