@@ -833,6 +833,18 @@ function shouldCountFixedPostSlot(slotMeta = {}) {
         return false;
     }
 
+    if (courthouse === 'mitchell' && (post === 'lock up west' || post === 'lockup west') && part === 'open-2') {
+        return false;
+    }
+
+    if (courthouse === 'juvenile' && post === 'lobby' && part === '0830-1630-3') {
+        return false;
+    }
+
+    if (courthouse === 'juvenile' && post === 'lockup') {
+        return false;
+    }
+
     if (courthouse === 'cummings' && post === 'cummings' && part === '0830-2') {
         return false;
     }
