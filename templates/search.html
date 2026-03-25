@@ -70,6 +70,8 @@ let pendingJudges = {};
 let pendingCourtroomMeta = {};
 let pendingCourtroomLocationMoves = {};
 let pendingShiftTimes = {};
+const DETAILS_NOTES_COURTHOUSE = "Details";
+const DETAILS_NOTES_TYPE = "Details Note";
 let changedRows = new Set();
 let allDeputies = [];
 let rawDeputies = [];
@@ -374,6 +376,31 @@ function queueAssignmentNoteUpdate(payload) {
 
     pendingNotes[key] = payload;
     updateSaveStatusBadge();
+}
+
+function getDetailsNoteCells() {
+    return Array.from(document.querySelectorAll('#detailsNotesTable .details-note-cell'));
+}
+
+function renderDetailsNotesRows(selectedDate, rows) {
+    const byLocation = new Map((rows || []).map(row => [row.location_detail || '', row.assignment_notes || '']));
+    getDetailsNoteCells().forEach(cell => {
+        const noteIndex = cell.dataset.noteIndex || '';
+        const locationDetail = `Row ${noteIndex}`;
+        cell.dataset.date = selectedDate || '';
+        cell.dataset.locationDetail = locationDetail;
+        cell.textContent = byLocation.get(locationDetail) || '';
+    });
+}
+
+function loadDetailsNotesForDate(selectedDate) {
+    renderDetailsNotesRows(selectedDate, []);
+    if (!selectedDate) return Promise.resolve();
+
+    return fetch(`/api/get-details-notes?date=${encodeURIComponent(selectedDate)}`)
+        .then(res => res.json())
+        .then(rows => renderDetailsNotesRows(selectedDate, rows))
+        .catch(() => renderDetailsNotesRows(selectedDate, []));
 }
 
 
@@ -3811,6 +3838,8 @@ function search() {
                 .filter(Boolean)
                 .forEach(row => row.innerHTML = "");
 
+            loadDetailsNotesForDate(date);
+
             if (!postsRow || !courtroomsRow || !overtimeRow) {
                 console.warn("Search layout row missing; skipping render to avoid runtime crash.");
                 return;
@@ -4492,6 +4521,24 @@ document.addEventListener('click', function(e) {
     }
 });
 
+document.addEventListener('focusout', function(e) {
+    const noteCell = e.target.closest('.details-note-cell');
+    if (!noteCell) return;
+
+    const assignmentDate = document.getElementById("date")?.value || noteCell.dataset.date || '';
+    const locationDetail = noteCell.dataset.locationDetail || '';
+    if (!assignmentDate || !locationDetail) return;
+
+    queueAssignmentNoteUpdate({
+        assignment_date: assignmentDate,
+        courthouse: DETAILS_NOTES_COURTHOUSE,
+        assignment_type: DETAILS_NOTES_TYPE,
+        location_detail: locationDetail,
+        part: '',
+        assignment_notes: noteCell.textContent || ''
+    });
+});
+
 function openRoster() {
     window.open("/roster", "_blank");
 }
@@ -4535,10 +4582,10 @@ window.addEventListener("beforeunload", function (e) {
             </tr>
         </thead>
         <tbody>
-            <tr><td contenteditable="true" aria-label="Details note row 1"></td></tr>
-            <tr><td contenteditable="true" aria-label="Details note row 2"></td></tr>
-            <tr><td contenteditable="true" aria-label="Details note row 3"></td></tr>
-            <tr><td contenteditable="true" aria-label="Details note row 4"></td></tr>
+            <tr><td class="details-note-cell" data-note-index="1" contenteditable="true" aria-label="Details note row 1"></td></tr>
+            <tr><td class="details-note-cell" data-note-index="2" contenteditable="true" aria-label="Details note row 2"></td></tr>
+            <tr><td class="details-note-cell" data-note-index="3" contenteditable="true" aria-label="Details note row 3"></td></tr>
+            <tr><td class="details-note-cell" data-note-index="4" contenteditable="true" aria-label="Details note row 4"></td></tr>
         </tbody>
     </table>
 </div>
