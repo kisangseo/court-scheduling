@@ -712,7 +712,7 @@ function loadRoster() {
 
     Promise.all([
         fetch(`/api/deputies?date=${date}`).then(res => res.json()),
-        fetch(`/api/search?date=${date}&dedupe=false`).then(res => res.json())
+        fetch(`/api/search?date=${date}`).then(res => res.json())
     ]).then(([deputiesData, assignments]) => {
         const deputies = (deputiesData || []).sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
         window.currentDeputies = deputies;
