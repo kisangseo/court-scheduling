@@ -190,6 +190,7 @@ def _ensure_courtroom_meta_table(cursor):
                 location_detail NVARCHAR(100) NOT NULL,
                 part NVARCHAR(100) NOT NULL DEFAULT '',
                 start_time NVARCHAR(16) NULL,
+                break_time NVARCHAR(16) NULL,
                 restart_time NVARCHAR(16) NULL,
                 adjourned_time NVARCHAR(16) NULL,
                 is_down BIT NOT NULL DEFAULT 0,
@@ -197,6 +198,11 @@ def _ensure_courtroom_meta_table(cursor):
                 updated_at DATETIME NOT NULL DEFAULT GETDATE(),
                 CONSTRAINT PK_courtroom_meta PRIMARY KEY (assignment_date, courthouse, location_detail, part)
             )
+        END
+
+        IF COL_LENGTH('dbo.courtroom_meta', 'break_time') IS NULL
+        BEGIN
+            ALTER TABLE dbo.courtroom_meta ADD break_time NVARCHAR(16) NULL;
         END
 
         IF COL_LENGTH('dbo.courtroom_meta', 'is_high_profile') IS NULL
@@ -1843,7 +1849,7 @@ def get_courtroom_meta():
     _ensure_courtroom_meta_table(cursor)
 
     cursor.execute("""
-        SELECT assignment_date, courthouse, location_detail, part, start_time, restart_time, adjourned_time, is_down, is_high_profile
+        SELECT assignment_date, courthouse, location_detail, part, start_time, break_time, restart_time, adjourned_time, is_down, is_high_profile
         FROM dbo.courtroom_meta
         WHERE assignment_date = ?
     """, (date,))
@@ -1855,10 +1861,11 @@ def get_courtroom_meta():
             "location_detail": row[2],
             "part": row[3] or "",
             "start_time": row[4] or "",
-            "restart_time": row[5] or "",
-            "adjourned_time": row[6] or "",
-            "is_down": bool(row[7]),
-            "is_high_profile": bool(row[8])
+            "break_time": row[5] or "",
+            "restart_time": row[6] or "",
+            "adjourned_time": row[7] or "",
+            "is_down": bool(row[8]),
+            "is_high_profile": bool(row[9])
         }
         for row in cursor.fetchall()
     ]
@@ -2137,20 +2144,22 @@ def update_courtroom_meta():
         WHEN MATCHED THEN
             UPDATE SET
                 start_time = ?,
+                break_time = ?,
                 restart_time = ?,
                 adjourned_time = ?,
                 is_down = ?,
                 is_high_profile = ?,
                 updated_at = GETDATE()
         WHEN NOT MATCHED THEN
-            INSERT (assignment_date, courthouse, location_detail, part, start_time, restart_time, adjourned_time, is_down, is_high_profile, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE());
+            INSERT (assignment_date, courthouse, location_detail, part, start_time, break_time, restart_time, adjourned_time, is_down, is_high_profile, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE());
     """, (
         assignment_date,
         courthouse,
         location_detail,
         data.get("part") or "",
         data.get("start_time") or None,
+        data.get("break_time") or None,
         data.get("restart_time") or None,
         data.get("adjourned_time") or None,
         1 if data.get("is_down") else 0,
@@ -2160,6 +2169,7 @@ def update_courtroom_meta():
         location_detail,
         data.get("part") or "",
         data.get("start_time") or None,
+        data.get("break_time") or None,
         data.get("restart_time") or None,
         data.get("adjourned_time") or None,
         1 if data.get("is_down") else 0,
@@ -2215,7 +2225,7 @@ def update_courtroom_location():
         ))
 
         cursor.execute("""
-            SELECT start_time, restart_time, adjourned_time, is_down, is_high_profile
+            SELECT start_time, break_time, restart_time, adjourned_time, is_down, is_high_profile
             FROM dbo.courtroom_meta
             WHERE assignment_date = ?
               AND courthouse = ?
@@ -2230,7 +2240,7 @@ def update_courtroom_location():
         source_meta = cursor.fetchone()
 
         cursor.execute("""
-            SELECT start_time, restart_time, adjourned_time, is_down, is_high_profile
+            SELECT start_time, break_time, restart_time, adjourned_time, is_down, is_high_profile
             FROM dbo.courtroom_meta
             WHERE assignment_date = ?
               AND courthouse = ?
@@ -2246,14 +2256,16 @@ def update_courtroom_location():
 
         if source_meta and target_meta:
             merged_start = source_meta[0] or target_meta[0]
-            merged_restart = source_meta[1] or target_meta[1]
-            merged_adjourned = source_meta[2] or target_meta[2]
-            merged_is_down = 1 if (bool(source_meta[3]) or bool(target_meta[3])) else 0
-            merged_is_high_profile = 1 if (bool(source_meta[4]) or bool(target_meta[4])) else 0
+            merged_break = source_meta[1] or target_meta[1]
+            merged_restart = source_meta[2] or target_meta[2]
+            merged_adjourned = source_meta[3] or target_meta[3]
+            merged_is_down = 1 if (bool(source_meta[4]) or bool(target_meta[4])) else 0
+            merged_is_high_profile = 1 if (bool(source_meta[5]) or bool(target_meta[5])) else 0
 
             cursor.execute("""
                 UPDATE dbo.courtroom_meta
                 SET start_time = ?,
+                    break_time = ?,
                     restart_time = ?,
                     adjourned_time = ?,
                     is_down = ?,
@@ -2265,6 +2277,7 @@ def update_courtroom_location():
                   AND LOWER(ISNULL(part, '')) = LOWER(ISNULL(?, ''))
             """, (
                 merged_start,
+                merged_break,
                 merged_restart,
                 merged_adjourned,
                 merged_is_down,

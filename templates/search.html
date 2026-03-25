@@ -1145,6 +1145,7 @@ function setPendingCourtroomMetaFromRow(rowEl) {
         location_detail: (rowEl.dataset.room || '').trim(),
         part: rowEl.dataset.part || "",
         start_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="start_time"]')?.value || ""),
+        break_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="break_time"]')?.value || ""),
         restart_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="restart_time"]')?.value || ""),
         adjourned_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="adjourned_time"]')?.value || ""),
         is_down: !!rowEl.querySelector('.courtroom-down-checkbox')?.checked,
@@ -2818,12 +2819,13 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
     table.innerHTML = `
         <thead>
             <tr>
-                <th>Building</th>
-                <th>Judge</th>
-                <th>Room</th>
-                <th>Assignment</th>
+                <th class="courtroom-building-col">Building</th>
+                <th class="courtroom-judge-col">Judge</th>
+                <th class="courtroom-room-col">Room</th>
+                <th class="courtroom-assignment-col">Assignment</th>
                 <th class="deputy-column">Deputy</th>
                 <th class="courtroom-time-header">Start</th>
+                <th class="courtroom-time-header">Break</th>
                 <th class="courtroom-time-header">Restart</th>
                 <th class="courtroom-time-header">Adjourned</th>
                 
@@ -3112,7 +3114,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
                 : row.__isRetiredJudgesHeader
                     ? "courtroom-group-row retired-judges-group-row"
                     : "courtroom-group-row juvenile-group-row";
-            groupTr.innerHTML = `<td colspan="9">${row.__isFamilyHeader ? "Family" : row.__isRetiredJudgesHeader ? "Retired Judges" : "Juvenile"}</td>`;
+            groupTr.innerHTML = `<td colspan="10">${row.__isFamilyHeader ? "Family" : row.__isRetiredJudgesHeader ? "Retired Judges" : "Juvenile"}</td>`;
             body.appendChild(groupTr);
             return;
         }
@@ -3156,6 +3158,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
             </td>
             <td class="editable deputy-column-cell" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" data-assigned="${row.assigned_member || ""}">${row.assigned_member || ""}</td>
             <td class="courtroom-time-cell"><select class="courtroom-time-input courtroom-time-select" data-field="start_time" aria-label="${courthouse} ${room} start time"><option value=""></option>${buildCourtroomTimeOptionsHtml('')}</select></td>
+            <td class="courtroom-time-cell"><select class="courtroom-time-input courtroom-time-select" data-field="break_time" aria-label="${courthouse} ${room} break time"><option value=""></option>${buildCourtroomTimeOptionsHtml('')}</select></td>
             <td class="courtroom-time-cell"><select class="courtroom-time-input courtroom-time-select" data-field="restart_time" aria-label="${courthouse} ${room} restart time"><option value=""></option>${buildCourtroomTimeOptionsHtml('')}</select></td>
             <td class="courtroom-time-cell"><select class="courtroom-time-input courtroom-time-select" data-field="adjourned_time" aria-label="${courthouse} ${room} adjourned time"><option value=""></option>${buildCourtroomTimeOptionsHtml('')}</select></td>
             
@@ -3409,6 +3412,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                 <th>Assignment</th>
                 <th class="deputy-column">Deputy</th>
                 <th class="courtroom-time-header">Start</th>
+                <th class="courtroom-time-header">Break</th>
                 <th class="courtroom-time-header">Restart</th>
                 <th class="courtroom-time-header">Adjourned</th>
                 
@@ -3457,6 +3461,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
             </td>
             <td class="editable deputy-column-cell" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" data-assigned="${row ? (row.assigned_member || "") : ""}">${row ? (row.assigned_member || "") : ""}</td>
             <td class="courtroom-time-cell"><select class="courtroom-time-input courtroom-time-select" data-field="start_time" aria-label="${courthouse} ${room} start time"><option value=""></option>${buildCourtroomTimeOptionsHtml('')}</select></td>
+            <td class="courtroom-time-cell"><select class="courtroom-time-input courtroom-time-select" data-field="break_time" aria-label="${courthouse} ${room} break time"><option value=""></option>${buildCourtroomTimeOptionsHtml('')}</select></td>
             <td class="courtroom-time-cell"><select class="courtroom-time-input courtroom-time-select" data-field="restart_time" aria-label="${courthouse} ${room} restart time"><option value=""></option>${buildCourtroomTimeOptionsHtml('')}</select></td>
             <td class="courtroom-time-cell"><select class="courtroom-time-input courtroom-time-select" data-field="adjourned_time" aria-label="${courthouse} ${room} adjourned time"><option value=""></option>${buildCourtroomTimeOptionsHtml('')}</select></td>
             
@@ -3949,12 +3954,14 @@ function loadCourtroomMeta(date) {
                 const pendingMeta = pendingCourtroomMeta[pendingKey] || null;
 
                 const startInput = row.querySelector('.courtroom-time-input[data-field="start_time"]');
+                const breakInput = row.querySelector('.courtroom-time-input[data-field="break_time"]');
                 const restartInput = row.querySelector('.courtroom-time-input[data-field="restart_time"]');
                 const adjournedInput = row.querySelector('.courtroom-time-input[data-field="adjourned_time"]');
                 const downInput = row.querySelector('.courtroom-down-checkbox');
                 const highProfileInput = row.querySelector('.courtroom-high-profile-checkbox');
 
                 if (startInput) startInput.value = parseStoredTimeToInputValue((pendingMeta && pendingMeta.start_time) || meta.start_time || '');
+                if (breakInput) breakInput.value = parseStoredTimeToInputValue((pendingMeta && pendingMeta.break_time) || meta.break_time || '');
                 if (restartInput) restartInput.value = parseStoredTimeToInputValue((pendingMeta && pendingMeta.restart_time) || meta.restart_time || '');
                 if (adjournedInput) adjournedInput.value = parseStoredTimeToInputValue((pendingMeta && pendingMeta.adjourned_time) || meta.adjourned_time || '');
                 if (downInput) downInput.checked = pendingMeta ? !!pendingMeta.is_down : !!meta.is_down;
