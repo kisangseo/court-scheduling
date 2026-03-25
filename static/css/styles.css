@@ -462,42 +462,39 @@ h4 {
 }
 
 .courtroom-time-input {
-    width: 52px;
+    width: 100%;
+    min-width: 0;
     padding: 2px 4px;
     border: 1px solid #d0d5dd;
     border-radius: 2px;
+    box-sizing: border-box;
 }
 
 .courtroom-table {
     table-layout: auto !important;
 }
 
-.courtroom-table th:nth-child(2),
-.courtroom-table td:nth-child(2) {
-    width: 5%;
-    white-space: normal;
-}
-.courtroom-table th:nth-child(1),
-.courtroom-table td:nth-child(1) {
-  width: 140px;  /* Judge */
+.courtroom-table .courtroom-building-col {
+    width: 1%;
+    white-space: nowrap;
 }
 
+.courtroom-table .courtroom-judge-col {
+    width: 140px;
+}
 
-
-.courtroom-table th:nth-child(3),
-.courtroom-table td:nth-child(3) {
+.courtroom-table .courtroom-room-col {
     width: 12%;
 }
 
-.courtroom-table th:nth-child(4),
-.courtroom-table td:nth-child(4) {
+.courtroom-table .courtroom-assignment-col {
     width: 28%;
 }
 
 .courtroom-time-header,
 .courtroom-time-cell {
-    width: 60px;
-    max-width: 60px;
+    width: 80px;
+    min-width: 80px;
 }
 
 .courtroom-down-checkbox {
