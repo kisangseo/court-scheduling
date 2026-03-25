@@ -2527,6 +2527,8 @@ def search():
         conn_for_seed.commit()
         conn_for_seed.close()
     courthouse = request.args.get("courthouse")
+    dedupe_param = (request.args.get("dedupe") or "true").strip().lower()
+    should_dedupe = dedupe_param not in {"0", "false", "no", "off"}
 
     query = """
         SELECT TOP 200
@@ -2575,21 +2577,24 @@ def search():
     columns = [column[0] for column in cursor.description]
     raw_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
-    # Some historical data contains duplicate assignment rows for the same slot.
-    # Collapse those rows at read time so the UI shows each assignment once.
-    deduped_results = {}
-    for row in raw_results:
-        dedupe_key = _assignment_dedupe_key(row)
+    if should_dedupe:
+        # Some historical data contains duplicate assignment rows for the same slot.
+        # Collapse those rows at read time so the UI shows each assignment once.
+        deduped_results = {}
+        for row in raw_results:
+            dedupe_key = _assignment_dedupe_key(row)
 
-        existing = deduped_results.get(dedupe_key)
-        if not existing:
-            deduped_results[dedupe_key] = row
-            continue
+            existing = deduped_results.get(dedupe_key)
+            if not existing:
+                deduped_results[dedupe_key] = row
+                continue
 
-        if _should_replace_deduped_row(existing, row):
-            deduped_results[dedupe_key] = row
+            if _should_replace_deduped_row(existing, row):
+                deduped_results[dedupe_key] = row
 
-    results = list(deduped_results.values())
+        results = list(deduped_results.values())
+    else:
+        results = raw_results
 
     conn.close()
 
