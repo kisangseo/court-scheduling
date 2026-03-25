@@ -587,6 +587,11 @@ function normalizeAssignmentLabel(value) {
     return (value || '').trim().toUpperCase();
 }
 
+function isOpenCourtLabel(value) {
+    const normalized = normalizeAssignmentLabel(value);
+    return normalized === "OPEN" || normalized.startsWith("OPEN-") || normalized === "WAITING TO RECEIVE CASE";
+}
+
 function getRequiredDeputiesForCourtroomLabel(value) {
     const normalized = normalizeAssignmentLabel(value);
     if (!normalized) return 0;
@@ -597,6 +602,15 @@ function getRequiredDeputiesForCourtroomLabel(value) {
     if (normalized.startsWith("OPEN-")) return 1;
 
     return 1;
+}
+
+function isConsoleRoomFixedPost(courthouse, post) {
+    const normalizedCourthouse = (courthouse || "").trim().toLowerCase();
+    if (normalizedCourthouse !== "mitchell" && normalizedCourthouse !== "cummings") {
+        return false;
+    }
+
+    return (post || "").trim().toLowerCase().includes("console room");
 }
 
 function shouldCountFixedPostRequirement(row) {
@@ -613,6 +627,7 @@ function shouldCountFixedPostRequirement(row) {
     if (courthouse === "juvenile" && post === "lockup") return false;
     if (courthouse === "cummings" && post === "cummings" && part === "0830-2") return false;
     if (courthouse === "cummings" && post === "transportation") return false;
+    if (isConsoleRoomFixedPost(courthouse, post)) return false;
 
     return true;
 }
@@ -659,7 +674,9 @@ function getTotalNeededFromAssignments(assignments) {
         }
 
         if (assignmentType === "Courtroom") {
-            const requiredDeputies = getRequiredDeputiesForCourtroomLabel(row.assignment_notes || "");
+            const assignmentLabel = row.assignment_notes || "";
+            if (isOpenCourtLabel(assignmentLabel)) return;
+            const requiredDeputies = getRequiredDeputiesForCourtroomLabel(assignmentLabel);
             totalCourtsNeeded += requiredDeputies;
         }
     });
