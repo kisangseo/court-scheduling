@@ -593,7 +593,8 @@ function getRequiredDeputiesForCourtroomLabel(value) {
 
     if (["CLOSED", "NO DEPUTY", "NO DEPUTIES", "CIVIL - NO DEPUTIES", "ON LEAVE"].includes(normalized)) return 0;
     if (normalized === "NEED 2 DEPUTIES") return 2;
-    if (normalized === "OPEN" || normalized.startsWith("OPEN-") || normalized === "WAITING TO RECEIVE CASE") return 0;
+    if (["NEED 1 DEPUTY", "CIVIL - 1 DEPUTY", "JUVENILE", "FAMILY", "OPEN"].includes(normalized)) return 1;
+    if (normalized.startsWith("OPEN-")) return 1;
 
     return 1;
 }
@@ -711,7 +712,7 @@ function loadRoster() {
 
     Promise.all([
         fetch(`/api/deputies?date=${date}`).then(res => res.json()),
-        fetch(`/api/search?date=${date}`).then(res => res.json())
+        fetch(`/api/search?date=${date}&dedupe=false`).then(res => res.json())
     ]).then(([deputiesData, assignments]) => {
         const deputies = (deputiesData || []).sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
         window.currentDeputies = deputies;
