@@ -3519,6 +3519,31 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
     sections.courtrooms = courtroomTable;
 
     const overtimeRows = typeGroups["Overtime"] || [];
+    const requiredOvertimeRows = courthouse === "Mitchell"
+        ? [{ location_detail: "Judge Detail", part: "" }]
+        : [];
+    const overtimeRowsForDisplay = [...overtimeRows];
+    requiredOvertimeRows.forEach(requiredRow => {
+        const hasRow = overtimeRowsForDisplay.some(row => {
+            const rowDetail = (row.location_detail || row.location_group || "").trim().toLowerCase();
+            const requiredDetail = (requiredRow.location_detail || "").trim().toLowerCase();
+            const rowPart = (row.part || "").trim().toLowerCase();
+            const requiredPart = (requiredRow.part || "").trim().toLowerCase();
+            return rowDetail === requiredDetail && rowPart === requiredPart;
+        });
+        if (!hasRow) {
+            overtimeRowsForDisplay.push({
+                assignment_type: "Overtime",
+                courthouse,
+                location_group: "",
+                location_detail: requiredRow.location_detail,
+                part: requiredRow.part,
+                shift_time: "",
+                assigned_member: "",
+                assignment_notes: ""
+            });
+        }
+    });
     const overtimeTable = document.createElement("table");
     overtimeTable.border = "1";
     overtimeTable.innerHTML = `
@@ -3533,7 +3558,7 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
         <tbody></tbody>
     `;
     const overtimeBody = overtimeTable.querySelector("tbody");
-    overtimeRows.forEach(row => {
+    overtimeRowsForDisplay.forEach(row => {
         const parsedShift = parseOvertimeShiftRange(row.shift_time || '');
         const overtimeSlot = row.location_detail || row.location_group || "";
         const displayOvertimeSlot = overtimeSlot === "OT Security Sweep" ? "" : overtimeSlot;
