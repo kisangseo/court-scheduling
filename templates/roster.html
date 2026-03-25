@@ -599,28 +599,22 @@ function getRequiredDeputiesForCourtroomLabel(value) {
     return 1;
 }
 
-function getFixedPostRequirementGroup(row) {
+function shouldCountFixedPostRequirement(row) {
     const courthouse = (row.courthouse || "").trim().toLowerCase();
     const post = (row.location_group || "").trim().toLowerCase();
     const detail = (row.location_detail || "").trim().toLowerCase();
     const part = (row.part || "").trim().toLowerCase();
 
-    if (post === "transportation" && !part && !detail) return null;
-    if (courthouse === "mitchell" && post === "calvert" && part === "0800-3") return null;
-    if (courthouse === "mitchell" && (post === "lock up west" || post === "lockup west") && part === "open-2") return null;
-    if (courthouse === "juvenile" && post === "lobby" && part === "0830-1630-3") return null;
-    if (courthouse === "juvenile" && post === "lockup") return null;
+    if (/__lunch$/i.test(part) || part === "__lunch") return false;
+    if (post === "transportation" && !part && !detail) return false;
+    if (courthouse === "mitchell" && post === "calvert" && part === "0800-3") return false;
+    if (courthouse === "mitchell" && (post === "lock up west" || post === "lockup west") && part === "open-2") return false;
+    if (courthouse === "juvenile" && post === "lobby" && part === "0830-1630-3") return false;
+    if (courthouse === "juvenile" && post === "lockup") return false;
+    if (courthouse === "cummings" && post === "cummings" && part === "0830-2") return false;
+    if (courthouse === "cummings" && post === "transportation") return false;
 
-    if (courthouse === "mitchell" && (post === "jury room" || post === "st. paul")) {
-        return `${courthouse}|jury-stpaul-combined`;
-    }
-
-    if (courthouse === "cummings" && post === "cummings") {
-        if (part === "0800") return `${courthouse}|cummings-0800`;
-        if (part.startsWith("0830")) return null;
-    }
-
-    return [courthouse, post, detail, part].join("|");
+    return true;
 }
 
 function getWorkAssignmentForDeputy(fullName) {
@@ -660,8 +654,7 @@ function getTotalNeededFromAssignments(assignments) {
     rows.forEach((row) => {
         const assignmentType = (row.assignment_type || "").trim();
         if (assignmentType === "Fixed Post") {
-            const groupKey = getFixedPostRequirementGroup(row);
-            if (groupKey) totalFixedPostsNeeded += 1;
+            if (shouldCountFixedPostRequirement(row)) totalFixedPostsNeeded += 1;
             return;
         }
 
