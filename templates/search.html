@@ -266,7 +266,7 @@ function getTotalOvertimeHours() {
         const part = (shiftCell.dataset.part || '').toLowerCase();
         const courthouse = (shiftCell.dataset.courthouse || '').toLowerCase();
         const deputyCell = row.querySelector('.editable[data-type="Fixed Post"]');
-        const hasDeputy = parseAssignedMemberValue(deputyCell?.textContent || '').length > 0;
+        const hasDeputy = deputyCell ? getActiveAssignedNamesFromCell(deputyCell).length > 0 : false;
         if (!hasDeputy) return;
 
         const isOtPost =
@@ -287,7 +287,7 @@ function getTotalOvertimeHours() {
         if (!row) return;
 
         const deputyCell = row.querySelector('.editable[data-type="Overtime"]');
-        const hasDeputy = parseAssignedMemberValue(deputyCell?.textContent || '').length > 0;
+        const hasDeputy = deputyCell ? getActiveAssignedNamesFromCell(deputyCell).length > 0 : false;
         if (!hasDeputy) return;
 
         total += parseShiftDurationHours((shiftCell.dataset.shift || shiftCell.textContent || '').trim());
@@ -307,7 +307,7 @@ function updateTotalOtHoursBadge() {
         document.querySelectorAll('.editable-overtime-shift').forEach(shiftCell => {
             const deputyCell = shiftCell.parentElement?.querySelector('.editable[data-type="Overtime"]');
             if (!deputyCell) return;
-            if (parseAssignedMemberValue(deputyCell.textContent || '').length === 0) return;
+            if (getActiveAssignedNamesFromCell(deputyCell).length === 0) return;
             const shiftText = (shiftCell.dataset.shift || shiftCell.textContent || '').trim();
             totalHours += parseShiftDurationHours(shiftText);
         });
@@ -321,7 +321,7 @@ function updateTotalOtHoursBadge() {
 
             const deputyCell = shiftCell.parentElement?.querySelector('.editable[data-type="Fixed Post"]');
             if (!deputyCell) return;
-            if (parseAssignedMemberValue(deputyCell.textContent || '').length === 0) return;
+            if (getActiveAssignedNamesFromCell(deputyCell).length === 0) return;
 
             const shiftText = (shiftCell.dataset.shift || shiftCell.textContent || '').trim();
             totalHours += parseShiftDurationHours(shiftText);
@@ -647,6 +647,16 @@ function getAssignedNamesFromCell(cell) {
     return Array.from(cell.querySelectorAll('.assignment-chip'))
         .map(chip => (chip.dataset.name || chip.textContent || '').trim())
         .filter(Boolean);
+}
+
+function getActiveAssignedNamesFromCell(cell) {
+    return Array.from(cell.querySelectorAll('.assignment-chip'))
+        .map(chip => ({
+            chip,
+            name: (chip.dataset.name || chip.textContent || '').trim()
+        }))
+        .filter(item => item.name && !isChipMarkedTransferredOut(item.chip) && !isCurrentlyTransferredOut(item.name))
+        .map(item => item.name);
 }
 
 function getAssignedChipsFromCell(cell) {
