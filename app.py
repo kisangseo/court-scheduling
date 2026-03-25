@@ -1392,6 +1392,36 @@ def update_assignment_notes():
 
     return {"status": "success"}
 
+@app.route("/api/get-details-notes", methods=["GET"])
+def get_details_notes():
+    date = request.args.get("date")
+    if not date:
+        return jsonify([])
+
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            location_detail,
+            assignment_notes
+        FROM dbo.court_assignments
+        WHERE assignment_date = ?
+          AND courthouse = 'Details'
+          AND assignment_type = 'Details Note'
+        ORDER BY location_detail
+    """, (date,))
+
+    rows = [
+        {
+            "location_detail": row[0],
+            "assignment_notes": row[1] or ""
+        }
+        for row in cursor.fetchall()
+    ]
+
+    conn.close()
+    return jsonify(rows)
+
 @app.route("/api/update-judge-name", methods=["POST"])
 def update_judge_name():
     data = request.json or {}

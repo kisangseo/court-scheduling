@@ -70,6 +70,8 @@ let pendingJudges = {};
 let pendingCourtroomMeta = {};
 let pendingCourtroomLocationMoves = {};
 let pendingShiftTimes = {};
+const DETAILS_NOTES_COURTHOUSE = "Details";
+const DETAILS_NOTES_TYPE = "Details Note";
 let changedRows = new Set();
 let allDeputies = [];
 let rawDeputies = [];
@@ -374,6 +376,31 @@ function queueAssignmentNoteUpdate(payload) {
 
     pendingNotes[key] = payload;
     updateSaveStatusBadge();
+}
+
+function getDetailsNoteCells() {
+    return Array.from(document.querySelectorAll('#detailsNotesTable .details-note-cell'));
+}
+
+function renderDetailsNotesRows(selectedDate, rows) {
+    const byLocation = new Map((rows || []).map(row => [row.location_detail || '', row.assignment_notes || '']));
+    getDetailsNoteCells().forEach(cell => {
+        const noteIndex = cell.dataset.noteIndex || '';
+        const locationDetail = `Row ${noteIndex}`;
+        cell.dataset.date = selectedDate || '';
+        cell.dataset.locationDetail = locationDetail;
+        cell.textContent = byLocation.get(locationDetail) || '';
+    });
+}
+
+function loadDetailsNotesForDate(selectedDate) {
+    renderDetailsNotesRows(selectedDate, []);
+    if (!selectedDate) return Promise.resolve();
+
+    return fetch(`/api/get-details-notes?date=${encodeURIComponent(selectedDate)}`)
+        .then(res => res.json())
+        .then(rows => renderDetailsNotesRows(selectedDate, rows))
+        .catch(() => renderDetailsNotesRows(selectedDate, []));
 }
 
 
@@ -3135,7 +3162,6 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         if (courthouse === "Juvenile" && (row.__building || courthouse) === "Juvenile") {
             tr.classList.add("juvenile-courtroom-row");
         }
-        const isRetiredJudgeRow = !!row.__isRetiredJudgeRow;
         tr.dataset.date = selectedDate;
         tr.dataset.courthouse = courthouse;
         tr.dataset.room = room;
@@ -3144,9 +3170,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         tr.innerHTML = `
             <td>${row.__building || courthouse}</td>
             <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" data-raw-judge="${effectiveJudge}">${displayJudge}</td>
-            <td>${isRetiredJudgeRow
-                ? `<input type="text" class="retired-room-part-input" value="${roomPartValue}" placeholder="Enter Room/Part" aria-label="Enter Room/Part" title="Enter Room/Part">`
-                : roomPartValue}</td>
+            <td><input type="text" class="courtroom-room-part-input" value="${roomPartValue}" placeholder="Enter Room/Part" aria-label="Enter Room/Part" title="Enter Room/Part"></td>
             <td class="courtroom-assignment-cell">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
                     <select class="courtroom-assignment-select" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" style="width:50%; min-width:120px;">
@@ -3185,15 +3209,15 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
             });
         };
 
-        const retiredRoomPartInput = tr.querySelector('.retired-room-part-input');
-        if (retiredRoomPartInput) {
+        const roomPartInput = tr.querySelector('.courtroom-room-part-input');
+        if (roomPartInput) {
             tr.dataset.originalRoom = room;
             tr.dataset.originalPart = effectivePart;
 
-            retiredRoomPartInput.addEventListener('change', () => {
+            roomPartInput.addEventListener('change', () => {
                 const previousRoom = tr.dataset.room || '';
                 const previousPart = tr.dataset.part || '';
-                const rawValue = (retiredRoomPartInput.value || '').trim();
+                const rawValue = (roomPartInput.value || '').trim();
                 let nextRoom = rawValue;
                 let nextPart = '';
 
@@ -3813,6 +3837,8 @@ function search() {
             [postsRow, courtroomsRow, overtimeRow]
                 .filter(Boolean)
                 .forEach(row => row.innerHTML = "");
+
+            loadDetailsNotesForDate(date);
 
             if (!postsRow || !courtroomsRow || !overtimeRow) {
                 console.warn("Search layout row missing; skipping render to avoid runtime crash.");
@@ -4495,6 +4521,24 @@ document.addEventListener('click', function(e) {
     }
 });
 
+document.addEventListener('focusout', function(e) {
+    const noteCell = e.target.closest('.details-note-cell');
+    if (!noteCell) return;
+
+    const assignmentDate = document.getElementById("date")?.value || noteCell.dataset.date || '';
+    const locationDetail = noteCell.dataset.locationDetail || '';
+    if (!assignmentDate || !locationDetail) return;
+
+    queueAssignmentNoteUpdate({
+        assignment_date: assignmentDate,
+        courthouse: DETAILS_NOTES_COURTHOUSE,
+        assignment_type: DETAILS_NOTES_TYPE,
+        location_detail: locationDetail,
+        part: '',
+        assignment_notes: noteCell.textContent || ''
+    });
+});
+
 function openRoster() {
     window.open("/roster", "_blank");
 }
@@ -4528,6 +4572,21 @@ window.addEventListener("beforeunload", function (e) {
             </tr>
         </thead>
         <tbody id="csoDetailBody"></tbody>
+    </table>
+
+    <h3>Notes</h3>
+    <table border="1" id="detailsNotesTable">
+        <thead>
+            <tr>
+                <th>Note</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td class="details-note-cell" data-note-index="1" contenteditable="true" aria-label="Details note row 1"></td></tr>
+            <tr><td class="details-note-cell" data-note-index="2" contenteditable="true" aria-label="Details note row 2"></td></tr>
+            <tr><td class="details-note-cell" data-note-index="3" contenteditable="true" aria-label="Details note row 3"></td></tr>
+            <tr><td class="details-note-cell" data-note-index="4" contenteditable="true" aria-label="Details note row 4"></td></tr>
+        </tbody>
     </table>
 </div>
 </body>
