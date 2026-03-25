@@ -605,34 +605,6 @@ function getRequiredDeputiesForCourtroomLabel(value) {
     return 1;
 }
 
-function isConsoleRoomFixedPost(courthouse, post) {
-    const normalizedCourthouse = (courthouse || "").trim().toLowerCase();
-    if (normalizedCourthouse !== "mitchell" && normalizedCourthouse !== "cummings") {
-        return false;
-    }
-
-    return (post || "").trim().toLowerCase().includes("console room");
-}
-
-function shouldCountFixedPostRequirement(row) {
-    const courthouse = (row.courthouse || "").trim().toLowerCase();
-    const post = (row.location_group || "").trim().toLowerCase();
-    const detail = (row.location_detail || "").trim().toLowerCase();
-    const part = (row.part || "").trim().toLowerCase();
-
-    if (/__lunch$/i.test(part) || part === "__lunch") return false;
-    if (post === "transportation" && !part && !detail) return false;
-    if (courthouse === "mitchell" && post === "calvert" && part === "0800-3") return false;
-    if (courthouse === "mitchell" && (post === "lock up west" || post === "lockup west") && part === "open-2") return false;
-    if (courthouse === "juvenile" && post === "lobby" && part === "0830-1630-3") return false;
-    if (courthouse === "juvenile" && post === "lockup") return false;
-    if (courthouse === "cummings" && post === "cummings" && part === "0830-2") return false;
-    if (courthouse === "cummings" && post === "transportation") return false;
-    if (isConsoleRoomFixedPost(courthouse, post)) return false;
-
-    return true;
-}
-
 function getWorkAssignmentForDeputy(fullName) {
     const assignments = window.currentAssignments || [];
     const normalizedName = (fullName || "").trim().toLowerCase();
@@ -662,36 +634,49 @@ function formatDateForWarning(value) {
 }
 
 
-function getTotalNeededFromAssignments(assignments) {
-    const normalizedSlots = buildNormalizedSlotsForCountHelper(assignments || []);
-    return SlotCountHelper.countNormalizedSlots(normalizedSlots).totalRequired;
+function getHardcodedRedFixedPostRequirementCount(rows) {
+    const redFixedPostSlots = new Set([
+        "mitchell|calvert|0800-1",
+        "mitchell|calvert|0800-2",
+        "mitchell|lexington|0700-1500",
+        "mitchell|jury room|0730",
+        "mitchell|st. paul|0730",
+        "cummings|cummings|0800",
+        "cummings|garage|0600",
+        "cummings|garage|1600",
+        "cummings|family desk|0800",
+        "juvenile|office|0830-1700",
+        "juvenile|lobby|0830-1630-1"
+    ]);
+
+    const present = new Set();
+    (rows || []).forEach((row) => {
+        if ((row.assignment_type || "").trim() !== "Fixed Post") return;
+        const key = [
+            (row.courthouse || "").trim().toLowerCase(),
+            (row.location_group || "").trim().toLowerCase(),
+            (row.part || "").trim().toLowerCase()
+        ].join("|");
+        if (redFixedPostSlots.has(key)) {
+            present.add(key);
+        }
+    });
+
+    return present.size;
 }
 
-function buildNormalizedSlotsForCountHelper(rows) {
-    return (rows || [])
-        .filter((row) => {
-            const type = (row.assignment_type || "").trim();
-            return type === "Fixed Post" || type === "Courtroom";
-        })
-        .map((row) => {
-            const assignmentType = (row.assignment_type || "").trim();
-            if (assignmentType === "Fixed Post") {
-                return {
-                    countable: shouldCountFixedPostRequirement(row),
-                    requiredDeputies: 1,
-                    state: ""
-                };
-            }
+function getTotalNeededFromAssignments(assignments) {
+    const rows = assignments || [];
+    const fixedPostNeeded = getHardcodedRedFixedPostRequirementCount(rows);
 
-            const assignmentLabel = row.assignment_notes || "";
-            const isOpen = isOpenCourtLabel(assignmentLabel);
-            const requiredDeputies = isOpen ? 0 : getRequiredDeputiesForCourtroomLabel(assignmentLabel);
-            return {
-                countable: !isOpen && requiredDeputies > 0,
-                requiredDeputies,
-                state: ""
-            };
-        });
+    const courtroomNeeded = rows
+        .filter((row) => (row.assignment_type || "").trim() === "Courtroom")
+        .reduce((total, row) => {
+            const requiredDeputies = getRequiredDeputiesForCourtroomLabel(row.assignment_notes || "");
+            return total + Math.max(requiredDeputies, 0);
+        }, 0);
+
+    return fixedPostNeeded + courtroomNeeded;
 }
 
 
