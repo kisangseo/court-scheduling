@@ -634,40 +634,39 @@ function formatDateForWarning(value) {
 }
 
 
-function getHardcodedRedFixedPostRequirementCount(rows) {
+function getHardcodedRedFixedPostRequirementCount() {
     const redFixedPostSlots = new Set([
         "mitchell|calvert|0800-1",
         "mitchell|calvert|0800-2",
         "mitchell|lexington|0700-1500",
+        "mitchell|lexington|1500-2300",
+        "mitchell|lexington|2300-0700",
+        "mitchell|fayette ada|0700",
+        "mitchell|lock up west|open-1",
         "mitchell|jury room|0730",
         "mitchell|st. paul|0730",
+        "mitchell|st. paul|0830",
+        "mitchell|mitchell office|0800",
+        "mitchell|k9 services|0700",
+        "mitchell|judges ot|0700",
         "cummings|cummings|0800",
+        "cummings|cummings|0830-1",
+        "cummings|fayette st. ada|0715",
+        "cummings|fayette st. ada|0900",
+        "cummings|lock up east|0800",
         "cummings|garage|0600",
         "cummings|garage|1600",
         "cummings|family desk|0800",
         "juvenile|office|0830-1700",
-        "juvenile|lobby|0830-1630-1"
+        "juvenile|lobby|0830-1630-1",
+        "juvenile|lobby|0830-1630-2"
     ]);
-
-    const present = new Set();
-    (rows || []).forEach((row) => {
-        if ((row.assignment_type || "").trim() !== "Fixed Post") return;
-        const key = [
-            (row.courthouse || "").trim().toLowerCase(),
-            (row.location_group || "").trim().toLowerCase(),
-            (row.part || "").trim().toLowerCase()
-        ].join("|");
-        if (redFixedPostSlots.has(key)) {
-            present.add(key);
-        }
-    });
-
-    return present.size;
+    return redFixedPostSlots.size;
 }
 
 function getTotalNeededFromAssignments(assignments) {
     const rows = assignments || [];
-    const fixedPostNeeded = getHardcodedRedFixedPostRequirementCount(rows);
+    const fixedPostNeeded = getHardcodedRedFixedPostRequirementCount();
 
     const courtroomNeeded = rows
         .filter((row) => (row.assignment_type || "").trim() === "Courtroom")
