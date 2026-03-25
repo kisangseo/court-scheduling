@@ -653,14 +653,14 @@ function formatDateForWarning(value) {
 
 function getTotalNeededFromAssignments(assignments) {
     const rows = assignments || [];
-    const fixedPostGroups = new Set();
+    let totalFixedPostsNeeded = 0;
     let totalCourtsNeeded = 0;
 
     rows.forEach((row) => {
         const assignmentType = (row.assignment_type || "").trim();
         if (assignmentType === "Fixed Post") {
             const groupKey = getFixedPostRequirementGroup(row);
-            if (groupKey) fixedPostGroups.add(groupKey);
+            if (groupKey) totalFixedPostsNeeded += 1;
             return;
         }
 
@@ -670,7 +670,7 @@ function getTotalNeededFromAssignments(assignments) {
         }
     });
 
-    return fixedPostGroups.size + totalCourtsNeeded;
+    return totalFixedPostsNeeded + totalCourtsNeeded;
 }
 
 
