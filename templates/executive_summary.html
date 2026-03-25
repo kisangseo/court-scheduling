@@ -95,27 +95,25 @@ function normalizeAssignmentLabel(value) {
     return (value || '').trim().toUpperCase();
 }
 
+function normalizeCourtroomAssignmentLabel(value) {
+    return (value || '').trim().toUpperCase();
+}
+
+function isOpenCourtLabel(value) {
+    const normalized = normalizeCourtroomAssignmentLabel(value);
+    return normalized === 'OPEN' || normalized.startsWith('OPEN-') || normalized === 'WAITING TO RECEIVE CASE';
+}
+
 function isInactiveCourtLabel(value) {
-    const normalized = normalizeAssignmentLabel(value);
-    return !normalized || [
-        'DNS',
-        'F/T',
-        'FT',
-        'NON-HEARING MOTIONS',
-        'NON-HEARING MOTIONS, CIVIL'
-    ].includes(normalized);
+    const normalized = normalizeCourtroomAssignmentLabel(value);
+    return getRequiredDeputiesForCourtroomLabel(normalized) === 0;
 }
 
 function getRequiredDeputiesForCourtroomLabel(value) {
-    const normalized = normalizeAssignmentLabel(value);
+    const normalized = normalizeCourtroomAssignmentLabel(value);
     if (!normalized) return 0;
 
     if ([
-        'DNS',
-        'F/T',
-        'FT',
-        'NON-HEARING MOTIONS',
-        'NON-HEARING MOTIONS, CIVIL',
         'CLOSED',
         'NO DEPUTY',
         'NO DEPUTIES',
@@ -125,8 +123,23 @@ function getRequiredDeputiesForCourtroomLabel(value) {
         return 0;
     }
 
-    if (normalized === 'NEED 2 DEPUTIES') return 2;
+    if ([
+        'NEED 2 DEPUTIES'
+    ].includes(normalized)) {
+        return 2;
+    }
 
+    if ([
+        'NEED 1 DEPUTY',
+        'CIVIL - 1 DEPUTY',
+        'JUVENILE',
+        'FAMILY',
+        'OPEN'
+    ].includes(normalized) || normalized.startsWith('OPEN-')) {
+        return 1;
+    }
+
+    // Keep older labels usable by treating non-empty, non-open labels as 1 required deputy.
     return 1;
 }
 
@@ -489,9 +502,9 @@ function getAssignmentTotals(assignments) {
 
         if (type !== 'Courtroom') return;
 
-        const normalized = normalizeAssignmentLabel(row.assignment_notes || '');
-        const assignedMember = normalizeAssignmentLabel(row.assigned_member || '');
-        if (normalized === 'OPEN' || normalized.startsWith('OPEN-') || normalized === 'WAITING TO RECEIVE CASE' || assignedMember === 'OPEN' || assignedMember.startsWith('OPEN-')) {
+        const normalized = normalizeCourtroomAssignmentLabel(row.assignment_notes || '');
+        if (isInactiveCourtLabel(normalized)) return;
+        if (isOpenCourtLabel(normalized)) {
             totals.open += 1;
             return;
         }
