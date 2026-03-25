@@ -99,6 +99,7 @@
     </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/slot_count_helper.js') }}"></script>
 <script>
 const canEditRoster = {{ "true" if can_edit_roster else "false" }};
 const canRemoveDeputy = {{ "true" if can_remove_deputy else "false" }};
@@ -662,26 +663,35 @@ function formatDateForWarning(value) {
 
 
 function getTotalNeededFromAssignments(assignments) {
-    const rows = assignments || [];
-    let totalFixedPostsNeeded = 0;
-    let totalCourtsNeeded = 0;
+    const normalizedSlots = buildNormalizedSlotsForCountHelper(assignments || []);
+    return SlotCountHelper.countNormalizedSlots(normalizedSlots).totalRequired;
+}
 
-    rows.forEach((row) => {
-        const assignmentType = (row.assignment_type || "").trim();
-        if (assignmentType === "Fixed Post") {
-            if (shouldCountFixedPostRequirement(row)) totalFixedPostsNeeded += 1;
-            return;
-        }
+function buildNormalizedSlotsForCountHelper(rows) {
+    return (rows || [])
+        .filter((row) => {
+            const type = (row.assignment_type || "").trim();
+            return type === "Fixed Post" || type === "Courtroom";
+        })
+        .map((row) => {
+            const assignmentType = (row.assignment_type || "").trim();
+            if (assignmentType === "Fixed Post") {
+                return {
+                    countable: shouldCountFixedPostRequirement(row),
+                    requiredDeputies: 1,
+                    state: ""
+                };
+            }
 
-        if (assignmentType === "Courtroom") {
             const assignmentLabel = row.assignment_notes || "";
-            if (isOpenCourtLabel(assignmentLabel)) return;
-            const requiredDeputies = getRequiredDeputiesForCourtroomLabel(assignmentLabel);
-            totalCourtsNeeded += requiredDeputies;
-        }
-    });
-
-    return totalFixedPostsNeeded + totalCourtsNeeded;
+            const isOpen = isOpenCourtLabel(assignmentLabel);
+            const requiredDeputies = isOpen ? 0 : getRequiredDeputiesForCourtroomLabel(assignmentLabel);
+            return {
+                countable: !isOpen && requiredDeputies > 0,
+                requiredDeputies,
+                state: ""
+            };
+        });
 }
 
 
