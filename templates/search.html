@@ -63,6 +63,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="{{ url_for('static', filename='js/slot_count_helper.js') }}"></script>
 <script>
 let pendingAssignments = {};
 let pendingNotes = {};
@@ -1214,22 +1215,8 @@ function fetchGlobalAssignmentTotals(dateValue) {
     return fetch(`/api/search?date=${date}`)
         .then(response => response.json())
         .then(rows => {
-            const relevantRows = (rows || []).filter(row => row.assignment_type === 'Courtroom' || row.assignment_type === 'Fixed Post');
-            let vacant = 0;
-            let filled = 0;
-            let open = 0;
-
-            relevantRows.forEach(row => {
-                const assignedCount = parseAssignedMemberValue(row.assigned_member || '').length;
-                const slotState = getSlotState(row.assignment_type, row.assignment_notes || '', assignedCount, {
-                    courthouse: row.courthouse || '',
-                    post: row.location_group || '',
-                    part: row.part || ''
-                });
-                if (slotState === 'vacant') vacant += 1;
-                else if (slotState === 'filled') filled += 1;
-                else if (slotState === 'open') open += 1;
-            });
+            const normalizedSlots = buildNormalizedSlotsForCountHelper(rows || []);
+            const { vacant, filled, open } = SlotCountHelper.countNormalizedSlots(normalizedSlots);
 
             const posted = new Set();
             (rows || [])
@@ -1253,6 +1240,29 @@ function fetchGlobalAssignmentTotals(dateValue) {
             updateAssignmentCountBadges();
             refreshRosterHeaderCounts();
             refreshRosterAssignedState();
+        });
+}
+
+function buildNormalizedSlotsForCountHelper(rows) {
+    return (rows || [])
+        .filter(row => row.assignment_type === 'Courtroom' || row.assignment_type === 'Fixed Post')
+        .map(row => {
+            const assignmentType = (row.assignment_type || '').trim();
+            const assignmentLabel = row.assignment_notes || '';
+            const assignedCount = parseAssignedMemberValue(row.assigned_member || '').length;
+            const slotState = getSlotState(assignmentType, assignmentLabel, assignedCount, {
+                courthouse: row.courthouse || '',
+                post: row.location_group || '',
+                part: row.part || ''
+            });
+
+            return {
+                countable: slotState !== 'inactive',
+                requiredDeputies: assignmentType === 'Fixed Post'
+                    ? 1
+                    : getRequiredDeputiesForCourtroomLabel(assignmentLabel),
+                state: slotState
+            };
         });
 }
 
