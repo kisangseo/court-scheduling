@@ -659,8 +659,14 @@ function getTotalNeededFromAssignments(assignments) {
     rows.forEach((row) => {
         const assignmentType = (row.assignment_type || "").trim();
         if (assignmentType === "Fixed Post") {
-            const groupKey = getFixedPostRequirementGroup(row);
-            if (groupKey) totalFixedPostsNeeded += 1;
+            const post = (row.location_group || "").toLowerCase();
+            const detail = (row.location_detail || "").toLowerCase();
+            const part = (row.part || "").toLowerCase();
+
+            // only skip true non-post
+            if (post === "transportation" && !detail && !part) return;
+
+            totalFixedPostsNeeded += 1;
             return;
         }
 
