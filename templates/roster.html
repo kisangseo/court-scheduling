@@ -99,6 +99,7 @@
     </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/slot_count_helper.js') }}"></script>
 <script>
 const canEditRoster = {{ "true" if can_edit_roster else "false" }};
 const canRemoveDeputy = {{ "true" if can_remove_deputy else "false" }};
