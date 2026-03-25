@@ -1445,6 +1445,15 @@ function getDefaultTransferTimeValue() {
     return `${h}:${m} ${meridiem}`;
 }
 
+function populateCourtroomTimeDatalist() {
+    const datalist = document.getElementById('courtroomTimeOptions');
+    if (!datalist) return;
+
+    datalist.innerHTML = getTimeOptionValues().map(value => {
+        return `<option value="${formatTimeValueToAmPm(value)}"></option>`;
+    }).join('');
+}
+
 function openTransferTimePicker({ title, defaultTime, onSave, onCancel }) {
     const overlay = document.createElement('div');
     overlay.style.position = 'fixed';
@@ -4168,6 +4177,7 @@ function showShiftTimeEditorModal({ title, currentStart, currentEnd, optionsHtml
 }
 
 window.onload = function() {
+    populateCourtroomTimeDatalist();
     const today = (() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`; })();
     const savedDate = localStorage.getItem('searchPageDate');
     document.getElementById("date").value = savedDate || today;
@@ -4497,31 +4507,7 @@ window.addEventListener("beforeunload", function (e) {
 });
 
 </script>
-<datalist id="courtroomTimeOptions">
-    <option value="7:00 AM"></option>
-    <option value="7:30 AM"></option>
-    <option value="8:00 AM"></option>
-    <option value="8:30 AM"></option>
-    <option value="9:00 AM"></option>
-    <option value="9:30 AM"></option>
-    <option value="10:00 AM"></option>
-    <option value="10:30 AM"></option>
-    <option value="11:00 AM"></option>
-    <option value="11:30 AM"></option>
-    <option value="12:00 PM"></option>
-    <option value="12:30 PM"></option>
-    <option value="1:00 PM"></option>
-    <option value="1:30 PM"></option>
-    <option value="2:00 PM"></option>
-    <option value="2:30 PM"></option>
-    <option value="3:00 PM"></option>
-    <option value="3:30 PM"></option>
-    <option value="4:00 PM"></option>
-    <option value="4:30 PM"></option>
-    <option value="5:00 PM"></option>
-    <option value="5:30 PM"></option>
-    <option value="6:00 PM"></option>
-</datalist>
+<datalist id="courtroomTimeOptions"></datalist>
 <div id="borrowedDeputiesPanel">
     <h3>CSO Detail - Borrowed Deputies</h3>
 
