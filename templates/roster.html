@@ -67,6 +67,7 @@
 <div class="container">
     <div class="panel">
         <h3>Court Security <span id="courtSecurityStatusCounts" class="status-counts"></span></h3>
+        <div class="small">Total Needed = 24 fixed posts + courtroom requirements only (does not include leave/unavailable/training).</div>
         <table id="courtSecurityTable">
             <thead>
                 <tr>
@@ -679,7 +680,8 @@ function getTotalNeededFromAssignments(assignments) {
 }
 
 
-function updateCourtSecurityStatusCounts(deputies, totalNeeded) {
+function updateCourtSecurityStatusCounts(deputies, assignments) {
+    const totalNeeded = getTotalNeededFromAssignments(assignments);
     const cs = deputies.filter(dep => isCourtSecurityDeputy(dep) && !isExcludedCourtSecurityRank(dep));
     const scheduledLeave = cs.filter(dep => statusIncludes(dep, "Scheduled Leave")).length;
     const unscheduledLeave = cs.filter(dep => statusIncludes(dep, "Unscheduled Leave")).length;
@@ -729,8 +731,7 @@ function loadRoster() {
             }
         });
 
-        const totalNeeded = getTotalNeededFromAssignments(assignments);
-        updateCourtSecurityStatusCounts(deputies, totalNeeded);
+        updateCourtSecurityStatusCounts(deputies, assignments);
     });
 }
 
