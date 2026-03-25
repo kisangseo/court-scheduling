@@ -3135,7 +3135,6 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         if (courthouse === "Juvenile" && (row.__building || courthouse) === "Juvenile") {
             tr.classList.add("juvenile-courtroom-row");
         }
-        const isRetiredJudgeRow = !!row.__isRetiredJudgeRow;
         tr.dataset.date = selectedDate;
         tr.dataset.courthouse = courthouse;
         tr.dataset.room = room;
@@ -3144,9 +3143,7 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
         tr.innerHTML = `
             <td>${row.__building || courthouse}</td>
             <td class="editable-judge" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" data-raw-judge="${effectiveJudge}">${displayJudge}</td>
-            <td>${isRetiredJudgeRow
-                ? `<input type="text" class="retired-room-part-input" value="${roomPartValue}" placeholder="Enter Room/Part" aria-label="Enter Room/Part" title="Enter Room/Part">`
-                : roomPartValue}</td>
+            <td><input type="text" class="courtroom-room-part-input" value="${roomPartValue}" placeholder="Enter Room/Part" aria-label="Enter Room/Part" title="Enter Room/Part"></td>
             <td class="courtroom-assignment-cell">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
                     <select class="courtroom-assignment-select" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" style="width:50%; min-width:120px;">
@@ -3185,15 +3182,15 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
             });
         };
 
-        const retiredRoomPartInput = tr.querySelector('.retired-room-part-input');
-        if (retiredRoomPartInput) {
+        const roomPartInput = tr.querySelector('.courtroom-room-part-input');
+        if (roomPartInput) {
             tr.dataset.originalRoom = room;
             tr.dataset.originalPart = effectivePart;
 
-            retiredRoomPartInput.addEventListener('change', () => {
+            roomPartInput.addEventListener('change', () => {
                 const previousRoom = tr.dataset.room || '';
                 const previousPart = tr.dataset.part || '';
-                const rawValue = (retiredRoomPartInput.value || '').trim();
+                const rawValue = (roomPartInput.value || '').trim();
                 let nextRoom = rawValue;
                 let nextPart = '';
 
@@ -4528,6 +4525,21 @@ window.addEventListener("beforeunload", function (e) {
             </tr>
         </thead>
         <tbody id="csoDetailBody"></tbody>
+    </table>
+
+    <h3>Notes</h3>
+    <table border="1" id="detailsNotesTable">
+        <thead>
+            <tr>
+                <th>Note</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td contenteditable="true" aria-label="Details note row 1"></td></tr>
+            <tr><td contenteditable="true" aria-label="Details note row 2"></td></tr>
+            <tr><td contenteditable="true" aria-label="Details note row 3"></td></tr>
+            <tr><td contenteditable="true" aria-label="Details note row 4"></td></tr>
+        </tbody>
     </table>
 </div>
 </body>
