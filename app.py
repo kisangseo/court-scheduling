@@ -5,6 +5,7 @@ import os
 import json
 import re
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 
 
@@ -199,6 +200,9 @@ def _ensure_courtroom_meta_table(cursor):
                 total_time_up_minutes INT NULL,
                 is_down BIT NOT NULL DEFAULT 0,
                 is_high_profile BIT NOT NULL DEFAULT 0,
+                is_unscheduled BIT NOT NULL DEFAULT 0,
+                unscheduled_changed_by NVARCHAR(255) NULL,
+                unscheduled_changed_at DATETIMEOFFSET NULL,
                 updated_at DATETIME NOT NULL DEFAULT GETDATE(),
                 CONSTRAINT PK_courtroom_meta PRIMARY KEY (assignment_date, courthouse, location_detail, part)
             )
@@ -232,6 +236,21 @@ def _ensure_courtroom_meta_table(cursor):
         IF COL_LENGTH('dbo.courtroom_meta', 'is_high_profile') IS NULL
         BEGIN
             ALTER TABLE dbo.courtroom_meta ADD is_high_profile BIT NOT NULL CONSTRAINT DF_courtroom_meta_is_high_profile DEFAULT 0;
+        END
+
+        IF COL_LENGTH('dbo.courtroom_meta', 'is_unscheduled') IS NULL
+        BEGIN
+            ALTER TABLE dbo.courtroom_meta ADD is_unscheduled BIT NOT NULL CONSTRAINT DF_courtroom_meta_is_unscheduled DEFAULT 0;
+        END
+
+        IF COL_LENGTH('dbo.courtroom_meta', 'unscheduled_changed_by') IS NULL
+        BEGIN
+            ALTER TABLE dbo.courtroom_meta ADD unscheduled_changed_by NVARCHAR(255) NULL;
+        END
+
+        IF COL_LENGTH('dbo.courtroom_meta', 'unscheduled_changed_at') IS NULL
+        BEGIN
+            ALTER TABLE dbo.courtroom_meta ADD unscheduled_changed_at DATETIMEOFFSET NULL;
         END
     """)
 
@@ -351,6 +370,18 @@ def _parse_status_payload(status_text):
 
 def _status_change_actor():
     return (session.get("user_email") or "unknown").strip().lower()
+
+
+def _format_unscheduled_actor():
+    raw_email = (session.get("user_email") or "").strip().lower()
+    if not raw_email:
+        return "unknown"
+
+    local_part = raw_email.split("@", 1)[0]
+    tokens = [token for token in re.split(r"[._-]+", local_part) if token]
+    if not tokens:
+        return local_part
+    return " ".join(token.capitalize() for token in tokens)
 
 
 def _effective_status_meta_for_date(status_text, target_date):
@@ -1951,7 +1982,7 @@ def get_courtroom_meta():
     cursor.execute("""
         SELECT assignment_date, courthouse, location_detail, part, start_time, break_time, restart_time, adjourned_time,
                start_to_break_minutes, break_to_restart_minutes, restart_to_adjourned_minutes, total_time_up_minutes,
-               is_down, is_high_profile
+               is_down, is_high_profile, is_unscheduled, unscheduled_changed_by, unscheduled_changed_at
         FROM dbo.courtroom_meta
         WHERE assignment_date = ?
     """, (date,))
@@ -1971,7 +2002,10 @@ def get_courtroom_meta():
             "restart_to_adjourned_minutes": row[10],
             "total_time_up_minutes": row[11],
             "is_down": bool(row[12]),
-            "is_high_profile": bool(row[13])
+            "is_high_profile": bool(row[13]),
+            "is_unscheduled": bool(row[14]),
+            "unscheduled_changed_by": row[15] or "",
+            "unscheduled_changed_at": row[16].isoformat() if row[16] else ""
         }
         for row in cursor.fetchall()
     ]
@@ -2243,6 +2277,13 @@ def update_courtroom_meta():
         data.get("restart_time"),
         data.get("adjourned_time"),
     )
+    is_unscheduled = 1 if data.get("is_unscheduled") else 0
+    if is_unscheduled:
+        unscheduled_changed_by = _format_unscheduled_actor()
+        unscheduled_changed_at = datetime.now(ZoneInfo("America/New_York")).isoformat()
+    else:
+        unscheduled_changed_by = None
+        unscheduled_changed_at = None
 
     cursor.execute("""
         MERGE dbo.courtroom_meta AS target
@@ -2265,12 +2306,15 @@ def update_courtroom_meta():
                 total_time_up_minutes = ?,
                 is_down = ?,
                 is_high_profile = ?,
+                is_unscheduled = ?,
+                unscheduled_changed_by = ?,
+                unscheduled_changed_at = ?,
                 updated_at = GETDATE()
         WHEN NOT MATCHED THEN
             INSERT (assignment_date, courthouse, location_detail, part, start_time, break_time, restart_time, adjourned_time,
                     start_to_break_minutes, break_to_restart_minutes, restart_to_adjourned_minutes, total_time_up_minutes,
-                    is_down, is_high_profile, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE());
+                    is_down, is_high_profile, is_unscheduled, unscheduled_changed_by, unscheduled_changed_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE());
     """, (
         assignment_date,
         courthouse,
@@ -2286,6 +2330,9 @@ def update_courtroom_meta():
         duration_minutes["total_time_up_minutes"],
         1 if data.get("is_down") else 0,
         1 if data.get("is_high_profile") else 0,
+        is_unscheduled,
+        unscheduled_changed_by,
+        unscheduled_changed_at,
         assignment_date,
         courthouse,
         location_detail,
@@ -2300,6 +2347,9 @@ def update_courtroom_meta():
         duration_minutes["total_time_up_minutes"],
         1 if data.get("is_down") else 0,
         1 if data.get("is_high_profile") else 0,
+        is_unscheduled,
+        unscheduled_changed_by,
+        unscheduled_changed_at,
     ))
 
     conn.commit()
@@ -2353,7 +2403,7 @@ def update_courtroom_location():
         cursor.execute("""
             SELECT start_time, break_time, restart_time, adjourned_time,
                    start_to_break_minutes, break_to_restart_minutes, restart_to_adjourned_minutes, total_time_up_minutes,
-                   is_down, is_high_profile
+                   is_down, is_high_profile, is_unscheduled, unscheduled_changed_by, unscheduled_changed_at
             FROM dbo.courtroom_meta
             WHERE assignment_date = ?
               AND courthouse = ?
@@ -2370,7 +2420,7 @@ def update_courtroom_location():
         cursor.execute("""
             SELECT start_time, break_time, restart_time, adjourned_time,
                    start_to_break_minutes, break_to_restart_minutes, restart_to_adjourned_minutes, total_time_up_minutes,
-                   is_down, is_high_profile
+                   is_down, is_high_profile, is_unscheduled, unscheduled_changed_by, unscheduled_changed_at
             FROM dbo.courtroom_meta
             WHERE assignment_date = ?
               AND courthouse = ?
@@ -2397,6 +2447,9 @@ def update_courtroom_location():
             )
             merged_is_down = 1 if (bool(source_meta[8]) or bool(target_meta[8])) else 0
             merged_is_high_profile = 1 if (bool(source_meta[9]) or bool(target_meta[9])) else 0
+            merged_is_unscheduled = 1 if (bool(source_meta[10]) or bool(target_meta[10])) else 0
+            merged_unscheduled_changed_by = source_meta[11] or target_meta[11]
+            merged_unscheduled_changed_at = source_meta[12] or target_meta[12]
 
             cursor.execute("""
                 UPDATE dbo.courtroom_meta
@@ -2410,6 +2463,9 @@ def update_courtroom_location():
                     total_time_up_minutes = ?,
                     is_down = ?,
                     is_high_profile = ?,
+                    is_unscheduled = ?,
+                    unscheduled_changed_by = ?,
+                    unscheduled_changed_at = ?,
                     updated_at = GETDATE()
                 WHERE assignment_date = ?
                   AND courthouse = ?
@@ -2426,6 +2482,9 @@ def update_courtroom_location():
                 merged_duration_minutes["total_time_up_minutes"],
                 merged_is_down,
                 merged_is_high_profile,
+                merged_is_unscheduled,
+                merged_unscheduled_changed_by,
+                merged_unscheduled_changed_at,
                 assignment_date,
                 courthouse,
                 new_location_detail,
@@ -2501,6 +2560,9 @@ def clear_daily_assignments():
     cursor.execute("""
         UPDATE dbo.courtroom_meta
         SET is_high_profile = 0,
+            is_unscheduled = 0,
+            unscheduled_changed_by = NULL,
+            unscheduled_changed_at = NULL,
             updated_at = GETDATE()
         WHERE assignment_date = ?
     """, (assignment_date,))
@@ -2559,6 +2621,9 @@ def clear_section_assignments():
         cursor.execute(f"""
             UPDATE dbo.courtroom_meta
             SET is_high_profile = 0,
+                is_unscheduled = 0,
+                unscheduled_changed_by = NULL,
+                unscheduled_changed_at = NULL,
                 updated_at = GETDATE()
             WHERE assignment_date = ?{courthouse_clause}
         """, params)
