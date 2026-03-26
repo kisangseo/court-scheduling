@@ -1167,6 +1167,9 @@ function queueOvertimeShiftUpdate(payload) {
 }
 
 function setPendingCourtroomMetaFromRow(rowEl) {
+    const unscheduledChecked = !!rowEl.querySelector('.courtroom-unscheduled-checkbox')?.checked;
+    const existingChangedBy = (rowEl.dataset.unscheduledChangedBy || '').trim();
+    const existingChangedAt = (rowEl.dataset.unscheduledChangedAt || '').trim();
     const payload = {
         assignment_date: (rowEl.dataset.date || '').trim(),
         courthouse: (rowEl.dataset.courthouse || '').trim(),
@@ -1177,7 +1180,10 @@ function setPendingCourtroomMetaFromRow(rowEl) {
         restart_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="restart_time"]')?.value || ""),
         adjourned_time: formatToAmPmFromTimeValue(rowEl.querySelector('.courtroom-time-input[data-field="adjourned_time"]')?.value || ""),
         is_down: !!rowEl.querySelector('.courtroom-down-checkbox')?.checked,
-        is_high_profile: !!rowEl.querySelector('.courtroom-high-profile-checkbox')?.checked
+        is_high_profile: !!rowEl.querySelector('.courtroom-high-profile-checkbox')?.checked,
+        is_unscheduled: unscheduledChecked,
+        unscheduled_changed_by: unscheduledChecked ? existingChangedBy : '',
+        unscheduled_changed_at: unscheduledChecked ? existingChangedAt : ''
     };
 
     if (!payload.assignment_date || !payload.courthouse || !payload.location_detail) {
@@ -1187,6 +1193,47 @@ function setPendingCourtroomMetaFromRow(rowEl) {
     const key = [payload.assignment_date, payload.courthouse, payload.location_detail, payload.part].join('|');
     pendingCourtroomMeta[key] = payload;
     updateSaveStatusBadge();
+}
+
+function formatCourtroomUnscheduledCaption(changedBy, changedAt) {
+    const byText = (changedBy || '').trim();
+    const atText = (changedAt || '').trim();
+    if (!byText || !atText) return '';
+
+    const stamp = new Date(atText);
+    const formattedWhen = Number.isNaN(stamp.getTime())
+        ? atText
+        : stamp.toLocaleString('en-US', {
+            timeZone: 'America/New_York',
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true,
+            timeZoneName: 'short'
+        });
+    return `${byText} • ${formattedWhen}`;
+}
+
+function updateCourtroomUnscheduledCaption(rowEl) {
+    const caption = rowEl.querySelector('.courtroom-unscheduled-caption');
+    if (!caption) return;
+
+    const isChecked = !!rowEl.querySelector('.courtroom-unscheduled-checkbox')?.checked;
+    if (!isChecked) {
+        caption.textContent = '';
+        caption.style.display = 'none';
+        return;
+    }
+
+    const text = formatCourtroomUnscheduledCaption(
+        rowEl.dataset.unscheduledChangedBy || '',
+        rowEl.dataset.unscheduledChangedAt || ''
+    );
+    caption.textContent = text;
+    caption.style.display = text ? 'block' : 'none';
 }
 
 function getCourtroomRowKey(rowEl) {
@@ -3187,8 +3234,10 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
                         <option value=""></option>
                         ${getCourtroomAssignmentOptionsHtml(row.assignment_notes || "")}
                     </select>
+                    <label style="display:flex; align-items:center; gap:4px; white-space:nowrap;"><input type="checkbox" class="courtroom-unscheduled-checkbox" aria-label="${courthouse} ${room} unscheduled"> Unscheduled</label>
                     <label style="display:flex; align-items:center; gap:4px; width:50%; justify-content:flex-end;"><input type="checkbox" class="courtroom-high-profile-checkbox" aria-label="${courthouse} ${room} high profile"> High Profile</label>
                 </div>
+                <div class="courtroom-unscheduled-caption" style="display:none; margin-top:4px; font-size:11px; color:#475467;"></div>
             </td>
             <td class="editable deputy-column-cell" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" data-assigned="${row.assigned_member || ""}">${row.assigned_member || ""}</td>
             <td class="courtroom-time-cell"><select class="courtroom-time-input courtroom-time-select" data-field="start_time" aria-label="${courthouse} ${room} start time"><option value=""></option>${buildCourtroomTimeOptionsHtml('')}</select></td>
@@ -3211,6 +3260,9 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
             const courthouseLabel = tr.dataset.courthouse || courthouse;
             tr.querySelectorAll('.courtroom-high-profile-checkbox').forEach(checkbox => {
                 checkbox.setAttribute('aria-label', `${courthouseLabel} ${nextRoom} high profile`);
+            });
+            tr.querySelectorAll('.courtroom-unscheduled-checkbox').forEach(checkbox => {
+                checkbox.setAttribute('aria-label', `${courthouseLabel} ${nextRoom} unscheduled`);
             });
             tr.querySelectorAll('.courtroom-time-input').forEach(inputEl => {
                 const field = inputEl.dataset.field || '';
@@ -3260,9 +3312,14 @@ function buildCombinedCourtroomsTable(grouped, selectedDate, includeFlags) {
             });
         }
 
-        tr.querySelectorAll('.courtroom-time-input, .courtroom-down-checkbox, .courtroom-high-profile-checkbox').forEach(inputEl => {
+        tr.querySelectorAll('.courtroom-time-input, .courtroom-down-checkbox, .courtroom-high-profile-checkbox, .courtroom-unscheduled-checkbox').forEach(inputEl => {
             inputEl.addEventListener('change', () => {
                 markCourtroomRowChanged(tr);
+                if (inputEl.classList.contains('courtroom-unscheduled-checkbox') && !inputEl.checked) {
+                    tr.dataset.unscheduledChangedBy = '';
+                    tr.dataset.unscheduledChangedAt = '';
+                }
+                updateCourtroomUnscheduledCaption(tr);
                 setPendingCourtroomMetaFromRow(tr);
             });
         });
@@ -3490,8 +3547,10 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
                         <option value=""></option>
                         ${getCourtroomAssignmentOptionsHtml(row ? (row.assignment_notes || "") : "")}
                     </select>
+                    <label style="display:flex; align-items:center; gap:4px; white-space:nowrap;"><input type="checkbox" class="courtroom-unscheduled-checkbox" aria-label="${courthouse} ${room} unscheduled"> Unscheduled</label>
                     <label style="display:flex; align-items:center; gap:4px; width:50%; justify-content:flex-end;"><input type="checkbox" class="courtroom-high-profile-checkbox" aria-label="${courthouse} ${room} high profile"> High Profile</label>
                 </div>
+                <div class="courtroom-unscheduled-caption" style="display:none; margin-top:4px; font-size:11px; color:#475467;"></div>
             </td>
             <td class="editable deputy-column-cell" data-date="${selectedDate}" data-courthouse="${courthouse}" data-type="Courtroom" data-room="${room}" data-part="${effectivePart}" data-assigned="${row ? (row.assigned_member || "") : ""}">${row ? (row.assigned_member || "") : ""}</td>
             <td class="courtroom-time-cell"><select class="courtroom-time-input courtroom-time-select" data-field="start_time" aria-label="${courthouse} ${room} start time"><option value=""></option>${buildCourtroomTimeOptionsHtml('')}</select></td>
@@ -3501,8 +3560,15 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
             
         `;
 
-        tr.querySelectorAll('.courtroom-time-input, .courtroom-down-checkbox, .courtroom-high-profile-checkbox').forEach(inputEl => {
-            inputEl.addEventListener('change', () => setPendingCourtroomMetaFromRow(tr));
+        tr.querySelectorAll('.courtroom-time-input, .courtroom-down-checkbox, .courtroom-high-profile-checkbox, .courtroom-unscheduled-checkbox').forEach(inputEl => {
+            inputEl.addEventListener('change', () => {
+                if (inputEl.classList.contains('courtroom-unscheduled-checkbox') && !inputEl.checked) {
+                    tr.dataset.unscheduledChangedBy = '';
+                    tr.dataset.unscheduledChangedAt = '';
+                }
+                updateCourtroomUnscheduledCaption(tr);
+                setPendingCourtroomMetaFromRow(tr);
+            });
         });
         const assignmentSelect = tr.querySelector('.courtroom-assignment-select');
         if (assignmentSelect) {
@@ -4020,6 +4086,7 @@ function loadCourtroomMeta(date) {
                 const adjournedInput = row.querySelector('.courtroom-time-input[data-field="adjourned_time"]');
                 const downInput = row.querySelector('.courtroom-down-checkbox');
                 const highProfileInput = row.querySelector('.courtroom-high-profile-checkbox');
+                const unscheduledInput = row.querySelector('.courtroom-unscheduled-checkbox');
 
                 if (startInput) startInput.value = parseStoredTimeToInputValue((pendingMeta && pendingMeta.start_time) || meta.start_time || '');
                 if (breakInput) breakInput.value = parseStoredTimeToInputValue((pendingMeta && pendingMeta.break_time) || meta.break_time || '');
@@ -4027,6 +4094,11 @@ function loadCourtroomMeta(date) {
                 if (adjournedInput) adjournedInput.value = parseStoredTimeToInputValue((pendingMeta && pendingMeta.adjourned_time) || meta.adjourned_time || '');
                 if (downInput) downInput.checked = pendingMeta ? !!pendingMeta.is_down : !!meta.is_down;
                 if (highProfileInput) highProfileInput.checked = pendingMeta ? !!pendingMeta.is_high_profile : !!meta.is_high_profile;
+                if (unscheduledInput) unscheduledInput.checked = pendingMeta ? !!pendingMeta.is_unscheduled : !!meta.is_unscheduled;
+
+                row.dataset.unscheduledChangedBy = (pendingMeta && pendingMeta.unscheduled_changed_by) || meta.unscheduled_changed_by || '';
+                row.dataset.unscheduledChangedAt = (pendingMeta && pendingMeta.unscheduled_changed_at) || meta.unscheduled_changed_at || '';
+                updateCourtroomUnscheduledCaption(row);
             });
         });
 }
