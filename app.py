@@ -193,6 +193,10 @@ def _ensure_courtroom_meta_table(cursor):
                 break_time NVARCHAR(16) NULL,
                 restart_time NVARCHAR(16) NULL,
                 adjourned_time NVARCHAR(16) NULL,
+                start_to_break_minutes INT NULL,
+                break_to_restart_minutes INT NULL,
+                restart_to_adjourned_minutes INT NULL,
+                total_time_up_minutes INT NULL,
                 is_down BIT NOT NULL DEFAULT 0,
                 is_high_profile BIT NOT NULL DEFAULT 0,
                 updated_at DATETIME NOT NULL DEFAULT GETDATE(),
@@ -205,11 +209,77 @@ def _ensure_courtroom_meta_table(cursor):
             ALTER TABLE dbo.courtroom_meta ADD break_time NVARCHAR(16) NULL;
         END
 
+        IF COL_LENGTH('dbo.courtroom_meta', 'start_to_break_minutes') IS NULL
+        BEGIN
+            ALTER TABLE dbo.courtroom_meta ADD start_to_break_minutes INT NULL;
+        END
+
+        IF COL_LENGTH('dbo.courtroom_meta', 'break_to_restart_minutes') IS NULL
+        BEGIN
+            ALTER TABLE dbo.courtroom_meta ADD break_to_restart_minutes INT NULL;
+        END
+
+        IF COL_LENGTH('dbo.courtroom_meta', 'restart_to_adjourned_minutes') IS NULL
+        BEGIN
+            ALTER TABLE dbo.courtroom_meta ADD restart_to_adjourned_minutes INT NULL;
+        END
+
+        IF COL_LENGTH('dbo.courtroom_meta', 'total_time_up_minutes') IS NULL
+        BEGIN
+            ALTER TABLE dbo.courtroom_meta ADD total_time_up_minutes INT NULL;
+        END
+
         IF COL_LENGTH('dbo.courtroom_meta', 'is_high_profile') IS NULL
         BEGIN
             ALTER TABLE dbo.courtroom_meta ADD is_high_profile BIT NOT NULL CONSTRAINT DF_courtroom_meta_is_high_profile DEFAULT 0;
         END
     """)
+
+
+def _parse_courtroom_time_to_minutes(time_value):
+    text = (time_value or "").strip()
+    if not text:
+        return None
+
+    normalized_text = re.sub(r"\s+", " ", text).upper()
+    for fmt in ("%I:%M %p", "%I %p"):
+        try:
+            parsed = datetime.strptime(normalized_text, fmt)
+            return (parsed.hour * 60) + parsed.minute
+        except ValueError:
+            continue
+    return None
+
+
+def _calculate_courtroom_duration_minutes(start_time, break_time, restart_time, adjourned_time):
+    start_minutes = _parse_courtroom_time_to_minutes(start_time)
+    break_minutes = _parse_courtroom_time_to_minutes(break_time)
+    restart_minutes = _parse_courtroom_time_to_minutes(restart_time)
+    adjourned_minutes = _parse_courtroom_time_to_minutes(adjourned_time)
+
+    start_to_break_minutes = None
+    break_to_restart_minutes = None
+    restart_to_adjourned_minutes = None
+    total_time_up_minutes = None
+
+    if start_minutes is not None and break_minutes is not None and break_minutes >= start_minutes:
+        start_to_break_minutes = break_minutes - start_minutes
+
+    if break_minutes is not None and restart_minutes is not None and restart_minutes >= break_minutes:
+        break_to_restart_minutes = restart_minutes - break_minutes
+
+    if restart_minutes is not None and adjourned_minutes is not None and adjourned_minutes >= restart_minutes:
+        restart_to_adjourned_minutes = adjourned_minutes - restart_minutes
+
+    if start_to_break_minutes is not None and restart_to_adjourned_minutes is not None:
+        total_time_up_minutes = start_to_break_minutes + restart_to_adjourned_minutes
+
+    return {
+        "start_to_break_minutes": start_to_break_minutes,
+        "break_to_restart_minutes": break_to_restart_minutes,
+        "restart_to_adjourned_minutes": restart_to_adjourned_minutes,
+        "total_time_up_minutes": total_time_up_minutes,
+    }
 
 
 def _normalize_status_type(status_type):
@@ -1879,7 +1949,9 @@ def get_courtroom_meta():
     _ensure_courtroom_meta_table(cursor)
 
     cursor.execute("""
-        SELECT assignment_date, courthouse, location_detail, part, start_time, break_time, restart_time, adjourned_time, is_down, is_high_profile
+        SELECT assignment_date, courthouse, location_detail, part, start_time, break_time, restart_time, adjourned_time,
+               start_to_break_minutes, break_to_restart_minutes, restart_to_adjourned_minutes, total_time_up_minutes,
+               is_down, is_high_profile
         FROM dbo.courtroom_meta
         WHERE assignment_date = ?
     """, (date,))
@@ -1894,8 +1966,12 @@ def get_courtroom_meta():
             "break_time": row[5] or "",
             "restart_time": row[6] or "",
             "adjourned_time": row[7] or "",
-            "is_down": bool(row[8]),
-            "is_high_profile": bool(row[9])
+            "start_to_break_minutes": row[8],
+            "break_to_restart_minutes": row[9],
+            "restart_to_adjourned_minutes": row[10],
+            "total_time_up_minutes": row[11],
+            "is_down": bool(row[12]),
+            "is_high_profile": bool(row[13])
         }
         for row in cursor.fetchall()
     ]
@@ -2161,6 +2237,12 @@ def update_courtroom_meta():
     conn = get_conn()
     cursor = conn.cursor()
     _ensure_courtroom_meta_table(cursor)
+    duration_minutes = _calculate_courtroom_duration_minutes(
+        data.get("start_time"),
+        data.get("break_time"),
+        data.get("restart_time"),
+        data.get("adjourned_time"),
+    )
 
     cursor.execute("""
         MERGE dbo.courtroom_meta AS target
@@ -2177,12 +2259,18 @@ def update_courtroom_meta():
                 break_time = ?,
                 restart_time = ?,
                 adjourned_time = ?,
+                start_to_break_minutes = ?,
+                break_to_restart_minutes = ?,
+                restart_to_adjourned_minutes = ?,
+                total_time_up_minutes = ?,
                 is_down = ?,
                 is_high_profile = ?,
                 updated_at = GETDATE()
         WHEN NOT MATCHED THEN
-            INSERT (assignment_date, courthouse, location_detail, part, start_time, break_time, restart_time, adjourned_time, is_down, is_high_profile, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE());
+            INSERT (assignment_date, courthouse, location_detail, part, start_time, break_time, restart_time, adjourned_time,
+                    start_to_break_minutes, break_to_restart_minutes, restart_to_adjourned_minutes, total_time_up_minutes,
+                    is_down, is_high_profile, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE());
     """, (
         assignment_date,
         courthouse,
@@ -2192,6 +2280,10 @@ def update_courtroom_meta():
         data.get("break_time") or None,
         data.get("restart_time") or None,
         data.get("adjourned_time") or None,
+        duration_minutes["start_to_break_minutes"],
+        duration_minutes["break_to_restart_minutes"],
+        duration_minutes["restart_to_adjourned_minutes"],
+        duration_minutes["total_time_up_minutes"],
         1 if data.get("is_down") else 0,
         1 if data.get("is_high_profile") else 0,
         assignment_date,
@@ -2202,6 +2294,10 @@ def update_courtroom_meta():
         data.get("break_time") or None,
         data.get("restart_time") or None,
         data.get("adjourned_time") or None,
+        duration_minutes["start_to_break_minutes"],
+        duration_minutes["break_to_restart_minutes"],
+        duration_minutes["restart_to_adjourned_minutes"],
+        duration_minutes["total_time_up_minutes"],
         1 if data.get("is_down") else 0,
         1 if data.get("is_high_profile") else 0,
     ))
@@ -2255,7 +2351,9 @@ def update_courtroom_location():
         ))
 
         cursor.execute("""
-            SELECT start_time, break_time, restart_time, adjourned_time, is_down, is_high_profile
+            SELECT start_time, break_time, restart_time, adjourned_time,
+                   start_to_break_minutes, break_to_restart_minutes, restart_to_adjourned_minutes, total_time_up_minutes,
+                   is_down, is_high_profile
             FROM dbo.courtroom_meta
             WHERE assignment_date = ?
               AND courthouse = ?
@@ -2270,7 +2368,9 @@ def update_courtroom_location():
         source_meta = cursor.fetchone()
 
         cursor.execute("""
-            SELECT start_time, break_time, restart_time, adjourned_time, is_down, is_high_profile
+            SELECT start_time, break_time, restart_time, adjourned_time,
+                   start_to_break_minutes, break_to_restart_minutes, restart_to_adjourned_minutes, total_time_up_minutes,
+                   is_down, is_high_profile
             FROM dbo.courtroom_meta
             WHERE assignment_date = ?
               AND courthouse = ?
@@ -2289,8 +2389,14 @@ def update_courtroom_location():
             merged_break = source_meta[1] or target_meta[1]
             merged_restart = source_meta[2] or target_meta[2]
             merged_adjourned = source_meta[3] or target_meta[3]
-            merged_is_down = 1 if (bool(source_meta[4]) or bool(target_meta[4])) else 0
-            merged_is_high_profile = 1 if (bool(source_meta[5]) or bool(target_meta[5])) else 0
+            merged_duration_minutes = _calculate_courtroom_duration_minutes(
+                merged_start,
+                merged_break,
+                merged_restart,
+                merged_adjourned,
+            )
+            merged_is_down = 1 if (bool(source_meta[8]) or bool(target_meta[8])) else 0
+            merged_is_high_profile = 1 if (bool(source_meta[9]) or bool(target_meta[9])) else 0
 
             cursor.execute("""
                 UPDATE dbo.courtroom_meta
@@ -2298,6 +2404,10 @@ def update_courtroom_location():
                     break_time = ?,
                     restart_time = ?,
                     adjourned_time = ?,
+                    start_to_break_minutes = ?,
+                    break_to_restart_minutes = ?,
+                    restart_to_adjourned_minutes = ?,
+                    total_time_up_minutes = ?,
                     is_down = ?,
                     is_high_profile = ?,
                     updated_at = GETDATE()
@@ -2310,6 +2420,10 @@ def update_courtroom_location():
                 merged_break,
                 merged_restart,
                 merged_adjourned,
+                merged_duration_minutes["start_to_break_minutes"],
+                merged_duration_minutes["break_to_restart_minutes"],
+                merged_duration_minutes["restart_to_adjourned_minutes"],
+                merged_duration_minutes["total_time_up_minutes"],
                 merged_is_down,
                 merged_is_high_profile,
                 assignment_date,
