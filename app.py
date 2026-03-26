@@ -2142,7 +2142,7 @@ def assignment_totals():
 
     # Reuse the exact same query + dedupe behavior as /api/search
     query = """
-        SELECT TOP 200
+        SELECT
             id,
             assignment_date,
             courthouse,
@@ -2157,7 +2157,7 @@ def assignment_totals():
             created_at
         FROM dbo.court_assignments
         WHERE assignment_date = ?
-        ORDER BY assignment_date DESC
+        ORDER BY assignment_date DESC, id ASC
     """
 
     conn = get_conn()
@@ -2645,7 +2645,7 @@ def search():
     should_dedupe = dedupe_param not in {"0", "false", "no", "off"}
 
     query = """
-        SELECT TOP 200
+        SELECT
             a.id,
             a.assignment_date,
             a.courthouse,
@@ -2682,7 +2682,7 @@ def search():
         query += " AND a.courthouse = ?"
         params.append(courthouse)
 
-    query += " ORDER BY a.assignment_date DESC"
+    query += " ORDER BY a.assignment_date DESC, a.id ASC"
 
     conn = get_conn()
     cursor = conn.cursor()
