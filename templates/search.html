@@ -1286,6 +1286,8 @@ function updateAssignmentCountBadges() {
     let overallOpen = 0;
 
     document.querySelectorAll('.editable[data-type="Courtroom"], .editable[data-type="Fixed Post"], .editable[data-type="Overtime"]').forEach(cell => {
+        if (!cell || cell.getClientRects().length === 0) return;
+
         const courthouse = getCountCourthouse(cell);
         const sectionType = cell.dataset.type || '';
         const key = `${courthouse}|${sectionType}`;
@@ -1315,20 +1317,6 @@ function updateAssignmentCountBadges() {
             post: cell.dataset.room || '',
             part: cell.dataset.part || ''
         });
-        if ((cell.dataset.courthouse || '') === 'Juvenile') {
-            console.log({
-                courthouse: cell.dataset.courthouse,
-                type: cell.dataset.type,
-                room: cell.dataset.room,
-                part: cell.dataset.part,
-                textContent: cell.textContent.trim(),
-                assignedNames: getAssignedNamesFromCell(cell),
-                parsedTextNames: parseAssignedMemberValue(cell.textContent),
-                assignmentLabel,
-                slotState
-            });
-        }
-
         setVacantRowHighlight(cell, slotState);
 
         const required = sectionType === 'Courtroom'
@@ -3367,20 +3355,34 @@ function buildCourthouseSections(courthouse, rows, selectedDate) {
         const postsBody = postsTable.querySelector("tbody");
         posts.forEach((slot, index) => {
             const lunchPart = `${slot.part || ''}__LUNCH`;
-            const slotMatches = postsType.filter(r =>
-                r.location_group === slot.post && (
-                    (slot.part && r.part === slot.part) ||
-                    (slot.detail && r.location_detail === slot.detail) ||
-                    (!slot.part && !slot.detail)
-                )
-            );
-            const lunchSlotMatches = postsType.filter(r =>
-                r.location_group === slot.post && (
-                    (slot.part && r.part === lunchPart) ||
-                    (!slot.part && r.part === '__LUNCH')
-                )
-            );
-            const fallbackMatches = postsType.filter(r => r.location_group === slot.post && !r.part && !r.location_detail);
+            const normalizedSlotPost = (slot.post || '').trim().toLowerCase();
+            const normalizedSlotPart = (slot.part || '').trim().toLowerCase();
+            const normalizedLunchPart = lunchPart.trim().toLowerCase();
+            const normalizedSlotDetail = (slot.detail || '').trim().toLowerCase();
+
+            const slotMatches = postsType.filter(r => {
+                const rowPost = (r.location_group || '').trim().toLowerCase();
+                const rowPart = (r.part || '').trim().toLowerCase();
+                const rowDetail = (r.location_detail || '').trim().toLowerCase();
+                if (rowPost !== normalizedSlotPost) return false;
+
+                return (normalizedSlotPart && rowPart === normalizedSlotPart)
+                    || (normalizedSlotDetail && rowDetail === normalizedSlotDetail)
+                    || (!normalizedSlotPart && !normalizedSlotDetail);
+            });
+            const lunchSlotMatches = postsType.filter(r => {
+                const rowPost = (r.location_group || '').trim().toLowerCase();
+                const rowPart = (r.part || '').trim().toLowerCase();
+                if (rowPost !== normalizedSlotPost) return false;
+                return (normalizedSlotPart && rowPart === normalizedLunchPart)
+                    || (!normalizedSlotPart && rowPart === '__lunch');
+            });
+            const fallbackMatches = postsType.filter(r => {
+                const rowPost = (r.location_group || '').trim().toLowerCase();
+                const rowPart = (r.part || '').trim();
+                const rowDetail = (r.location_detail || '').trim();
+                return rowPost === normalizedSlotPost && !rowPart && !rowDetail;
+            });
             const pickPreferredRow = (rowList) => rowList.find(r => (r.assigned_member || '').trim()) || rowList[0] || null;
             const assigned = pickPreferredRow(slotMatches) || pickPreferredRow(fallbackMatches);
             const lunchAssigned = pickPreferredRow(lunchSlotMatches);
