@@ -180,16 +180,6 @@ function isCourtSecurityDeputy(deputy) {
     return division === "court security";
 }
 
-function normalizeRankValue(rank) {
-    return (rank || "").toUpperCase().replace(/[^A-Z]/g, "");
-}
-
-function isExcludedCourtSecurityRank(deputy) {
-    const excludedRanks = new Set(["LT", "CAPT", "MJR"]);
-    return excludedRanks.has(normalizeRankValue(deputy.rank));
-}
-
-
 function parseDateOnly(value) {
     if (!value) return null;
     const d = new Date(`${value}T00:00:00`);
@@ -682,7 +672,7 @@ function getTotalNeededFromAssignments(assignments) {
 
 function updateCourtSecurityStatusCounts(deputies, assignments) {
     const totalNeeded = getTotalNeededFromAssignments(assignments);
-    const cs = deputies.filter(dep => isCourtSecurityDeputy(dep) && !isExcludedCourtSecurityRank(dep));
+    const cs = deputies.filter(dep => isCourtSecurityDeputy(dep));
     const scheduledLeave = cs.filter(dep => statusIncludes(dep, "Scheduled Leave")).length;
     const unscheduledLeave = cs.filter(dep => statusIncludes(dep, "Unscheduled Leave")).length;
     const unavailable = cs.filter(dep => statusIncludes(dep, "Unavailable")).length;
