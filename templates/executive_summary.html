@@ -220,9 +220,11 @@ function isCourtSecurity(deputy) {
 
 function getUnavailableBreakdown(status) {
     const normalized = (status || '').toLowerCase();
+    const isUnscheduled = normalized.includes('unscheduled leave') || normalized === 'unscheduled';
+    const isScheduled = !isUnscheduled && (normalized.includes('scheduled leave') || normalized === 'leave');
     return {
-        scheduled_leave: normalized.includes('scheduled leave') ? 1 : 0,
-        unscheduled_leave: normalized.includes('unscheduled leave') || normalized.includes('unscheduled') ? 1 : 0,
+        scheduled_leave: isScheduled ? 1 : 0,
+        unscheduled_leave: isUnscheduled ? 1 : 0,
         unavailable: normalized.includes('unavailable') ? 1 : 0,
         training: normalized.includes('training') ? 1 : 0
     };
@@ -837,7 +839,7 @@ function renderSummary(dayResults) {
                     ${highProfileCells}
                 </tr>
                 <tr>
-                    <td class="metric-label">Unscheduled Courts</td>
+                    <td class="metric-label">Unscheduled Courts (Checked)</td>
                     ${unscheduledCourtsCells}
                 </tr>
                 <tr>
