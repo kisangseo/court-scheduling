@@ -218,6 +218,15 @@ function isCourtSecurity(deputy) {
         || division === 'court security division';
 }
 
+function normalizeRankValue(rank) {
+    return (rank || '').toUpperCase().replace(/[^A-Z]/g, '');
+}
+
+function isExcludedCourtSecurityRank(deputy) {
+    const excludedRanks = new Set(['LT', 'CAPT', 'MJR']);
+    return excludedRanks.has(normalizeRankValue(deputy.rank));
+}
+
 function getUnavailableBreakdown(status) {
     const normalized = (status || '').toLowerCase();
     const isUnscheduled = normalized.includes('unscheduled leave') || normalized === 'unscheduled';
@@ -329,7 +338,6 @@ function summarizeAvailableDeputies(availableDeputies) {
     };
 
     (availableDeputies || []).forEach(dep => {
-        if (isConsoleTag(dep)) return;
         summary.total += 1;
         const tag = normalizeCapacityTag(dep);
 
@@ -704,7 +712,10 @@ async function loadSummary() {
             const deputies = await deputiesRes.json();
             const assignments = await assignmentsRes.json();
             const courtroomMetaRows = await courtroomMetaRes.json();
-            const courtSecurityDeputies = deputies.filter(dep => isCourtSecurity(dep) && !isConsoleTag(dep));
+            const courtSecurityDeputies = deputies.filter(dep =>
+                isCourtSecurity(dep)
+                && !isExcludedCourtSecurityRank(dep)
+            );
             const unavailableBreakdown = courtSecurityDeputies.reduce((totals, dep) => {
                 const breakdown = getUnavailableBreakdown(dep.current_status);
                 totals.scheduled_leave += breakdown.scheduled_leave;

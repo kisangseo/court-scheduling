@@ -1408,7 +1408,6 @@ function getCourtSecurityRosterStats() {
     const courtSecurity = rawDeputies.filter(dep =>
         isCourtSecurityDeputy(dep)
         && !isExcludedCourtSecurityRank(dep)
-        && !isConsoleDeputy(dep)
     );
     const outCount = courtSecurity.filter(dep => !isDeputyAvailable(dep)).length;
     const postedNames = getPostedNameSetForPostsAndCourtrooms();
