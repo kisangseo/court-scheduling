@@ -505,9 +505,20 @@ function renderPostTable(courthouse, rows) {
 function buildCourtroomAssignmentText(row) {
     const assignmentText = (row?.assignment_notes || '').trim();
     const isHighProfile = !!row?.is_high_profile;
-    if (isHighProfile && assignmentText) return `${assignmentText} / <span class="high-profile-flag">High Profile</span>`;
-    if (isHighProfile) return '<span class="high-profile-flag">High Profile</span>';
-    return assignmentText;
+    const isUnscheduled = !!row?.is_unscheduled;
+    const changedBy = (row?.unscheduled_changed_by || '').trim();
+    const changedAt = (row?.unscheduled_changed_at || '').trim();
+    const caption = (isUnscheduled && (changedBy || changedAt))
+        ? `<div style="font-size:11px; color:#6b7280; margin-top:4px;">Saved by ${changedBy || 'Unknown'}${changedAt ? ` on ${changedAt}` : ''}</div>`
+        : '';
+    return `
+        <div>${assignmentText}</div>
+        <div style="display:flex; align-items:center; gap:12px; margin-top:4px;">
+            <label style="display:flex; align-items:center; gap:4px;"><input type="checkbox" disabled ${isUnscheduled ? 'checked' : ''}> Unscheduled</label>
+            <label style="display:flex; align-items:center; gap:4px;"><input type="checkbox" disabled ${isHighProfile ? 'checked' : ''}> High Profile</label>
+        </div>
+        ${caption}
+    `;
 }
 
 function renderCourtroomTable(courthouse, rows) {
