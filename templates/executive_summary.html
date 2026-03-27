@@ -220,9 +220,11 @@ function isCourtSecurity(deputy) {
 
 function getUnavailableBreakdown(status) {
     const normalized = (status || '').toLowerCase();
+    const isUnscheduled = normalized.includes('unscheduled leave') || normalized === 'unscheduled';
+    const isScheduled = !isUnscheduled && (normalized.includes('scheduled leave') || normalized === 'leave');
     return {
-        scheduled_leave: normalized.includes('scheduled leave') ? 1 : 0,
-        unscheduled_leave: normalized.includes('unscheduled leave') || normalized.includes('unscheduled') ? 1 : 0,
+        scheduled_leave: isScheduled ? 1 : 0,
+        unscheduled_leave: isUnscheduled ? 1 : 0,
         unavailable: normalized.includes('unavailable') ? 1 : 0,
         training: normalized.includes('training') ? 1 : 0
     };
@@ -368,6 +370,10 @@ function normalizeDeputyName(value) {
 
 function countHighProfileCases(courtroomMetaRows) {
     return (courtroomMetaRows || []).filter(row => !!row.is_high_profile).length;
+}
+
+function countUnscheduledCourts(courtroomMetaRows) {
+    return (courtroomMetaRows || []).filter(row => !!row.is_unscheduled).length;
 }
 
 function countAssignedCourts(assignments) {
@@ -713,6 +719,7 @@ async function loadSummary() {
             const neededBreakdown = getNeededBreakdownFromAssignments(assignments);
             const assignmentTotals = getAssignmentTotals(assignments);
             const highProfileCaseCount = countHighProfileCases(courtroomMetaRows);
+            const unscheduledCourtsCount = countUnscheduledCourts(courtroomMetaRows);
             const openCourtsCount = assignmentTotals.open || 0;
             const totalOvertimeHours = getTotalOvertimeHours(assignments);
             return {
@@ -727,6 +734,7 @@ async function loadSummary() {
                 availableByCapacityTag: availableSummary.byCapacityTag,
                 assignmentTotals,
                 highProfileCases: highProfileCaseCount,
+                unscheduledCourts: unscheduledCourtsCount,
                 openCourts: openCourtsCount,
                 totalOvertimeHours,
                 unavailableBreakdown,
@@ -767,6 +775,7 @@ function renderSummary(dayResults) {
   `<span class="metric-blue">Open ${day.assignmentTotals?.open || 0}</span></td>`
 ).join('');
     const highProfileCells = dayResults.map(day => `<td>${day.highProfileCases || 0}</td>`).join('');
+    const unscheduledCourtsCells = dayResults.map(day => `<td>${day.unscheduledCourts || 0}</td>`).join('');
     const openCourtsCells = dayResults.map(day => `<td>${day.openCourts || 0}</td>`).join('');
     const overtimeHoursCells = dayResults.map(day => `<td>${(day.totalOvertimeHours || 0).toFixed(2)}</td>`).join('');
     const unavailableTotalCells = dayResults.map(day => {
@@ -828,6 +837,10 @@ function renderSummary(dayResults) {
                 <tr>
                     <td class="metric-label">High Profile Case</td>
                     ${highProfileCells}
+                </tr>
+                <tr>
+                    <td class="metric-label">Unscheduled Courts (Checked)</td>
+                    ${unscheduledCourtsCells}
                 </tr>
                 <tr>
                     <td class="metric-label">Open Courts</td>
