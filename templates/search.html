@@ -2691,8 +2691,6 @@ function initAssignmentDropzones() {
                             sourceChip.classList.add('transferred-out');
 
                             applyDeputyToCell(dropCell, assignedName, role, {
-                                transferInTime: payload.out_time || transferTime,
-                                transferIndex: payload.transfer_index,
                                 preserveExistingAssignments: true,
                                 allowUnavailable: true
                             });
